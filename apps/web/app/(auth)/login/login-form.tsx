@@ -14,11 +14,8 @@ export function LoginForm({ searchParams }: LoginFormProps) {
   const [error, setError] = useState(params.error ?? "");
 
   async function handleGoogleSignIn() {
-    try {
-      await signInWithGoogle();
-    } catch {
-      setError("Failed to initiate Google sign-in");
-    }
+    setError("");
+    await signInWithGoogle();
   }
 
   async function handleMagicLink(formData: FormData) {

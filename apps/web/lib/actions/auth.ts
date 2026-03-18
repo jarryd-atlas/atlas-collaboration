@@ -1,16 +1,25 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createSupabaseServer, createSupabaseAdmin } from "../supabase/server";
 
+async function getBaseUrl() {
+  const h = await headers();
+  const host = h.get("host") || "localhost:3000";
+  const proto = h.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
 export async function signInWithGoogle() {
+  const baseUrl = await getBaseUrl();
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/callback`,
+      redirectTo: `${baseUrl}/callback`,
       queryParams: {
-        hd: "crossnokaye.com", // Restrict to CK Google Workspace
+        hd: "crossnokaye.com",
       },
     },
   });
@@ -21,12 +30,13 @@ export async function signInWithGoogle() {
 
 export async function signInWithMagicLink(formData: FormData) {
   const email = formData.get("email") as string;
+  const baseUrl = await getBaseUrl();
 
   const supabase = await createSupabaseServer();
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/callback`,
+      emailRedirectTo: `${baseUrl}/callback`,
     },
   });
 

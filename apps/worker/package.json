@@ -1,0 +1,26 @@
+{
+  "name": "worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
+  },
+  "dependencies": {
+    "@repo/ai": "workspace:*",
+    "@repo/email": "workspace:*",
+    "@repo/shared": "workspace:*",
+    "@repo/supabase": "workspace:*",
+    "@supabase/supabase-js": "^2.99.2"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.0",
+    "typescript": "5.9.2"
+  }
+}

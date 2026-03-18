@@ -17,7 +17,7 @@ export async function getCustomers() {
     .order("name");
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getCustomerBySlug(slug: string) {
@@ -29,7 +29,7 @@ export async function getCustomerBySlug(slug: string) {
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
-  return data;
+  return data as any;
 }
 
 // ─── Sites ──────────────────────────────────────────────────
@@ -43,7 +43,7 @@ export async function getSitesForCustomer(customerId: string) {
     .order("name");
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getSiteBySlug(customerSlug: string, siteSlug: string) {
@@ -61,7 +61,7 @@ export async function getSiteBySlug(customerSlug: string, siteSlug: string) {
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
-  return data;
+  return data as any;
 }
 
 // ─── Milestones ─────────────────────────────────────────────
@@ -75,7 +75,7 @@ export async function getMilestonesForSite(siteId: string) {
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getMilestoneBySlug(siteId: string, milestoneSlug: string) {
@@ -88,7 +88,7 @@ export async function getMilestoneBySlug(siteId: string, milestoneSlug: string) 
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
-  return data;
+  return data as any;
 }
 
 export async function getMilestoneTemplates() {
@@ -99,7 +99,7 @@ export async function getMilestoneTemplates() {
     .order("sort_order");
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 // ─── Tasks ──────────────────────────────────────────────────
@@ -113,7 +113,7 @@ export async function getTasksForMilestone(milestoneId: string) {
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getMyTasks(profileId: string) {
@@ -136,7 +136,7 @@ export async function getMyTasks(profileId: string) {
     .order("due_date", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 // ─── Comments ───────────────────────────────────────────────
@@ -151,7 +151,7 @@ export async function getCommentsForEntity(entityType: string, entityId: string)
     .order("created_at", { ascending: true });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 // ─── Flagged Issues ─────────────────────────────────────────
@@ -166,7 +166,7 @@ export async function getFlaggedIssuesForSites(siteIds: string[]) {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getAllFlaggedIssues() {
@@ -178,7 +178,7 @@ export async function getAllFlaggedIssues() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 // ─── Notifications ──────────────────────────────────────────
@@ -194,7 +194,7 @@ export async function getUnreadNotifications(profileId: string) {
     .limit(20);
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 // ─── Profiles ───────────────────────────────────────────────
@@ -207,7 +207,7 @@ export async function getAllProfiles() {
     .order("full_name");
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getActiveProfiles() {
@@ -219,7 +219,7 @@ export async function getActiveProfiles() {
     .order("full_name");
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getPendingProfiles() {
@@ -231,7 +231,7 @@ export async function getPendingProfiles() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return data;
+  return (data ?? []) as any[];
 }
 
 export async function getProfileById(profileId: string) {
@@ -243,7 +243,7 @@ export async function getProfileById(profileId: string) {
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
-  return data;
+  return data as any;
 }
 
 // ─── Reports (public - uses service role) ───────────────────
@@ -258,14 +258,15 @@ export async function getPublicReport(slug: string) {
     .single();
 
   if (reportError) return null;
+  const reportData = report as any;
 
   const { data: sections } = await supabase
     .from("report_sections")
     .select("*")
-    .eq("report_id", report.id)
+    .eq("report_id", reportData.id)
     .order("sort_order");
 
-  return { report, sections: sections ?? [] };
+  return { report: reportData, sections: sections ?? [] };
 }
 
 // ─── Dashboard stats ────────────────────────────────────────
@@ -312,7 +313,7 @@ export async function getVoiceNotes() {
   if (error) throw error;
 
   // Flatten transcription data onto the voice note for easier consumption
-  return (data ?? []).map((note) => {
+  return ((data ?? []) as any[]).map((note: any) => {
     const t = Array.isArray(note.transcription) ? note.transcription[0] : note.transcription;
     return {
       ...note,
@@ -344,13 +345,14 @@ export async function getVoiceNoteById(noteId: string) {
 
   if (error && error.code !== "PGRST116") throw error;
   if (!data) return null;
+  const d = data as any;
 
   // Flatten transcription data
-  const t = Array.isArray(data.transcription) ? data.transcription[0] : data.transcription;
+  const t = Array.isArray(d.transcription) ? d.transcription[0] : d.transcription;
   return {
-    ...data,
-    duration: data.duration_sec ?? 0,
-    audio_url: data.file_path ?? null,
+    ...d,
+    duration: d.duration_sec ?? 0,
+    audio_url: d.file_path ?? null,
     transcript: t?.raw_text ?? null,
     summary: t?.summary ?? null,
     extracted_tasks: t?.extracted_tasks ?? [],
@@ -377,7 +379,7 @@ export async function getReports(filter?: "all" | "draft" | "published") {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as any[];
 }
 
 export async function getReportById(reportId: string) {
@@ -389,7 +391,7 @@ export async function getReportById(reportId: string) {
     .single();
 
   if (error && error.code !== "PGRST116") throw error;
-  return data;
+  return data as any;
 }
 
 export async function getReportSections(reportId: string) {
@@ -401,7 +403,7 @@ export async function getReportSections(reportId: string) {
     .order("sort_order");
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as any[];
 }
 
 // ─── All Tasks (for tasks page) ─────────────────────────
@@ -425,7 +427,7 @@ export async function getAllOpenTasks() {
     .order("due_date", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as any[];
 }
 
 // ─── Flagged Issues for Customer ────────────────────────
@@ -439,7 +441,7 @@ export async function getFlaggedIssuesForCustomer(customerId: string) {
 
   if (!sites || sites.length === 0) return [];
 
-  const siteIds = sites.map((s) => s.id);
+  const siteIds = (sites as any[]).map((s: any) => s.id);
   return getFlaggedIssuesForSites(siteIds);
 }
 

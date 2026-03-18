@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "build:worker": "next build && opennextjs-cloudflare",
+    "build:worker": "next build && opennextjs-cloudflare build",
     "preview:cloudflare": "npx @opennextjs/cloudflare && npx wrangler dev",
     "start": "next start",
     "lint": "eslint --max-warnings 0",

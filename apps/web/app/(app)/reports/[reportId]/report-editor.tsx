@@ -16,7 +16,35 @@ import {
   AlertTriangle,
   ArrowRight,
 } from "lucide-react";
-import type { StatusReport, ReportSection } from "../../../../lib/mock-data";
+type ReportStatus = "draft" | "generating" | "review" | "published";
+
+interface StatusReport {
+  id: string;
+  tenantId: string;
+  customerId: string;
+  customerName: string;
+  siteId: string | null;
+  siteName: string | null;
+  title: string;
+  slug: string;
+  status: ReportStatus;
+  dateRangeStart: string;
+  dateRangeEnd: string;
+  createdBy: string;
+  createdByName: string;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ReportSection {
+  id: string;
+  reportId: string;
+  sectionType: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+}
 
 const SECTION_ICONS: Record<string, React.ReactNode> = {
   executive_summary: <FileText className="h-4 w-4" />,

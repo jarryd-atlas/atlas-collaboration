@@ -3,10 +3,22 @@ import { FileAudio, Clock, CheckCircle, AlertCircle, Loader2, MapPin } from "luc
 import { Badge } from "../ui/badge";
 import { Avatar } from "../ui/avatar";
 import { cn } from "../../lib/utils";
-import type { VoiceNote, VoiceNoteStatus } from "../../lib/mock-data";
+
+type VoiceNoteStatus = "uploading" | "transcribing" | "summarizing" | "ready" | "error";
+
+interface VoiceNoteProps {
+  id: string;
+  title: string;
+  duration: number;
+  status: VoiceNoteStatus;
+  recordedByName: string;
+  siteName: string | null;
+  milestoneName: string | null;
+  createdAt: string;
+}
 
 interface VoiceNoteCardProps {
-  note: VoiceNote;
+  note: VoiceNoteProps;
   className?: string;
 }
 

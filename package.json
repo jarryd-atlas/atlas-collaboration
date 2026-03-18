@@ -23,6 +23,9 @@
       "esbuild",
       "sharp",
       "supabase"
+    ],
+    "ignoredBuiltDependencies": [
+      "workerd"
     ]
   }
 }

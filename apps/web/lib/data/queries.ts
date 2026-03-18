@@ -1,7 +1,7 @@
 /**
  * Supabase data access queries.
  * All queries use the user's session (RLS-scoped) unless noted.
- * Falls back to mock data if Supabase isn't connected yet.
+ * Pages handle empty results gracefully when the database has no data.
  */
 
 import { createSupabaseServer, createSupabaseAdmin } from "../supabase/server";
@@ -203,7 +203,7 @@ export async function getAllProfiles() {
   const supabase = await createSupabaseServer();
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*, tenant:tenants(id, name, type)")
     .order("full_name");
 
   if (error) throw error;
@@ -252,7 +252,7 @@ export async function getPublicReport(slug: string) {
   const supabase = createSupabaseAdmin();
   const { data: report, error: reportError } = await supabase
     .from("status_reports")
-    .select("*, customer:customers!inner(name, logo_url)")
+    .select("*, customer:customers!inner(name, logo_url), site:sites(name)")
     .eq("slug", slug)
     .eq("status", "published")
     .single();
@@ -292,6 +292,155 @@ export async function getDashboardStats() {
     openTasks: tasksRes.count ?? 0,
     openIssues: issuesRes.count ?? 0,
   };
+}
+
+// ─── Voice Notes ────────────────────────────────────────
+
+export async function getVoiceNotes() {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("voice_notes")
+    .select(`
+      *,
+      recorded_by_profile:profiles!voice_notes_recorded_by_fkey(full_name, avatar_url),
+      site:sites(name),
+      milestone:milestones(name),
+      transcription:transcriptions(raw_text, summary, extracted_tasks, extracted_decisions, extracted_updates)
+    `)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  // Flatten transcription data onto the voice note for easier consumption
+  return (data ?? []).map((note) => {
+    const t = Array.isArray(note.transcription) ? note.transcription[0] : note.transcription;
+    return {
+      ...note,
+      duration: note.duration_sec ?? 0,
+      audio_url: note.file_path ?? null,
+      transcript: t?.raw_text ?? null,
+      summary: t?.summary ?? null,
+      extracted_tasks: t?.extracted_tasks ?? [],
+      extracted_decisions: t?.extracted_decisions ?? [],
+      extracted_updates: t?.extracted_updates ?? [],
+      error_message: null,
+    };
+  });
+}
+
+export async function getVoiceNoteById(noteId: string) {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("voice_notes")
+    .select(`
+      *,
+      recorded_by_profile:profiles!voice_notes_recorded_by_fkey(full_name, avatar_url),
+      site:sites(name),
+      milestone:milestones(name),
+      transcription:transcriptions(raw_text, summary, extracted_tasks, extracted_decisions, extracted_updates)
+    `)
+    .eq("id", noteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  if (!data) return null;
+
+  // Flatten transcription data
+  const t = Array.isArray(data.transcription) ? data.transcription[0] : data.transcription;
+  return {
+    ...data,
+    duration: data.duration_sec ?? 0,
+    audio_url: data.file_path ?? null,
+    transcript: t?.raw_text ?? null,
+    summary: t?.summary ?? null,
+    extracted_tasks: t?.extracted_tasks ?? [],
+    extracted_decisions: t?.extracted_decisions ?? [],
+    extracted_updates: t?.extracted_updates ?? [],
+    error_message: null,
+  };
+}
+
+// ─── Status Reports ─────────────────────────────────────
+
+export async function getReports(filter?: "all" | "draft" | "published") {
+  const supabase = await createSupabaseServer();
+  let query = supabase
+    .from("status_reports")
+    .select("*, customer:customers!inner(name), site:sites(name), created_by_profile:profiles!status_reports_created_by_fkey(full_name)")
+    .order("created_at", { ascending: false });
+
+  if (filter === "draft") {
+    query = query.eq("status", "draft");
+  } else if (filter === "published") {
+    query = query.eq("status", "published");
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getReportById(reportId: string) {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("status_reports")
+    .select("*, customer:customers!inner(name), site:sites(name), created_by_profile:profiles!status_reports_created_by_fkey(full_name)")
+    .eq("id", reportId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data;
+}
+
+export async function getReportSections(reportId: string) {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("report_sections")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("sort_order");
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ─── All Tasks (for tasks page) ─────────────────────────
+
+export async function getAllOpenTasks() {
+  const supabase = await createSupabaseServer();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(`
+      *,
+      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
+      milestone:milestones!inner(
+        id, name, slug,
+        site:sites!inner(
+          id, name, slug,
+          customer:customers!inner(id, name, slug)
+        )
+      )
+    `)
+    .neq("status", "done")
+    .order("due_date", { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ─── Flagged Issues for Customer ────────────────────────
+
+export async function getFlaggedIssuesForCustomer(customerId: string) {
+  const supabase = await createSupabaseServer();
+  const { data: sites } = await supabase
+    .from("sites")
+    .select("id")
+    .eq("customer_id", customerId);
+
+  if (!sites || sites.length === 0) return [];
+
+  const siteIds = sites.map((s) => s.id);
+  return getFlaggedIssuesForSites(siteIds);
 }
 
 // ─── Search ─────────────────────────────────────────────────

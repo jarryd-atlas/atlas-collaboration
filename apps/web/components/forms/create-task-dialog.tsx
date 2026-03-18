@@ -6,13 +6,11 @@ import { Input, Textarea, Select } from "../ui/input";
 import { Button } from "../ui/button";
 import { PRIORITIES } from "@repo/shared";
 import { formatLabel } from "../../lib/utils";
-import type { Profile } from "../../lib/mock-data";
-
 interface CreateTaskDialogProps {
   open: boolean;
   onClose: () => void;
   milestoneName: string;
-  assignableUsers: Profile[];
+  assignableUsers: Array<{ id: string; full_name: string; [key: string]: unknown }>;
 }
 
 export function CreateTaskDialog({ open, onClose, milestoneName, assignableUsers }: CreateTaskDialogProps) {
@@ -61,7 +59,7 @@ export function CreateTaskDialog({ open, onClose, milestoneName, assignableUsers
                 { value: "", label: "Unassigned" },
                 ...assignableUsers.map((u) => ({
                   value: u.id,
-                  label: u.fullName,
+                  label: u.full_name,
                 })),
               ]}
             />

@@ -4,11 +4,9 @@ import { useState } from "react";
 import { Button } from "../ui/button";
 import { CreateTaskDialog } from "./create-task-dialog";
 import { Plus } from "lucide-react";
-import type { Profile } from "../../lib/mock-data";
-
 interface AddTaskButtonProps {
   milestoneName: string;
-  assignableUsers: Profile[];
+  assignableUsers: Array<{ id: string; full_name: string; avatar_url: string | null; [key: string]: unknown }>;
 }
 
 export function AddTaskButton({ milestoneName, assignableUsers }: AddTaskButtonProps) {

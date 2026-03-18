@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { getReports, type ReportStatus } from "../../../lib/mock-data";
+import { getReports } from "../../../lib/data/queries";
 import { Badge } from "../../../components/ui/badge";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { Button } from "../../../components/ui/button";
 import { FileText, Plus, Calendar, User } from "lucide-react";
 import { ReportFilterTabs } from "./report-filter-tabs";
+
+type ReportStatus = "draft" | "generating" | "review" | "published";
 
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
   const variants: Record<ReportStatus, { variant: "default" | "success" | "warning" | "info"; label: string }> = {
@@ -13,8 +15,8 @@ function ReportStatusBadge({ status }: { status: ReportStatus }) {
     review: { variant: "warning", label: "In Review" },
     published: { variant: "success", label: "Published" },
   };
-  const { variant, label } = variants[status];
-  return <Badge variant={variant}>{label}</Badge>;
+  const config = variants[status] ?? variants.draft;
+  return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
 interface ReportsPageProps {
@@ -24,7 +26,13 @@ interface ReportsPageProps {
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const { filter } = await searchParams;
   const activeFilter = (filter as "all" | "draft" | "published") || "all";
-  const reports = getReports(activeFilter);
+
+  let reports: Awaited<ReturnType<typeof getReports>> = [];
+  try {
+    reports = await getReports(activeFilter);
+  } catch {
+    // Show empty state
+  }
 
   return (
     <div className="space-y-6">
@@ -78,27 +86,27 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                     <p className="text-sm font-medium text-gray-900 truncate">
                       {report.title}
                     </p>
-                    <ReportStatusBadge status={report.status} />
+                    <ReportStatusBadge status={report.status as ReportStatus} />
                   </div>
                   <div className="flex items-center gap-4 mt-1">
-                    <span className="text-xs text-gray-400">{report.customerName}</span>
-                    {report.siteName && (
-                      <span className="text-xs text-gray-400">{report.siteName}</span>
+                    <span className="text-xs text-gray-400">{report.customer?.name ?? ""}</span>
+                    {report.site?.name && (
+                      <span className="text-xs text-gray-400">{report.site.name}</span>
                     )}
                     <span className="flex items-center gap-1 text-xs text-gray-400">
                       <Calendar className="h-3 w-3" />
-                      {report.dateRangeStart} — {report.dateRangeEnd}
+                      {report.date_from} &mdash; {report.date_to}
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0 ml-4">
                   <span className="flex items-center gap-1 text-xs text-gray-400">
                     <User className="h-3 w-3" />
-                    {report.createdByName}
+                    {report.created_by_profile?.full_name ?? ""}
                   </span>
-                  {report.publishedAt && (
+                  {report.published_at && (
                     <span className="text-xs text-gray-400">
-                      Published {new Date(report.publishedAt).toLocaleDateString()}
+                      Published {new Date(report.published_at).toLocaleDateString()}
                     </span>
                   )}
                 </div>

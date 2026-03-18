@@ -4,7 +4,7 @@ import {
   getSiteBySlug,
   getCustomerBySlug,
   getMilestonesForSite,
-} from "../../../../../../lib/mock-data";
+} from "../../../../../../lib/data/queries";
 import { PipelineStageBadge, StatusBadge, PriorityBadge } from "../../../../../../components/ui/badge";
 import { ProgressBar } from "../../../../../../components/ui/progress-bar";
 import { EmptyState } from "../../../../../../components/ui/empty-state";
@@ -32,12 +32,27 @@ const PIPELINE_STEPS: SitePipelineStage[] = [
 
 export default async function SitePage({ params }: SitePageProps) {
   const { customerSlug, siteSlug } = await params;
-  const site = getSiteBySlug(siteSlug);
-  const customer = getCustomerBySlug(customerSlug);
+
+  let site: Awaited<ReturnType<typeof getSiteBySlug>> = null;
+  let customer: Awaited<ReturnType<typeof getCustomerBySlug>> = null;
+
+  try {
+    [site, customer] = await Promise.all([
+      getSiteBySlug(customerSlug, siteSlug),
+      getCustomerBySlug(customerSlug),
+    ]);
+  } catch {
+    return notFound();
+  }
 
   if (!site || !customer) return notFound();
 
-  const milestones = getMilestonesForSite(site.id);
+  let milestones: Awaited<ReturnType<typeof getMilestonesForSite>> = [];
+  try {
+    milestones = await getMilestonesForSite(site.id);
+  } catch {
+    // Show empty milestones
+  }
 
   return (
     <div className="space-y-8">
@@ -58,20 +73,20 @@ export default async function SitePage({ params }: SitePageProps) {
               </p>
             )}
           </div>
-          <PipelineStageBadge stage={site.pipelineStage} />
+          <PipelineStageBadge stage={site.pipeline_stage} />
         </div>
       </div>
 
       {/* Pipeline stage tracker */}
-      {site.pipelineStage !== "disqualified" && site.pipelineStage !== "paused" && (
+      {site.pipeline_stage !== "disqualified" && site.pipeline_stage !== "paused" && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-900">Pipeline Stage</h2>
-            <ChangeStageButton siteName={site.name} currentStage={site.pipelineStage} />
+            <ChangeStageButton siteName={site.name} currentStage={site.pipeline_stage} />
           </div>
           <div className="flex items-center gap-1">
             {PIPELINE_STEPS.map((step, i) => {
-              const currentIdx = PIPELINE_STEPS.indexOf(site.pipelineStage as SitePipelineStage);
+              const currentIdx = PIPELINE_STEPS.indexOf(site.pipeline_stage as SitePipelineStage);
               const isCompleted = i < currentIdx;
               const isCurrent = i === currentIdx;
               return (
@@ -132,18 +147,18 @@ export default async function SitePage({ params }: SitePageProps) {
                     <PriorityBadge priority={milestone.priority} />
                   </div>
                   <div className="flex items-center gap-4 text-xs text-gray-400">
-                    {milestone.dueDate && (
+                    {milestone.due_date && (
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Due {milestone.dueDate}
+                        <Calendar className="h-3 w-3" /> Due {milestone.due_date}
                       </span>
                     )}
                     <span>
-                      {milestone.completedTaskCount}/{milestone.taskCount} tasks
+                      {milestone.completed_task_count ?? 0}/{milestone.task_count ?? 0} tasks
                     </span>
                   </div>
                 </div>
                 <div className="w-32 shrink-0">
-                  <ProgressBar value={milestone.progress} size="sm" showLabel />
+                  <ProgressBar value={milestone.progress ?? 0} size="sm" showLabel />
                 </div>
                 <ArrowRight className="h-4 w-4 text-gray-300 shrink-0" />
               </Link>

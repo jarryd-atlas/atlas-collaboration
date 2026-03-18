@@ -6,12 +6,10 @@ import { Input, Textarea, Select } from "../ui/input";
 import { Button } from "../ui/button";
 import { SEVERITY_LEVELS } from "@repo/shared";
 import { formatLabel } from "../../lib/utils";
-import type { Site } from "../../lib/mock-data";
-
 interface FlagIssueDialogProps {
   open: boolean;
   onClose: () => void;
-  sites: Site[];
+  sites: Array<{ id: string; name: string; [key: string]: unknown }>;
   /** Pre-selected site ID (when flagging from a site page) */
   defaultSiteId?: string;
 }

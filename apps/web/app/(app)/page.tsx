@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getDashboardStats, getCustomers, MOCK_TASKS, MOCK_FLAGGED_ISSUES } from "../../lib/mock-data";
+import { getDashboardStats, getCustomers, getAllFlaggedIssues, getAllOpenTasks } from "../../lib/data/queries";
+import { getCurrentUser } from "../../lib/data/current-user";
 import { StatusBadge, SeverityBadge } from "../../components/ui/badge";
 import { Avatar } from "../../components/ui/avatar";
 import {
@@ -11,18 +12,33 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-export default function DashboardPage() {
-  const stats = getDashboardStats();
-  const customers = getCustomers();
-  const openTasks = MOCK_TASKS.filter((t) => t.status !== "done").slice(0, 5);
-  const openIssues = MOCK_FLAGGED_ISSUES.filter((i) => i.status === "open");
+export default async function DashboardPage() {
+  let stats = { totalCustomers: 0, totalSites: 0, activeSites: 0, inEvaluation: 0, activeMilestones: 0, openTasks: 0, openIssues: 0 };
+  let customers: Awaited<ReturnType<typeof getCustomers>> = [];
+  let openTasks: Awaited<ReturnType<typeof getAllOpenTasks>> = [];
+  let openIssues: Awaited<ReturnType<typeof getAllFlaggedIssues>> = [];
+  let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
+
+  try {
+    [stats, customers, openTasks, openIssues, currentUser] = await Promise.all([
+      getDashboardStats(),
+      getCustomers(),
+      getAllOpenTasks().then((tasks) => tasks.slice(0, 5)),
+      getAllFlaggedIssues(),
+      getCurrentUser(),
+    ]);
+  } catch {
+    // If Supabase is not connected, show empty state
+  }
+
+  const displayName = currentUser?.full_name?.split(" ")[0] ?? "there";
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Portfolio Dashboard</h1>
-        <p className="text-gray-500 mt-1">Welcome back, Sarah</p>
+        <p className="text-gray-500 mt-1">Welcome back, {displayName}</p>
       </div>
 
       {/* Stats cards */}
@@ -49,26 +65,30 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="divide-y divide-gray-50">
-            {customers.map((customer) => (
-              <Link
-                key={customer.slug}
-                href={`/customers/${customer.slug}`}
-                className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-gray-400" />
+            {customers.length === 0 ? (
+              <p className="px-6 py-8 text-sm text-gray-400 text-center">No customers yet</p>
+            ) : (
+              customers.map((customer) => (
+                <Link
+                  key={customer.slug}
+                  href={`/customers/${customer.slug}`}
+                  className="flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{customer.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {customer.active_sites ?? 0} active / {customer.total_sites ?? 0} total sites
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{customer.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {customer.activeSites} active / {customer.totalSites} total sites
-                    </p>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4 text-gray-300" />
-              </Link>
-            ))}
+                  <ArrowRight className="h-4 w-4 text-gray-300" />
+                </Link>
+              ))
+            )}
           </div>
         </div>
 
@@ -87,7 +107,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium text-gray-900">{issue.summary}</p>
                     <SeverityBadge severity={issue.severity} />
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">{issue.siteName}</p>
+                  <p className="text-xs text-gray-400 mt-1">{issue.site?.name ?? ""}</p>
                 </div>
               ))
             )}
@@ -101,20 +121,24 @@ export default function DashboardPage() {
           <h2 className="text-base font-semibold text-gray-900">Upcoming Tasks</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {openTasks.map((task) => (
-            <div key={task.id} className="flex items-center justify-between px-6 py-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <StatusBadge status={task.status} />
-                <p className="text-sm text-gray-900 truncate">{task.title}</p>
+          {openTasks.length === 0 ? (
+            <p className="px-6 py-8 text-sm text-gray-400 text-center">No open tasks</p>
+          ) : (
+            openTasks.map((task) => (
+              <div key={task.id} className="flex items-center justify-between px-6 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <StatusBadge status={task.status} />
+                  <p className="text-sm text-gray-900 truncate">{task.title}</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {task.assignee?.full_name && <Avatar name={task.assignee.full_name} size="sm" />}
+                  {task.due_date && (
+                    <span className="text-xs text-gray-400">{task.due_date}</span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {task.assigneeName && <Avatar name={task.assigneeName} size="sm" />}
-                {task.dueDate && (
-                  <span className="text-xs text-gray-400">{task.dueDate}</span>
-                )}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

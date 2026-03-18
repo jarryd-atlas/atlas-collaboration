@@ -4,7 +4,7 @@ import {
   getCustomerBySlug,
   getSitesForCustomer,
   getFlaggedIssuesForCustomer,
-} from "../../../../lib/mock-data";
+} from "../../../../lib/data/queries";
 import { PipelineStageBadge, SeverityBadge, StatusBadge } from "../../../../components/ui/badge";
 import { ProgressBar } from "../../../../components/ui/progress-bar";
 import { Button } from "../../../../components/ui/button";
@@ -21,17 +21,32 @@ interface CustomerPageProps {
 
 export default async function CustomerPage({ params }: CustomerPageProps) {
   const { customerSlug } = await params;
-  const customer = getCustomerBySlug(customerSlug);
+
+  let customer: Awaited<ReturnType<typeof getCustomerBySlug>> = null;
+  try {
+    customer = await getCustomerBySlug(customerSlug);
+  } catch {
+    return notFound();
+  }
 
   if (!customer) return notFound();
 
-  const sites = getSitesForCustomer(customerSlug);
-  const issues = getFlaggedIssuesForCustomer(customerSlug);
+  let sites: Awaited<ReturnType<typeof getSitesForCustomer>> = [];
+  let issues: Awaited<ReturnType<typeof getFlaggedIssuesForCustomer>> = [];
 
-  const activeSites = sites.filter((s) => s.pipelineStage === "active");
-  const deployingSites = sites.filter((s) => s.pipelineStage === "deployment");
+  try {
+    [sites, issues] = await Promise.all([
+      getSitesForCustomer(customer.id),
+      getFlaggedIssuesForCustomer(customer.id),
+    ]);
+  } catch {
+    // Show empty state if queries fail
+  }
+
+  const activeSites = sites.filter((s) => s.pipeline_stage === "active");
+  const deployingSites = sites.filter((s) => s.pipeline_stage === "deployment");
   const evaluatingSites = sites.filter(
-    (s) => s.pipelineStage === "evaluation" || s.pipelineStage === "qualified" || s.pipelineStage === "prospect",
+    (s) => s.pipeline_stage === "evaluation" || s.pipeline_stage === "qualified" || s.pipeline_stage === "prospect",
   );
 
   return (
@@ -81,7 +96,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
                 key={site.slug}
                 href={`/customers/${customerSlug}/sites/${site.slug}`}
                 className={`group rounded-xl border bg-white p-5 shadow-card hover:shadow-card-hover transition-shadow ${
-                  site.pipelineStage === "disqualified" ? "border-gray-200 opacity-60" : "border-gray-100"
+                  site.pipeline_stage === "disqualified" ? "border-gray-200 opacity-60" : "border-gray-100"
                 }`}
               >
                 <div className="flex items-start justify-between mb-3">
@@ -93,25 +108,25 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
                       {site.city}, {site.state}
                     </p>
                   </div>
-                  <PipelineStageBadge stage={site.pipelineStage} />
+                  <PipelineStageBadge stage={site.pipeline_stage} />
                 </div>
 
-                {site.pipelineStage === "disqualified" ? (
+                {site.pipeline_stage === "disqualified" ? (
                   <div className="text-xs text-gray-400">
-                    <p>{site.dqReason}</p>
-                    {site.dqReevalDate && <p className="mt-1">Re-eval: {site.dqReevalDate}</p>}
+                    <p>{site.dq_reason}</p>
+                    {site.dq_reeval_date && <p className="mt-1">Re-eval: {site.dq_reeval_date}</p>}
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{site.milestoneCount} milestones</span>
+                      <span>{site.milestone_count ?? 0} milestones</span>
                       <span>
-                        {site.completedTaskCount}/{site.taskCount} tasks
+                        {site.completed_task_count ?? 0}/{site.task_count ?? 0} tasks
                       </span>
                     </div>
-                    {site.taskCount > 0 && (
+                    {(site.task_count ?? 0) > 0 && (
                       <ProgressBar
-                        value={Math.round((site.completedTaskCount / site.taskCount) * 100)}
+                        value={Math.round(((site.completed_task_count ?? 0) / (site.task_count ?? 1)) * 100)}
                         size="sm"
                       />
                     )}
@@ -138,7 +153,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
                   <div>
                     <p className="text-sm font-medium text-gray-900">{issue.summary}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {issue.siteName} &middot; {issue.flaggedByName}
+                      {issue.site?.name ?? ""} &middot; {issue.flagged_by_profile?.full_name ?? ""}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

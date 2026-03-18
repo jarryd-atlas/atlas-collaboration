@@ -5,10 +5,8 @@ import { Button } from "../ui/button";
 import { InviteUserDialog } from "./invite-user-dialog";
 import { Plus, UserCheck } from "lucide-react";
 import { approveUser, denyUser } from "../../lib/actions";
-import type { Customer } from "../../lib/mock-data";
-
 interface InviteUserButtonProps {
-  customers: Customer[];
+  customers: Array<{ id: string; name: string; slug: string; tenant_id: string; domain: string | null; [key: string]: unknown }>;
 }
 
 export function InviteUserButton({ customers }: InviteUserButtonProps) {

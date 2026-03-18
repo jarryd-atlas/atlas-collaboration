@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { searchAll, type SearchResult } from "../../lib/mock-data";
 import { Search, MapPin, Target, ListTodo, X } from "lucide-react";
+
+type SearchResult = { id: string; title: string; subtitle: string; type: string; href: string };
 import { cn } from "../../lib/utils";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -51,17 +52,31 @@ export function SearchDialog() {
     }
   }, [open]);
 
-  // Debounced search
+  // Debounced search via API
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
       if (query.trim()) {
-        setResults(searchAll(query));
-        setSelectedIndex(0);
+        try {
+          const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setResults(data);
+            setSelectedIndex(0);
+          }
+        } catch {
+          // aborted or network error
+        }
       } else {
         setResults([]);
       }
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query]);
 
   const grouped = results.reduce<Record<string, SearchResult[]>>((acc, r) => {

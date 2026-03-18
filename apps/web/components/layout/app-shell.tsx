@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { MobileSidebar } from "./mobile-sidebar";
-import { getMockCurrentUser, getCustomers as getMockCustomers } from "../../lib/mock-data";
 
 interface SessionClaims {
   tenantId?: string;
@@ -20,6 +19,8 @@ interface AppShellProps {
   sessionClaims?: SessionClaims | null;
   userEmail?: string | null;
   userAvatarUrl?: string | null;
+  userFullName?: string | null;
+  customers?: Array<{ name: string; slug: string }>;
 }
 
 export function AppShell({
@@ -28,18 +29,16 @@ export function AppShell({
   sessionClaims,
   userEmail,
   userAvatarUrl,
+  userFullName,
+  customers = [],
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Use real session if available, fall back to mock data
-  const mockUser = getMockCurrentUser();
-  const customers = getMockCustomers();
-
   const tenantType = sessionClaims?.tenantType ?? "internal";
-  const userRole = sessionClaims?.appRole ?? mockUser.role;
-  const fullName = userEmail ? userEmail.split("@")[0]! : mockUser.fullName;
-  const email = userEmail ?? mockUser.email;
-  const avatar = userAvatarUrl ?? mockUser.avatarUrl;
+  const userRole = sessionClaims?.appRole ?? "member";
+  const fullName = userFullName ?? userEmail?.split("@")[0] ?? "User";
+  const email = userEmail ?? "";
+  const avatar = userAvatarUrl ?? null;
 
   const sidebarProps = {
     tenantType,
@@ -49,7 +48,7 @@ export function AppShell({
       avatarUrl: avatar,
       role: userRole,
     },
-    customers: customers.map((c) => ({ name: c.name, slug: c.slug })),
+    customers,
   };
 
   return (

@@ -1,21 +1,36 @@
-import { MOCK_TASKS, MOCK_PROFILES, MOCK_MILESTONES, MOCK_SITES, MOCK_CUSTOMERS } from "../../../lib/mock-data";
+import { getAllOpenTasks } from "../../../lib/data/queries";
+import { getCurrentUser } from "../../../lib/data/current-user";
 import { StatusBadge, PriorityBadge } from "../../../components/ui/badge";
 import { Avatar } from "../../../components/ui/avatar";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { Calendar, ListTodo, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
-export default function TasksPage() {
-  // TODO: Replace with real query: getMyTasks(profileId)
-  const allTasks = MOCK_TASKS.filter((t) => t.status !== "done");
+export default async function TasksPage() {
+  let allTasks: Awaited<ReturnType<typeof getAllOpenTasks>> = [];
+  let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
 
-  // Group by milestone → site → customer for context
+  try {
+    [allTasks, currentUser] = await Promise.all([
+      getAllOpenTasks(),
+      getCurrentUser(),
+    ]);
+  } catch {
+    // Show empty state
+  }
+
+  // Build context from the joined data
   const tasksWithContext = allTasks.map((task) => {
-    const milestone = MOCK_MILESTONES.find((m) => m.id === task.milestoneId);
-    const site = milestone ? MOCK_SITES.find((s) => s.id === milestone.siteId) : null;
-    const customer = site ? MOCK_CUSTOMERS.find((c) => c.id === site.customerId) : null;
-    const assignee = task.assigneeId ? MOCK_PROFILES.find((p) => p.id === task.assigneeId) : null;
-    return { ...task, milestone, site, customer, assignee };
+    const milestone = task.milestone;
+    const site = milestone?.site;
+    const customer = site?.customer;
+    return {
+      ...task,
+      milestoneInfo: milestone ? { name: milestone.name, slug: milestone.slug } : null,
+      siteInfo: site ? { name: site.name, slug: site.slug } : null,
+      customerInfo: customer ? { name: customer.name, slug: customer.slug } : null,
+      assigneeName: task.assignee?.full_name ?? null,
+    };
   });
 
   const todoTasks = tasksWithContext.filter((t) => t.status === "todo");
@@ -56,11 +71,11 @@ function TaskSection({
     title: string;
     status: string;
     priority: string;
-    dueDate: string | null;
+    due_date: string | null;
     assigneeName: string | null;
-    milestone?: { name: string; slug: string } | null;
-    site?: { name: string; slug: string } | null;
-    customer?: { name: string; slug: string } | null;
+    milestoneInfo?: { name: string; slug: string } | null;
+    siteInfo?: { name: string; slug: string } | null;
+    customerInfo?: { name: string; slug: string } | null;
   }>;
 }) {
   if (tasks.length === 0) return null;
@@ -81,13 +96,13 @@ function TaskSection({
                 <StatusBadge status={task.status} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
-                  {task.customer && task.site && task.milestone && (
+                  {task.customerInfo && task.siteInfo && task.milestoneInfo && (
                     <p className="text-xs text-gray-400 mt-0.5">
                       <Link
-                        href={`/customers/${task.customer.slug}/sites/${task.site.slug}/milestones/${task.milestone.slug}`}
+                        href={`/customers/${task.customerInfo.slug}/sites/${task.siteInfo.slug}/milestones/${task.milestoneInfo.slug}`}
                         className="hover:text-gray-600"
                       >
-                        {task.customer.name} → {task.site.name} → {task.milestone.name}
+                        {task.customerInfo.name} &rarr; {task.siteInfo.name} &rarr; {task.milestoneInfo.name}
                       </Link>
                     </p>
                   )}
@@ -95,9 +110,9 @@ function TaskSection({
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <PriorityBadge priority={task.priority} />
-                {task.dueDate && (
+                {task.due_date && (
                   <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> {task.dueDate}
+                    <Calendar className="h-3 w-3" /> {task.due_date}
                   </span>
                 )}
                 {task.assigneeName && <Avatar name={task.assigneeName} size="sm" />}

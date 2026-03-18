@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getReportById, getReportSections, getCustomers } from "../../../../lib/mock-data";
+import { getReportById, getReportSections, getCustomers } from "../../../../lib/data/queries";
 import { Badge } from "../../../../components/ui/badge";
 import { ReportEditor } from "./report-editor";
 import { ChevronRight } from "lucide-react";
-import type { ReportStatus } from "../../../../lib/mock-data";
+
+type ReportStatus = "draft" | "generating" | "review" | "published";
 
 function ReportStatusBadge({ status }: { status: ReportStatus }) {
   const variants: Record<ReportStatus, { variant: "default" | "success" | "warning" | "info"; label: string }> = {
@@ -13,8 +14,8 @@ function ReportStatusBadge({ status }: { status: ReportStatus }) {
     review: { variant: "warning", label: "In Review" },
     published: { variant: "success", label: "Published" },
   };
-  const { variant, label } = variants[status];
-  return <Badge variant={variant}>{label}</Badge>;
+  const config = variants[status] ?? variants.draft;
+  return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
 interface ReportDetailPageProps {
@@ -23,14 +24,29 @@ interface ReportDetailPageProps {
 
 export default async function ReportDetailPage({ params }: ReportDetailPageProps) {
   const { reportId } = await params;
-  const report = getReportById(reportId);
+
+  let report: Awaited<ReturnType<typeof getReportById>> = null;
+  try {
+    report = await getReportById(reportId);
+  } catch {
+    notFound();
+  }
 
   if (!report) {
     notFound();
   }
 
-  const sections = getReportSections(reportId);
-  const customers = getCustomers();
+  let sections: Awaited<ReturnType<typeof getReportSections>> = [];
+  let customers: Awaited<ReturnType<typeof getCustomers>> = [];
+
+  try {
+    [sections, customers] = await Promise.all([
+      getReportSections(reportId),
+      getCustomers(),
+    ]);
+  } catch {
+    // Show empty state
+  }
 
   // Build default sections if none exist (for drafts)
   const defaultSectionTypes = [
@@ -43,7 +59,14 @@ export default async function ReportDetailPage({ params }: ReportDetailPageProps
 
   const displaySections =
     sections.length > 0
-      ? sections
+      ? sections.map((s) => ({
+          id: s.id,
+          reportId: s.report_id,
+          sectionType: s.section_key,
+          title: s.title,
+          content: s.content,
+          sortOrder: s.sort_order,
+        }))
       : defaultSectionTypes.map((s, i) => ({
           id: `new-${s.type}`,
           reportId: report.id,
@@ -52,6 +75,26 @@ export default async function ReportDetailPage({ params }: ReportDetailPageProps
           content: "",
           sortOrder: i,
         }));
+
+  // Map report to the shape the editor expects
+  const reportForEditor = {
+    id: report.id,
+    tenantId: report.tenant_id,
+    customerId: report.customer_id,
+    customerName: report.customer?.name ?? "",
+    siteId: report.site_id,
+    siteName: report.site?.name ?? null,
+    title: report.title,
+    slug: report.slug,
+    status: report.status as ReportStatus,
+    dateRangeStart: report.date_from ?? "",
+    dateRangeEnd: report.date_to ?? "",
+    createdBy: report.created_by,
+    createdByName: report.created_by_profile?.full_name ?? "",
+    publishedAt: report.published_at,
+    createdAt: report.created_at,
+    updatedAt: report.updated_at,
+  };
 
   return (
     <div className="space-y-6">
@@ -69,19 +112,19 @@ export default async function ReportDetailPage({ params }: ReportDetailPageProps
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">{report.title}</h1>
-            <ReportStatusBadge status={report.status} />
+            <ReportStatusBadge status={report.status as ReportStatus} />
           </div>
           <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-            <span>{report.customerName}</span>
-            {report.siteName && (
+            <span>{report.customer?.name ?? ""}</span>
+            {report.site?.name && (
               <>
                 <span className="text-gray-300">|</span>
-                <span>{report.siteName}</span>
+                <span>{report.site.name}</span>
               </>
             )}
             <span className="text-gray-300">|</span>
             <span>
-              {report.dateRangeStart} — {report.dateRangeEnd}
+              {report.date_from} &mdash; {report.date_to}
             </span>
           </div>
         </div>
@@ -89,7 +132,7 @@ export default async function ReportDetailPage({ params }: ReportDetailPageProps
 
       {/* Editor */}
       <ReportEditor
-        report={report}
+        report={reportForEditor}
         sections={displaySections}
         customers={customers.map((c) => ({ id: c.id, name: c.name }))}
       />

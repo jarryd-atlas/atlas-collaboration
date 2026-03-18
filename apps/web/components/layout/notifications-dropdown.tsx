@@ -2,12 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import {
-  getNotifications,
-  getUnreadNotificationCount,
-  type Notification,
-  type NotificationType,
-} from "../../lib/mock-data";
+
+type NotificationType = "task_assigned" | "comment_added" | "report_published" | "issue_flagged" | "milestone_completed" | "user_joined";
+
+interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  href: string | null;
+  read_at: string | null;
+  created_at: string;
+}
 import {
   Bell,
   ListTodo,
@@ -38,7 +44,7 @@ const TYPE_COLORS: Record<NotificationType, string> = {
 };
 
 function timeAgo(dateString: string): string {
-  const now = new Date("2026-03-17T12:00:00Z"); // Use mock "now"
+  const now = new Date();
   const date = new Date(dateString);
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
@@ -54,13 +60,23 @@ function timeAgo(dateString: string): string {
 
 export function NotificationsDropdown() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(getNotifications());
-  const [readIds, setReadIds] = useState<Set<string>>(
-    new Set(notifications.filter((n) => n.readAt).map((n) => n.id)),
-  );
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !readIds.has(n.id)).length;
+
+  // Fetch notifications when dropdown opens
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/notifications")
+      .then((res) => res.json())
+      .then((data: Notification[]) => {
+        setNotifications(data);
+        setReadIds(new Set(data.filter((n) => n.read_at).map((n) => n.id)));
+      })
+      .catch(() => {});
+  }, [open]);
 
   // Close on click outside
   useEffect(() => {
@@ -141,7 +157,7 @@ export function NotificationsDropdown() {
                           {notification.title}
                         </p>
                         <span className="text-xs text-gray-400 shrink-0">
-                          {timeAgo(notification.createdAt)}
+                          {timeAgo(notification.created_at)}
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">

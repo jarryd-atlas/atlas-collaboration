@@ -6,12 +6,10 @@ import { Input, Select } from "../ui/input";
 import { Button } from "../ui/button";
 import { ROLES } from "@repo/shared";
 import { formatLabel } from "../../lib/utils";
-import type { Customer } from "../../lib/mock-data";
-
 interface InviteUserDialogProps {
   open: boolean;
   onClose: () => void;
-  customers: Customer[];
+  customers: Array<{ id: string; name: string; tenant_id: string; [key: string]: unknown }>;
 }
 
 export function InviteUserDialog({ open, onClose, customers }: InviteUserDialogProps) {
@@ -79,7 +77,7 @@ export function InviteUserDialog({ open, onClose, customers }: InviteUserDialogP
               id="invite-customer"
               label="Customer"
               options={customers.map((c) => ({
-                value: c.tenantId,
+                value: c.tenant_id,
                 label: c.name,
               }))}
             />

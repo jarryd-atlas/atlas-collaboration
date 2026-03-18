@@ -6,8 +6,9 @@ import {
   getCustomerBySlug,
   getTasksForMilestone,
   getCommentsForEntity,
-  MOCK_PROFILES,
-} from "../../../../../../../../lib/mock-data";
+  getActiveProfiles,
+} from "../../../../../../../../lib/data/queries";
+import { getCurrentUser } from "../../../../../../../../lib/data/current-user";
 import { StatusBadge, PriorityBadge } from "../../../../../../../../components/ui/badge";
 import { ProgressBar } from "../../../../../../../../components/ui/progress-bar";
 import { Avatar } from "../../../../../../../../components/ui/avatar";
@@ -38,15 +39,47 @@ const TASK_COLUMNS: { status: TaskStatus; label: string }[] = [
 
 export default async function MilestonePage({ params }: MilestonePageProps) {
   const { customerSlug, siteSlug, milestoneSlug } = await params;
-  const milestone = getMilestoneBySlug(milestoneSlug);
-  const site = getSiteBySlug(siteSlug);
-  const customer = getCustomerBySlug(customerSlug);
 
-  if (!milestone || !site || !customer) return notFound();
+  let site: Awaited<ReturnType<typeof getSiteBySlug>> = null;
+  let customer: Awaited<ReturnType<typeof getCustomerBySlug>> = null;
 
-  const tasks = getTasksForMilestone(milestone.id);
-  const comments = getCommentsForEntity("milestone", milestone.id);
-  const assignableUsers = MOCK_PROFILES.filter((p) => p.status === "active");
+  try {
+    [site, customer] = await Promise.all([
+      getSiteBySlug(customerSlug, siteSlug),
+      getCustomerBySlug(customerSlug),
+    ]);
+  } catch {
+    return notFound();
+  }
+
+  if (!site || !customer) return notFound();
+
+  let milestone: Awaited<ReturnType<typeof getMilestoneBySlug>> = null;
+  try {
+    milestone = await getMilestoneBySlug(site.id, milestoneSlug);
+  } catch {
+    return notFound();
+  }
+
+  if (!milestone) return notFound();
+
+  let tasks: Awaited<ReturnType<typeof getTasksForMilestone>> = [];
+  let comments: Awaited<ReturnType<typeof getCommentsForEntity>> = [];
+  let assignableUsers: Awaited<ReturnType<typeof getActiveProfiles>> = [];
+  let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
+
+  try {
+    [tasks, comments, assignableUsers, currentUser] = await Promise.all([
+      getTasksForMilestone(milestone.id),
+      getCommentsForEntity("milestone", milestone.id),
+      getActiveProfiles(),
+      getCurrentUser(),
+    ]);
+  } catch {
+    // Show empty state
+  }
+
+  const currentUserName = currentUser?.full_name ?? "User";
 
   return (
     <div className="space-y-8">
@@ -78,30 +111,30 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
         <div>
           <p className="text-xs text-gray-400 mb-0.5">Progress</p>
           <div className="flex items-center gap-2">
-            <ProgressBar value={milestone.progress} className="w-24" size="sm" />
-            <span className="text-gray-700 font-medium">{milestone.progress}%</span>
+            <ProgressBar value={milestone.progress ?? 0} className="w-24" size="sm" />
+            <span className="text-gray-700 font-medium">{milestone.progress ?? 0}%</span>
           </div>
         </div>
-        {milestone.startDate && (
+        {milestone.start_date && (
           <div>
             <p className="text-xs text-gray-400 mb-0.5">Start</p>
             <p className="text-gray-700 flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" /> {milestone.startDate}
+              <Calendar className="h-3.5 w-3.5" /> {milestone.start_date}
             </p>
           </div>
         )}
-        {milestone.dueDate && (
+        {milestone.due_date && (
           <div>
             <p className="text-xs text-gray-400 mb-0.5">Due</p>
             <p className="text-gray-700 flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5" /> {milestone.dueDate}
+              <Calendar className="h-3.5 w-3.5" /> {milestone.due_date}
             </p>
           </div>
         )}
         <div>
           <p className="text-xs text-gray-400 mb-0.5">Tasks</p>
           <p className="text-gray-700">
-            {milestone.completedTaskCount}/{milestone.taskCount} completed
+            {milestone.completed_task_count ?? 0}/{milestone.task_count ?? 0} completed
           </p>
         </div>
       </div>
@@ -141,15 +174,15 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
                         <p className="text-sm font-medium text-gray-900 mb-2">{task.title}</p>
                         <div className="flex items-center justify-between">
                           <PriorityBadge priority={task.priority} />
-                          {task.assigneeName ? (
-                            <Avatar name={task.assigneeName} size="sm" />
+                          {task.assignee?.full_name ? (
+                            <Avatar name={task.assignee.full_name} size="sm" />
                           ) : (
                             <span className="text-xs text-gray-300">Unassigned</span>
                           )}
                         </div>
-                        {task.dueDate && (
+                        {task.due_date && (
                           <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" /> {task.dueDate}
+                            <Calendar className="h-3 w-3" /> {task.due_date}
                           </p>
                         )}
                       </div>
@@ -185,10 +218,10 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
             {comments.map((comment) => (
               <div key={comment.id} className="px-6 py-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Avatar name={comment.authorName} src={comment.authorAvatar} size="sm" />
-                  <span className="text-sm font-medium text-gray-900">{comment.authorName}</span>
+                  <Avatar name={comment.author?.full_name ?? "User"} src={comment.author?.avatar_url} size="sm" />
+                  <span className="text-sm font-medium text-gray-900">{comment.author?.full_name ?? "User"}</span>
                   <span className="text-xs text-gray-400">
-                    {new Date(comment.createdAt).toLocaleDateString("en-US", {
+                    {new Date(comment.created_at).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       hour: "numeric",
@@ -204,7 +237,7 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
 
         {/* Comment input (client component) */}
         <CommentInput
-          currentUserName="Sarah Kim"
+          currentUserName={currentUserName}
           entityType="milestone"
           entityId={milestone.id}
         />

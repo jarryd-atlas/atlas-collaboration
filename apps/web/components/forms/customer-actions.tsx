@@ -6,11 +6,9 @@ import { CreateSiteDialog } from "./create-site-dialog";
 import { CreateMilestoneDialog } from "./create-milestone-dialog";
 import { FlagIssueDialog } from "./flag-issue-dialog";
 import { Plus, Mic, Flag, Target } from "lucide-react";
-import type { Site } from "../../lib/mock-data";
-
 interface CustomerActionsProps {
   customerName: string;
-  sites: Site[];
+  sites: Array<{ id: string; name: string; slug: string; [key: string]: unknown }>;
 }
 
 export function CustomerActions({ customerName, sites }: CustomerActionsProps) {

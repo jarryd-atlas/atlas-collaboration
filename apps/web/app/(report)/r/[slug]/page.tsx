@@ -1,7 +1,7 @@
 // Public report page — no auth required, standalone layout
-// Fetches report data by slug from Supabase (with mock fallback)
+// Fetches report data by slug from Supabase using service role
 
-import { getReportById, getReportSections, MOCK_REPORTS, type StatusReport, type ReportSection } from "../../../../lib/mock-data";
+import { getPublicReport } from "../../../../lib/data/queries";
 
 interface ReportPageProps {
   params: Promise<{ slug: string }>;
@@ -10,11 +10,14 @@ interface ReportPageProps {
 export default async function ReportPage({ params }: ReportPageProps) {
   const { slug } = await params;
 
-  // Try to find report by slug (mock for now)
-  const report = MOCK_REPORTS.find((r) => r.slug === slug) ?? null;
-  const sections = report ? getReportSections(report.id) : [];
+  let reportData: Awaited<ReturnType<typeof getPublicReport>> = null;
+  try {
+    reportData = await getPublicReport(slug);
+  } catch {
+    // Show not found
+  }
 
-  if (!report) {
+  if (!reportData) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -27,6 +30,8 @@ export default async function ReportPage({ params }: ReportPageProps) {
       </div>
     );
   }
+
+  const { report, sections } = reportData;
 
   return (
     <div className="min-h-screen bg-white">
@@ -44,24 +49,24 @@ export default async function ReportPage({ params }: ReportPageProps) {
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
               <span className="text-sm font-bold text-gray-400">
-                {report.customerName.charAt(0)}
+                {(report.customer?.name ?? "?").charAt(0)}
               </span>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-900">{report.customerName}</p>
-              {report.siteName && (
-                <p className="text-xs text-gray-500">{report.siteName}</p>
+              <p className="text-sm font-medium text-gray-900">{report.customer?.name ?? ""}</p>
+              {report.site?.name && (
+                <p className="text-xs text-gray-500">{report.site?.name}</p>
               )}
             </div>
           </div>
 
           <h1 className="text-3xl font-bold text-gray-900">{report.title}</h1>
           <p className="mt-2 text-sm text-gray-500">
-            Reporting period: {report.dateRangeStart} to {report.dateRangeEnd}
+            Reporting period: {report.date_from} to {report.date_to}
           </p>
-          {report.publishedAt && (
+          {report.published_at && (
             <p className="text-xs text-gray-400 mt-1">
-              Published {new Date(report.publishedAt).toLocaleDateString("en-US", {
+              Published {new Date(report.published_at).toLocaleDateString("en-US", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
@@ -80,7 +85,7 @@ export default async function ReportPage({ params }: ReportPageProps) {
         ) : (
           <div className="space-y-8">
             {sections
-              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .sort((a, b) => a.sort_order - b.sort_order)
               .map((section) => (
                 <section key={section.id}>
                   <h2 className="text-lg font-bold text-gray-900 mb-3 pb-2 border-b border-gray-100">

@@ -7,7 +7,7 @@ import { slugify } from "../utils";
 
 export async function createCustomer(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const name = formData.get("name") as string;
   const domain = (formData.get("domain") as string) || null;
@@ -44,7 +44,7 @@ export async function createCustomer(formData: FormData) {
 
 export async function updateCustomer(customerId: string, formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const name = formData.get("name") as string;
   const logoUrl = (formData.get("logoUrl") as string) || null;

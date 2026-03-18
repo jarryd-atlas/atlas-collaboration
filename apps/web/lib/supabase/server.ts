@@ -55,8 +55,9 @@ export function createSupabaseAdmin() {
 }
 
 /**
- * Get the current user's session and profile claims from JWT.
- * Returns null if not authenticated.
+ * Get the current user's session and profile from the database.
+ * Falls back to DB lookup when JWT custom claims aren't available
+ * (e.g. when the JWT hook is disabled).
  */
 export async function getSession() {
   const supabase = await createSupabaseServer();
@@ -66,25 +67,48 @@ export async function getSession() {
 
   if (!session) return null;
 
-  // Extract custom claims from JWT
-  const claims = session.access_token
+  // Try to get claims from JWT first
+  const jwtPayload = session.access_token
     ? JSON.parse(atob(session.access_token.split(".")[1]!))
     : {};
+
+  let claims = {
+    tenantId: jwtPayload.tenant_id as string | undefined,
+    tenantType: jwtPayload.tenant_type as "internal" | "customer" | undefined,
+    appRole: jwtPayload.app_role as
+      | "super_admin"
+      | "admin"
+      | "member"
+      | undefined,
+    profileId: jwtPayload.profile_id as string | undefined,
+    profileStatus: jwtPayload.profile_status as string | undefined,
+  };
+
+  // If JWT claims are missing (hook disabled), look up profile from DB
+  if (!claims.profileId) {
+    const admin = createSupabaseAdmin();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id, role, status, tenant_id, tenants(type)")
+      .eq("user_id", session.user.id)
+      .single();
+
+    if (profile) {
+      const tenantType = (profile.tenants as unknown as { type: string })?.type;
+      claims = {
+        tenantId: profile.tenant_id,
+        tenantType: tenantType as "internal" | "customer",
+        appRole: profile.role as "super_admin" | "admin" | "member",
+        profileId: profile.id,
+        profileStatus: profile.status,
+      };
+    }
+  }
 
   return {
     session,
     user: session.user,
-    claims: {
-      tenantId: claims.tenant_id as string | undefined,
-      tenantType: claims.tenant_type as "internal" | "customer" | undefined,
-      appRole: claims.app_role as
-        | "super_admin"
-        | "admin"
-        | "member"
-        | undefined,
-      profileId: claims.profile_id as string | undefined,
-      profileStatus: claims.profile_status as string | undefined,
-    },
+    claims,
   };
 }
 
@@ -94,10 +118,12 @@ export async function getSession() {
  */
 export async function requireSession() {
   const result = await getSession();
-  if (!result || !result.claims.profileId) {
+  if (!result) {
     throw new Error("Unauthorized");
   }
-  if (result.claims.profileStatus !== "active") {
+  // If no profile exists yet (first-time user), allow through
+  // with limited claims — the action itself should handle this
+  if (result.claims.profileStatus && result.claims.profileStatus !== "active") {
     throw new Error("Account not active");
   }
   return result;

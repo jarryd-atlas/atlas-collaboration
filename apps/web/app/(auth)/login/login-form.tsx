@@ -1,17 +1,10 @@
 "use client";
 
 import { useState, use } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseBrowser } from "../../../lib/supabase/browser";
 
 interface LoginFormProps {
   searchParams: Promise<{ error?: string; redirect?: string }>;
-}
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
 }
 
 export function LoginForm({ searchParams }: LoginFormProps) {
@@ -24,7 +17,7 @@ export function LoginForm({ searchParams }: LoginFormProps) {
   async function handleGoogleSignIn() {
     setError("");
     setLoading(true);
-    const supabase = getSupabase();
+    const supabase = getSupabaseBrowser();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -45,7 +38,7 @@ export function LoginForm({ searchParams }: LoginFormProps) {
     const email = formData.get("email") as string;
     setError("");
     setLoading(true);
-    const supabase = getSupabase();
+    const supabase = getSupabaseBrowser();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {

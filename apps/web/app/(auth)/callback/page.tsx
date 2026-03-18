@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseBrowser } from "../../../lib/supabase/browser";
 
 function CallbackHandler() {
   const router = useRouter();
@@ -11,10 +11,7 @@ function CallbackHandler() {
 
   useEffect(() => {
     async function handleAuth() {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      );
+      const supabase = getSupabaseBrowser();
 
       // PKCE flow: exchange the code from the URL query params
       const code = searchParams.get("code");

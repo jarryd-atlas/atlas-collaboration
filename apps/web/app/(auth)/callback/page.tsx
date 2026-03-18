@@ -1,63 +1,61 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "../../../lib/supabase/browser";
 
 function CallbackHandler() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState("Completing sign in...");
 
   useEffect(() => {
     async function handleAuth() {
       const supabase = getSupabaseBrowser();
 
-      // PKCE flow: exchange the code from the URL query params
-      const code = searchParams.get("code");
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          console.error("Code exchange failed:", error.message);
-          setStatus(`Sign in failed: ${error.message}`);
-          setTimeout(() => router.push("/login?error=auth_callback_failed"), 3000);
-          return;
-        }
-        // Success — redirect to app
-        router.push(searchParams.get("redirect") || "/");
-        return;
-      }
+      // With implicit flow, Supabase auto-detects tokens in the URL hash.
+      // The onAuthStateChange listener fires when a session is established.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          if (event === "SIGNED_IN" && session) {
+            subscription.unsubscribe();
+            router.push("/");
+          }
+        },
+      );
 
-      // Hash fragment flow (implicit grant / magic link with token)
-      // The Supabase client auto-detects tokens in the hash
-      const { data: { session }, error } = await supabase.auth.getSession();
+      // Also check if session already exists (e.g. magic link click)
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        router.push(searchParams.get("redirect") || "/");
+        subscription.unsubscribe();
+        router.push("/");
         return;
       }
 
-      if (error) {
-        console.error("Session error:", error.message);
-      }
-
-      // No code and no session — check URL hash for tokens
-      const hash = window.location.hash;
-      if (hash && hash.includes("access_token")) {
-        // Wait for Supabase to process the hash
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Give Supabase time to process the hash fragment
+      setTimeout(async () => {
         const { data: { session: s2 } } = await supabase.auth.getSession();
         if (s2) {
-          router.push(searchParams.get("redirect") || "/");
+          subscription.unsubscribe();
+          router.push("/");
           return;
         }
-      }
-
-      setStatus("Authentication failed. Redirecting to login...");
-      setTimeout(() => router.push("/login?error=auth_callback_failed"), 2000);
+        // Check for error in URL
+        const hash = window.location.hash;
+        const params = new URLSearchParams(window.location.search);
+        const errorMsg = params.get("error_description") ||
+                         (hash.includes("error") ? "Authentication error" : null);
+        if (errorMsg) {
+          console.error("Auth callback error:", errorMsg);
+          setStatus(`Sign in failed. Redirecting...`);
+        } else {
+          setStatus("No session found. Redirecting...");
+        }
+        setTimeout(() => router.push("/login?error=auth_callback_failed"), 2000);
+      }, 3000);
     }
 
     handleAuth();
-  }, [router, searchParams]);
+  }, [router]);
 
   return (
     <div className="text-center">

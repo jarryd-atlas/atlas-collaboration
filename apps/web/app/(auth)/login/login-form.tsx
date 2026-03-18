@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, use } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 interface LoginFormProps {
   searchParams: Promise<{ error?: string; redirect?: string }>;
 }
 
 function getSupabase() {
-  return createBrowserClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );

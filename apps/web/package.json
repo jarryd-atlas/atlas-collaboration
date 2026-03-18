@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
+    "build:worker": "next build && opennextjs-cloudflare",
+    "preview:cloudflare": "npx @opennextjs/cloudflare && npx wrangler dev",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
@@ -21,6 +23,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.17.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4.2.1",

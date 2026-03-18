@@ -10,29 +10,56 @@ function CallbackHandler() {
   const [status, setStatus] = useState("Completing sign in...");
 
   useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
+    async function handleAuth() {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      );
 
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        const next = searchParams.get("redirect") || "/";
-        router.push(next);
+      // PKCE flow: exchange the code from the URL query params
+      const code = searchParams.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error("Code exchange failed:", error.message);
+          setStatus(`Sign in failed: ${error.message}`);
+          setTimeout(() => router.push("/login?error=auth_callback_failed"), 3000);
+          return;
+        }
+        // Success — redirect to app
+        router.push(searchParams.get("redirect") || "/");
+        return;
       }
-    });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Hash fragment flow (implicit grant / magic link with token)
+      // The Supabase client auto-detects tokens in the hash
+      const { data: { session }, error } = await supabase.auth.getSession();
       if (session) {
-        const next = searchParams.get("redirect") || "/";
-        router.push(next);
-      } else {
-        setTimeout(() => {
-          setStatus("Authentication failed. Redirecting to login...");
-          setTimeout(() => router.push("/login?error=auth_callback_failed"), 2000);
-        }, 3000);
+        router.push(searchParams.get("redirect") || "/");
+        return;
       }
-    });
+
+      if (error) {
+        console.error("Session error:", error.message);
+      }
+
+      // No code and no session — check URL hash for tokens
+      const hash = window.location.hash;
+      if (hash && hash.includes("access_token")) {
+        // Wait for Supabase to process the hash
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: { session: s2 } } = await supabase.auth.getSession();
+        if (s2) {
+          router.push(searchParams.get("redirect") || "/");
+          return;
+        }
+      }
+
+      setStatus("Authentication failed. Redirecting to login...");
+      setTimeout(() => router.push("/login?error=auth_callback_failed"), 2000);
+    }
+
+    handleAuth();
   }, [router, searchParams]);
 
   return (

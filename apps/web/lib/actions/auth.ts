@@ -3,19 +3,23 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer, createSupabaseAdmin } from "../supabase/server";
 
-export async function signInWithGoogle() {
-  const supabase = await createSupabaseServer();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      queryParams: {
-        hd: "crossnokaye.com",
+export async function signInWithGoogle(): Promise<{ url: string | null; error: string | null }> {
+  try {
+    const supabase = await createSupabaseServer();
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        queryParams: {
+          hd: "crossnokaye.com",
+        },
       },
-    },
-  });
+    });
 
-  if (error) throw error;
-  if (data.url) redirect(data.url);
+    if (error) return { url: null, error: error.message };
+    return { url: data.url, error: null };
+  } catch (e) {
+    return { url: null, error: e instanceof Error ? e.message : "Unknown error" };
+  }
 }
 
 export async function signInWithMagicLink(formData: FormData) {

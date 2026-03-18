@@ -15,7 +15,12 @@ export function LoginForm({ searchParams }: LoginFormProps) {
 
   async function handleGoogleSignIn() {
     setError("");
-    await signInWithGoogle();
+    const result = await signInWithGoogle();
+    if (result.error) {
+      setError(result.error);
+    } else if (result.url) {
+      window.location.href = result.url;
+    }
   }
 
   async function handleMagicLink(formData: FormData) {

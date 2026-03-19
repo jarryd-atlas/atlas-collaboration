@@ -7,5 +7,8 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  }
+  },
+  // Runtime vars set via Cloudflare dashboard (Settings > Variables and Secrets)
+  // SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
+  // NEXT_PUBLIC_* vars are baked in at build time
 }

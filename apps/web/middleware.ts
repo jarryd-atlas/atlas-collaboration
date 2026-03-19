@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login", "/callback", "/pending", "/welcome"];
 const REPORT_ROUTE_PREFIX = "/r/";
+const API_ROUTE_PREFIX = "/api/";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -18,6 +19,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) ||
     pathname.startsWith(REPORT_ROUTE_PREFIX) ||
+    pathname.startsWith(API_ROUTE_PREFIX) ||
     pathname === "/robots.txt" ||
     pathname === "/favicon.ico";
 

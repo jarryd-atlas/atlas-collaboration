@@ -8,10 +8,12 @@ import { FlagIssueDialog } from "./flag-issue-dialog";
 import { Plus, Mic, Flag, Target } from "lucide-react";
 interface CustomerActionsProps {
   customerName: string;
+  customerId: string;
+  customerTenantId: string;
   sites: Array<{ id: string; name: string; slug: string; [key: string]: unknown }>;
 }
 
-export function CustomerActions({ customerName, sites }: CustomerActionsProps) {
+export function CustomerActions({ customerName, customerId, customerTenantId, sites }: CustomerActionsProps) {
   const [showAddSite, setShowAddSite] = useState(false);
   const [showFlagIssue, setShowFlagIssue] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
@@ -37,6 +39,8 @@ export function CustomerActions({ customerName, sites }: CustomerActionsProps) {
         open={showAddSite}
         onClose={() => setShowAddSite(false)}
         customerName={customerName}
+        customerId={customerId}
+        customerTenantId={customerTenantId}
       />
       <FlagIssueDialog
         open={showFlagIssue}
@@ -54,9 +58,11 @@ export function CustomerActions({ customerName, sites }: CustomerActionsProps) {
 
 interface AddSiteButtonProps {
   customerName: string;
+  customerId: string;
+  customerTenantId: string;
 }
 
-export function AddSiteButton({ customerName }: AddSiteButtonProps) {
+export function AddSiteButton({ customerName, customerId, customerTenantId }: AddSiteButtonProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -67,6 +73,8 @@ export function AddSiteButton({ customerName }: AddSiteButtonProps) {
         open={open}
         onClose={() => setOpen(false)}
         customerName={customerName}
+        customerId={customerId}
+        customerTenantId={customerTenantId}
       />
     </>
   );

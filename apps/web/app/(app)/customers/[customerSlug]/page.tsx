@@ -65,7 +65,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       </div>
 
       {/* Quick actions */}
-      <CustomerActions customerName={customer.name} sites={sites} />
+      <CustomerActions customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} sites={sites} />
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -79,7 +79,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
-          <AddSiteButton customerName={customer.name} />
+          <AddSiteButton customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} />
         </div>
 
         {sites.length === 0 ? (
@@ -87,7 +87,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
             icon={<MapPin className="h-12 w-12" />}
             title="No sites yet"
             description="Add a site to start tracking milestones and tasks."
-            action={<AddSiteButton customerName={customer.name} />}
+            action={<AddSiteButton customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} />}
           />
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

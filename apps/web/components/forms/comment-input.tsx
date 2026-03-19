@@ -34,12 +34,12 @@ export function CommentInput({
     if (tenantId) formData.set("tenantId", tenantId);
 
     startTransition(async () => {
-      try {
-        await createComment(formData);
-        setBody("");
-      } catch {
+      const result = await createComment(formData);
+      if (result && "error" in result) {
         // Error handled silently — comment stays in textarea for retry
+        return;
       }
+      setBody("");
     });
   }
 

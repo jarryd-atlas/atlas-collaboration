@@ -5,77 +5,105 @@ import { createSupabaseAdmin, requireSession } from "../supabase/server";
 import type { TaskStatus, PriorityLevel } from "@repo/supabase";
 
 export async function createTask(formData: FormData) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const milestoneId = formData.get("milestoneId") as string;
-  const tenantId = formData.get("tenantId") as string;
-  const title = formData.get("title") as string;
-  const description = (formData.get("description") as string) || null;
-  const priority = (formData.get("priority") as PriorityLevel) || "medium";
-  const assigneeId = (formData.get("assigneeId") as string) || null;
-  const dueDate = (formData.get("dueDate") as string) || null;
+    const milestoneId = formData.get("milestoneId") as string;
+    const tenantId = formData.get("tenantId") as string;
+    const title = formData.get("title") as string;
+    const description = (formData.get("description") as string) || null;
+    const priority = (formData.get("priority") as PriorityLevel) || "medium";
+    const assigneeId = (formData.get("assigneeId") as string) || null;
+    const dueDate = (formData.get("dueDate") as string) || null;
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("tasks").insert({
-    milestone_id: milestoneId,
-    tenant_id: tenantId,
-    title,
-    description,
-    priority,
-    assignee_id: assigneeId,
-    due_date: dueDate,
-    status: "todo" as TaskStatus,
-    source: "manual" as const,
-  });
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin.from("tasks").insert({
+      milestone_id: milestoneId,
+      tenant_id: tenantId,
+      title,
+      description,
+      priority,
+      assignee_id: assigneeId,
+      due_date: dueDate,
+      status: "todo" as TaskStatus,
+      source: "manual" as const,
+    });
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/customers");
-  revalidatePath("/tasks");
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("tasks")
-    .update({ status })
-    .eq("id", taskId);
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ status })
+      .eq("id", taskId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/customers");
-  revalidatePath("/tasks");
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function updateTaskAssignee(taskId: string, assigneeId: string | null) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("tasks")
-    .update({ assignee_id: assigneeId })
-    .eq("id", taskId);
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ assignee_id: assigneeId })
+      .eq("id", taskId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/customers");
-  revalidatePath("/tasks");
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function deleteTask(taskId: string) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const admin = createSupabaseAdmin();
-  const { error } = await admin.from("tasks").delete().eq("id", taskId);
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin.from("tasks").delete().eq("id", taskId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/customers");
-  revalidatePath("/tasks");
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }

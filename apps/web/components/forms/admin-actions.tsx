@@ -35,7 +35,10 @@ export function ApproveUserButton({ userId, userName: _userName }: ApproveUserBu
 
   function handleApprove() {
     startTransition(async () => {
-      await approveUser(userId);
+      const result = await approveUser(userId);
+      if (result && "error" in result) {
+        console.error("Failed to approve user:", result.error);
+      }
     });
   }
 
@@ -51,7 +54,10 @@ export function DenyUserButton({ userId }: { userId: string }) {
 
   function handleDeny() {
     startTransition(async () => {
-      await denyUser(userId);
+      const result = await denyUser(userId);
+      if (result && "error" in result) {
+        console.error("Failed to deny user:", result.error);
+      }
     });
   }
 

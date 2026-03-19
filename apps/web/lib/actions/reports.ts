@@ -12,89 +12,109 @@ const DEFAULT_SECTIONS = [
 ];
 
 export async function createReport(formData: FormData) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
-  if (!claims.profileId || !claims.tenantId) throw new Error("Profile not found");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
+    if (!claims.profileId || !claims.tenantId) return { error: "Profile not found" };
 
-  const title = formData.get("title") as string;
-  const customerId = formData.get("customerId") as string;
-  const siteId = (formData.get("siteId") as string) || null;
-  const dateRangeStart = formData.get("dateRangeStart") as string;
-  const dateRangeEnd = formData.get("dateRangeEnd") as string;
+    const title = formData.get("title") as string;
+    const customerId = formData.get("customerId") as string;
+    const siteId = (formData.get("siteId") as string) || null;
+    const dateRangeStart = formData.get("dateRangeStart") as string;
+    const dateRangeEnd = formData.get("dateRangeEnd") as string;
 
-  const admin = createSupabaseAdmin();
+    const admin = createSupabaseAdmin();
 
-  // Create the report
-  const { data: report, error: reportErr } = await admin
-    .from("status_reports")
-    .insert({
-      tenant_id: claims.tenantId,
-      customer_id: customerId,
-      site_id: siteId,
-      title,
-      status: "draft" as const,
-      date_range_start: dateRangeStart,
-      date_range_end: dateRangeEnd,
-      created_by: claims.profileId,
-    })
-    .select()
-    .single();
+    // Create the report
+    const { data: report, error: reportErr } = await admin
+      .from("status_reports")
+      .insert({
+        tenant_id: claims.tenantId,
+        customer_id: customerId,
+        site_id: siteId,
+        title,
+        status: "draft" as const,
+        date_range_start: dateRangeStart,
+        date_range_end: dateRangeEnd,
+        created_by: claims.profileId,
+      })
+      .select()
+      .single();
 
-  if (reportErr) throw reportErr;
+    if (reportErr) return { error: reportErr.message };
 
-  // Create default sections
-  const tenantId = claims.tenantId;
-  const sections = DEFAULT_SECTIONS.map((s) => ({
-    report_id: report.id,
-    tenant_id: tenantId,
-    section_key: s.section_type,
-    title: s.title,
-    content: "",
-    sort_order: s.sort_order,
-  }));
+    // Create default sections
+    const tenantId = claims.tenantId;
+    const sections = DEFAULT_SECTIONS.map((s) => ({
+      report_id: report.id,
+      tenant_id: tenantId,
+      section_key: s.section_type,
+      title: s.title,
+      content: "",
+      sort_order: s.sort_order,
+    }));
 
-  const { error: sectionsErr } = await admin
-    .from("report_sections")
-    .insert(sections);
+    const { error: sectionsErr } = await admin
+      .from("report_sections")
+      .insert(sections);
 
-  if (sectionsErr) throw sectionsErr;
+    if (sectionsErr) return { error: sectionsErr.message };
 
-  revalidatePath("/reports");
-  return { id: report.id };
+    revalidatePath("/reports");
+    return { id: report.id };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function updateReportSection(sectionId: string, content: string) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const admin = createSupabaseAdmin();
+    const admin = createSupabaseAdmin();
 
-  const { error } = await admin
-    .from("report_sections")
-    .update({ content })
-    .eq("id", sectionId);
+    const { error: dbError } = await admin
+      .from("report_sections")
+      .update({ content })
+      .eq("id", sectionId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/reports");
+    revalidatePath("/reports");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function publishReport(reportId: string) {
-  const { claims } = await requireSession();
-  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
 
-  const admin = createSupabaseAdmin();
+    const admin = createSupabaseAdmin();
 
-  const { error } = await admin
-    .from("status_reports")
-    .update({
-      status: "published" as const,
-      published_at: new Date().toISOString(),
-    })
-    .eq("id", reportId);
+    const { error: dbError } = await admin
+      .from("status_reports")
+      .update({
+        status: "published" as const,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", reportId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  revalidatePath("/reports");
-  revalidatePath(`/reports/${reportId}`);
+    revalidatePath("/reports");
+    revalidatePath(`/reports/${reportId}`);
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }

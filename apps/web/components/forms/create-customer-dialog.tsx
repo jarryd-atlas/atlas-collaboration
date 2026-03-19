@@ -23,12 +23,12 @@ export function CreateCustomerDialog({ open, onClose }: CreateCustomerDialogProp
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      try {
-        const result = await createCustomer(formData);
+      const result = await createCustomer(formData);
+      if ("error" in result) {
+        setError(result.error ?? "Unknown error");
+      } else {
         onClose();
         router.push(`/customers/${result.slug}`);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create customer");
       }
     });
   }

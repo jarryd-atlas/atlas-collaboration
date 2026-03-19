@@ -23,16 +23,20 @@ export async function signInWithGoogle(): Promise<{ url: string | null; error: s
 }
 
 export async function signInWithMagicLink(formData: FormData) {
-  const email = formData.get("email") as string;
+  try {
+    const email = formData.get("email") as string;
 
-  const supabase = await createSupabaseServer();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-  });
+    const supabase = await createSupabaseServer();
+    const { error: dbError } = await supabase.auth.signInWithOtp({
+      email,
+    });
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
 
-  return { success: true, email };
+    return { success: true, email };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }
 
 export async function signOut() {
@@ -42,11 +46,17 @@ export async function signOut() {
 }
 
 export async function markNotificationRead(notificationId: string) {
-  const admin = createSupabaseAdmin();
-  const { error } = await admin
-    .from("notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", notificationId);
+  try {
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", notificationId);
 
-  if (error) throw error;
+    if (dbError) return { error: dbError.message };
+
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
 }

@@ -7,7 +7,7 @@ import type { PipelineStage } from "@repo/supabase";
 
 export async function createSite(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const customerId = formData.get("customerId") as string;
   const customerTenantId = formData.get("customerTenantId") as string;
@@ -41,7 +41,7 @@ export async function updateSitePipelineStage(
   dqReevalDate?: string,
 ) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin

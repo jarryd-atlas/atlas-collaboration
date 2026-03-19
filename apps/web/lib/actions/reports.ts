@@ -13,7 +13,8 @@ const DEFAULT_SECTIONS = [
 
 export async function createReport(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (!claims.profileId || !claims.tenantId) throw new Error("Profile not found");
 
   const title = formData.get("title") as string;
   const customerId = formData.get("customerId") as string;
@@ -27,14 +28,14 @@ export async function createReport(formData: FormData) {
   const { data: report, error: reportErr } = await admin
     .from("status_reports")
     .insert({
-      tenant_id: claims.tenantId!,
+      tenant_id: claims.tenantId,
       customer_id: customerId,
       site_id: siteId,
       title,
       status: "draft" as const,
       date_range_start: dateRangeStart,
       date_range_end: dateRangeEnd,
-      created_by: claims.profileId!,
+      created_by: claims.profileId,
     })
     .select()
     .single();
@@ -42,9 +43,10 @@ export async function createReport(formData: FormData) {
   if (reportErr) throw reportErr;
 
   // Create default sections
+  const tenantId = claims.tenantId;
   const sections = DEFAULT_SECTIONS.map((s) => ({
     report_id: report.id,
-    tenant_id: claims.tenantId!,
+    tenant_id: tenantId,
     section_key: s.section_type,
     title: s.title,
     content: "",
@@ -63,7 +65,7 @@ export async function createReport(formData: FormData) {
 
 export async function updateReportSection(sectionId: string, content: string) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
 
@@ -79,7 +81,7 @@ export async function updateReportSection(sectionId: string, content: string) {
 
 export async function publishReport(reportId: string) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
 

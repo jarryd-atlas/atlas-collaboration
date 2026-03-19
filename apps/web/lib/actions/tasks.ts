@@ -6,7 +6,7 @@ import type { TaskStatus, PriorityLevel } from "@repo/supabase";
 
 export async function createTask(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const milestoneId = formData.get("milestoneId") as string;
   const tenantId = formData.get("tenantId") as string;
@@ -37,7 +37,7 @@ export async function createTask(formData: FormData) {
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin
@@ -53,7 +53,7 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
 
 export async function updateTaskAssignee(taskId: string, assigneeId: string | null) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin
@@ -69,7 +69,7 @@ export async function updateTaskAssignee(taskId: string, assigneeId: string | nu
 
 export async function deleteTask(taskId: string) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin.from("tasks").delete().eq("id", taskId);

@@ -6,6 +6,7 @@ import type { EntityType } from "@repo/supabase";
 
 export async function createComment(formData: FormData) {
   const { claims } = await requireSession();
+  if (!claims.profileId) throw new Error("Profile not found");
 
   const entityType = formData.get("entityType") as EntityType;
   const entityId = formData.get("entityId") as string;
@@ -19,7 +20,7 @@ export async function createComment(formData: FormData) {
     tenant_id: tenantId,
     entity_type: entityType,
     entity_id: entityId,
-    author_id: claims.profileId!,
+    author_id: claims.profileId,
     body: body.trim(),
   });
 

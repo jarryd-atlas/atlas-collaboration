@@ -6,7 +6,8 @@ import type { SeverityLevel, IssueStatus } from "@repo/supabase";
 
 export async function createFlaggedIssue(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (!claims.profileId) throw new Error("Profile not found");
 
   const siteId = formData.get("siteId") as string;
   const tenantId = formData.get("tenantId") as string;
@@ -21,7 +22,7 @@ export async function createFlaggedIssue(formData: FormData) {
     severity,
     summary,
     details,
-    flagged_by: claims.profileId!,
+    flagged_by: claims.profileId,
     status: "open" as IssueStatus,
   });
 
@@ -33,7 +34,7 @@ export async function createFlaggedIssue(formData: FormData) {
 
 export async function updateIssueStatus(issueId: string, status: IssueStatus) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const update: Record<string, unknown> = { status };

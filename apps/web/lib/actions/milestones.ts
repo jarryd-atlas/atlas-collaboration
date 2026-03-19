@@ -7,7 +7,7 @@ import type { MilestoneStatus, PriorityLevel } from "@repo/supabase";
 
 export async function createMilestone(formData: FormData) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const siteId = formData.get("siteId") as string;
   const tenantId = formData.get("tenantId") as string;
@@ -43,7 +43,7 @@ export async function updateMilestoneStatus(
   status: MilestoneStatus,
 ) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin
@@ -64,7 +64,7 @@ export async function updateMilestoneProgress(
   progress: number,
 ) {
   const { claims } = await requireSession();
-  if (claims.tenantType !== "internal") throw new Error("Forbidden");
+  if (claims.tenantType && claims.tenantType !== "internal") throw new Error("Forbidden");
 
   const admin = createSupabaseAdmin();
   const { error } = await admin

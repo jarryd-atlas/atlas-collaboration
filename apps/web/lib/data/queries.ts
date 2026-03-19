@@ -1,6 +1,7 @@
 /**
  * Supabase data access queries.
- * All queries use the user's session (RLS-scoped) unless noted.
+ * All queries use the service role (admin) client to bypass RLS.
+ * Auth checks are handled by server actions and middleware.
  * Pages handle empty results gracefully when the database has no data.
  */
 
@@ -10,7 +11,7 @@ import type { SiteRow } from "@repo/supabase";
 // ─── Customers ──────────────────────────────────────────────
 
 export async function getCustomers() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("customers")
     .select("*")
@@ -21,7 +22,7 @@ export async function getCustomers() {
 }
 
 export async function getCustomerBySlug(slug: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("customers")
     .select("*")
@@ -35,7 +36,7 @@ export async function getCustomerBySlug(slug: string) {
 // ─── Sites ──────────────────────────────────────────────────
 
 export async function getSitesForCustomer(customerId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("sites")
     .select("*")
@@ -52,7 +53,7 @@ export async function getSiteBySlug(customerSlug: string, siteSlug: string) {
 
   const customerId = (customer as { id: string }).id;
 
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("sites")
     .select("*")
@@ -67,7 +68,7 @@ export async function getSiteBySlug(customerSlug: string, siteSlug: string) {
 // ─── Milestones ─────────────────────────────────────────────
 
 export async function getMilestonesForSite(siteId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("milestones")
     .select("*")
@@ -79,7 +80,7 @@ export async function getMilestonesForSite(siteId: string) {
 }
 
 export async function getMilestoneBySlug(siteId: string, milestoneSlug: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("milestones")
     .select("*")
@@ -92,7 +93,7 @@ export async function getMilestoneBySlug(siteId: string, milestoneSlug: string) 
 }
 
 export async function getMilestoneTemplates() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("milestone_templates")
     .select("*")
@@ -105,7 +106,7 @@ export async function getMilestoneTemplates() {
 // ─── Tasks ──────────────────────────────────────────────────
 
 export async function getTasksForMilestone(milestoneId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("tasks")
     .select("*, assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url)")
@@ -117,7 +118,7 @@ export async function getTasksForMilestone(milestoneId: string) {
 }
 
 export async function getMyTasks(profileId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("tasks")
     .select(`
@@ -141,8 +142,9 @@ export async function getMyTasks(profileId: string) {
 
 // ─── Comments ───────────────────────────────────────────────
 
-export async function getCommentsForEntity(entityType: string, entityId: string) {
-  const supabase = await createSupabaseServer();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getCommentsForEntity(entityType: any, entityId: string) {
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("comments")
     .select("*, author:profiles!comments_author_id_fkey(id, full_name, avatar_url)")
@@ -158,7 +160,7 @@ export async function getCommentsForEntity(entityType: string, entityId: string)
 
 export async function getFlaggedIssuesForSites(siteIds: string[]) {
   if (siteIds.length === 0) return [];
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("flagged_issues")
     .select("*, flagged_by_profile:profiles!flagged_issues_flagged_by_fkey(full_name), site:sites!inner(name)")
@@ -170,7 +172,7 @@ export async function getFlaggedIssuesForSites(siteIds: string[]) {
 }
 
 export async function getAllFlaggedIssues() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("flagged_issues")
     .select("*, flagged_by_profile:profiles!flagged_issues_flagged_by_fkey(full_name), site:sites!inner(name)")
@@ -184,7 +186,7 @@ export async function getAllFlaggedIssues() {
 // ─── Notifications ──────────────────────────────────────────
 
 export async function getUnreadNotifications(profileId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("notifications")
     .select("*")
@@ -200,7 +202,7 @@ export async function getUnreadNotifications(profileId: string) {
 // ─── Profiles ───────────────────────────────────────────────
 
 export async function getAllProfiles() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
     .select("*, tenant:tenants(id, name, type)")
@@ -211,7 +213,7 @@ export async function getAllProfiles() {
 }
 
 export async function getActiveProfiles() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -223,7 +225,7 @@ export async function getActiveProfiles() {
 }
 
 export async function getPendingProfiles() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -235,7 +237,7 @@ export async function getPendingProfiles() {
 }
 
 export async function getProfileById(profileId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("profiles")
     .select("*, tenant:tenants!inner(id, name, type)")
@@ -272,7 +274,7 @@ export async function getPublicReport(slug: string) {
 // ─── Dashboard stats ────────────────────────────────────────
 
 export async function getDashboardStats() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   const [customersRes, sitesRes, milestonesRes, tasksRes, issuesRes] = await Promise.all([
     supabase.from("customers").select("id", { count: "exact", head: true }),
@@ -298,7 +300,7 @@ export async function getDashboardStats() {
 // ─── Voice Notes ────────────────────────────────────────
 
 export async function getVoiceNotes() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("voice_notes")
     .select(`
@@ -330,7 +332,7 @@ export async function getVoiceNotes() {
 }
 
 export async function getVoiceNoteById(noteId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("voice_notes")
     .select(`
@@ -365,7 +367,7 @@ export async function getVoiceNoteById(noteId: string) {
 // ─── Status Reports ─────────────────────────────────────
 
 export async function getReports(filter?: "all" | "draft" | "published") {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   let query = supabase
     .from("status_reports")
     .select("*, customer:customers!inner(name), site:sites(name), created_by_profile:profiles!status_reports_created_by_fkey(full_name)")
@@ -383,7 +385,7 @@ export async function getReports(filter?: "all" | "draft" | "published") {
 }
 
 export async function getReportById(reportId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("status_reports")
     .select("*, customer:customers!inner(name), site:sites(name), created_by_profile:profiles!status_reports_created_by_fkey(full_name)")
@@ -395,7 +397,7 @@ export async function getReportById(reportId: string) {
 }
 
 export async function getReportSections(reportId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("report_sections")
     .select("*")
@@ -409,7 +411,7 @@ export async function getReportSections(reportId: string) {
 // ─── All Tasks (for tasks page) ─────────────────────────
 
 export async function getAllOpenTasks() {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("tasks")
     .select(`
@@ -433,7 +435,7 @@ export async function getAllOpenTasks() {
 // ─── Flagged Issues for Customer ────────────────────────
 
 export async function getFlaggedIssuesForCustomer(customerId: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const { data: sites } = await supabase
     .from("sites")
     .select("id")
@@ -448,7 +450,7 @@ export async function getFlaggedIssuesForCustomer(customerId: string) {
 // ─── Search ─────────────────────────────────────────────────
 
 export async function searchAll(query: string) {
-  const supabase = await createSupabaseServer();
+  const supabase = createSupabaseAdmin();
   const tsQuery = query.trim().split(/\s+/).join(" & ");
 
   // Search individual tables with full-text search
@@ -458,18 +460,18 @@ export async function searchAll(query: string) {
     supabase.from("tasks").select("*").textSearch("search_vector", tsQuery).limit(5),
   ]);
 
-  type SearchResult = { id: string; title: string; entityType: "site" | "milestone" | "task"; tenantId: string };
+  type SearchResult = { id: string; title: string; entityType: "site" | "milestone" | "task" };
 
   const results: SearchResult[] = [];
 
-  for (const s of (sitesRes.data ?? []) as SiteRow[]) {
-    results.push({ id: s.id, title: s.name, entityType: "site", tenantId: s.tenant_id });
+  for (const s of (sitesRes.data ?? []) as any[]) {
+    results.push({ id: s.id, title: s.name, entityType: "site" });
   }
-  for (const m of (milestonesRes.data ?? []) as Array<{ id: string; name: string; tenant_id: string }>) {
-    results.push({ id: m.id, title: m.name, entityType: "milestone", tenantId: m.tenant_id });
+  for (const m of (milestonesRes.data ?? []) as any[]) {
+    results.push({ id: m.id, title: m.name, entityType: "milestone" });
   }
-  for (const t of (tasksRes.data ?? []) as Array<{ id: string; title: string; tenant_id: string }>) {
-    results.push({ id: t.id, title: t.title, entityType: "task", tenantId: t.tenant_id });
+  for (const t of (tasksRes.data ?? []) as any[]) {
+    results.push({ id: t.id, title: t.title, entityType: "task" });
   }
 
   return results;

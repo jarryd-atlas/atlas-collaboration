@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
 import { MobileSidebar } from "./mobile-sidebar";
+import { QuickActions } from "./quick-actions";
 
 interface SessionClaims {
   tenantId?: string;
@@ -72,6 +73,9 @@ export function AppShell({
         />
         <div className="p-6">{children}</div>
       </main>
+
+      {/* Quick Actions FAB */}
+      <QuickActions isInternal={tenantType === "internal"} />
     </div>
   );
 }

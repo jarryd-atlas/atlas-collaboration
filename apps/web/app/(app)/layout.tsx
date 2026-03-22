@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AppShell } from "../../components/layout/app-shell";
 import { getSession } from "../../lib/supabase/server";
 import { getCustomers, getProfileById } from "../../lib/data/queries";
@@ -26,14 +26,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppShell
-      sessionClaims={sessionResult?.claims ?? null}
-      userEmail={sessionResult?.user?.email ?? null}
-      userAvatarUrl={sessionResult?.user?.user_metadata?.avatar_url ?? null}
-      userFullName={userFullName}
-      customers={customers}
-    >
-      {children}
-    </AppShell>
+    <Suspense>
+      <AppShell
+        sessionClaims={sessionResult?.claims ?? null}
+        userEmail={sessionResult?.user?.email ?? null}
+        userAvatarUrl={sessionResult?.user?.user_metadata?.avatar_url ?? null}
+        userFullName={userFullName}
+        customers={customers}
+      >
+        {children}
+      </AppShell>
+    </Suspense>
   );
 }

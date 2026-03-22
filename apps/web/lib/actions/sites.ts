@@ -18,6 +18,7 @@ export async function createSite(formData: FormData) {
     const address = (formData.get("address") as string) || null;
     const city = (formData.get("city") as string) || null;
     const state = (formData.get("state") as string) || null;
+    const pipelineStage = (formData.get("pipelineStage") as PipelineStage) || "prospect";
     const slug = slugify(name);
 
     const admin = createSupabaseAdmin();
@@ -29,7 +30,7 @@ export async function createSite(formData: FormData) {
       address,
       city,
       state,
-      pipeline_stage: "prospect" as PipelineStage,
+      pipeline_stage: pipelineStage,
     });
 
     if (dbError) return { error: dbError.message };

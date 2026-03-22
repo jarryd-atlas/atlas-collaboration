@@ -67,7 +67,7 @@ export function InviteUserDialog({ open, onClose, customers }: InviteUserDialogP
                   onChange={() => setTenantType("customer")}
                   className="text-brand-green"
                 />
-                Customer User
+                Company User
               </label>
             </div>
           </div>
@@ -75,7 +75,7 @@ export function InviteUserDialog({ open, onClose, customers }: InviteUserDialogP
           {tenantType === "customer" && (
             <Select
               id="invite-customer"
-              label="Customer"
+              label="Company"
               options={customers.map((c) => ({
                 value: c.tenant_id,
                 label: c.name,
@@ -96,8 +96,8 @@ export function InviteUserDialog({ open, onClose, customers }: InviteUserDialogP
             <p className="text-xs text-gray-500">
               The user will receive an email invitation with a magic link to sign in.
               {tenantType === "customer"
-                ? " Customer users can only see their own organization's data."
-                : " CK team members can see all customer data."}
+                ? " Company users can only see their own organization's data."
+                : " CK team members can see all company data."}
             </p>
           </div>
         </DialogBody>

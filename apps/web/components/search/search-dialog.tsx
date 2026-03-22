@@ -1,22 +1,29 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, Target, ListTodo, X } from "lucide-react";
+import { Search, MapPin, Target, ListTodo, Mic, MessageSquare, Building2, X } from "lucide-react";
 
 type SearchResult = { id: string; title: string; subtitle: string; type: string; href: string };
 import { cn } from "../../lib/utils";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
+  customer: <Building2 className="h-4 w-4" />,
   site: <MapPin className="h-4 w-4" />,
   milestone: <Target className="h-4 w-4" />,
   task: <ListTodo className="h-4 w-4" />,
+  voice_note: <Mic className="h-4 w-4" />,
+  comment: <MessageSquare className="h-4 w-4" />,
 };
 
 const TYPE_LABELS: Record<string, string> = {
+  customer: "Companies",
   site: "Sites",
   milestone: "Milestones",
   task: "Tasks",
+  voice_note: "Voice Notes",
+  comment: "Comments",
 };
 
 export function SearchDialog() {
@@ -111,17 +118,18 @@ export function SearchDialog() {
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50">
+  // Use portal to escape stacking context of parent header/sidebar
+  return createPortal(
+    <div className="fixed inset-0" style={{ zIndex: 9999 }}>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
 
       {/* Dialog */}
       <div className="relative mx-auto mt-[15vh] max-w-xl w-full px-4">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-dropdown overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-2xl overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-3 px-4 border-b border-gray-100">
             <Search className="h-5 w-5 text-gray-400 shrink-0" />
@@ -130,7 +138,7 @@ export function SearchDialog() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search sites, milestones, tasks..."
+              placeholder="Search sites, milestones, tasks, voice notes..."
               className="flex-1 py-4 text-sm bg-transparent outline-none placeholder:text-gray-400"
             />
             <button
@@ -188,11 +196,12 @@ export function SearchDialog() {
           {/* Footer */}
           {!query.trim() && (
             <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-400">
-              Type to search across sites, milestones, and tasks
+              Type to search across sites, milestones, tasks, and voice notes
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

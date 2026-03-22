@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { Mic, FileAudio } from "lucide-react";
 import { Button } from "../../../components/ui/button";
-import { Dialog, DialogHeader, DialogBody } from "../../../components/ui/dialog";
-import { VoiceRecorder } from "../../../components/voice/voice-recorder";
 import { VoiceNoteCard } from "../../../components/voice/voice-note-card";
+import { VoiceRecordDialog } from "../../../components/forms/voice-record-dialog";
 
 type FilterStatus = "all" | "ready" | "processing";
 
@@ -44,12 +43,6 @@ export function VoiceNotesClient({ notes: allNotes }: VoiceNotesClientProps) {
       return note.status === "uploading" || note.status === "transcribing" || note.status === "summarizing";
     return true;
   });
-
-  const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
-    // In production, this would call uploadVoiceNote server action
-    console.log("Recording complete:", { size: blob.size, durationSeconds });
-    setShowRecorder(false);
-  };
 
   return (
     <div className="space-y-6">
@@ -122,12 +115,10 @@ export function VoiceNotesClient({ notes: allNotes }: VoiceNotesClientProps) {
       )}
 
       {/* Record dialog */}
-      <Dialog open={showRecorder} onClose={() => setShowRecorder(false)} className="max-w-md">
-        <DialogHeader onClose={() => setShowRecorder(false)}>Record Voice Note</DialogHeader>
-        <DialogBody>
-          <VoiceRecorder onRecordingComplete={handleRecordingComplete} />
-        </DialogBody>
-      </Dialog>
+      <VoiceRecordDialog
+        open={showRecorder}
+        onClose={() => setShowRecorder(false)}
+      />
     </div>
   );
 }

@@ -1,10 +1,14 @@
 export { signInWithGoogle, signInWithMagicLink, signOut, markNotificationRead } from "./auth";
 export { createCustomer, updateCustomer } from "./customers";
 export { createSite, updateSitePipelineStage } from "./sites";
-export { createMilestone, updateMilestoneStatus, updateMilestoneProgress } from "./milestones";
-export { createTask, updateTaskStatus, updateTaskAssignee, deleteTask } from "./tasks";
+export { createMilestone, updateMilestoneStatus, updateMilestoneProgress, createMilestoneTemplate, deleteMilestoneTemplate } from "./milestones";
+export { createTask, createTaskInline, createTasksBatch, updateTaskStatus, updateTaskTitle, updateTaskAssignee, deleteTask, getTaskComments } from "./tasks";
 export { createComment, deleteComment } from "./comments";
 export { createFlaggedIssue, updateIssueStatus } from "./issues";
 export { inviteUser, approveUser, denyUser, updateUserRole } from "./admin";
 export { uploadVoiceNote } from "./voice";
 export { createReport, updateReportSection, publishReport } from "./reports";
+export { fetchSitesWithMilestones, fetchSitesList, fetchAssignableUsers, fetchCustomers } from "./data";
+export { uploadAttachment, deleteAttachment, fetchAttachments, fetchCustomerAttachments, updateAttachmentCategory, updateAttachmentFileName, updateAttachmentNote, uploadNewVersion, fetchVersionHistory } from "./attachments";
+export { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel } from "./customer-team";
+export { setSiteAccess } from "./site-access";

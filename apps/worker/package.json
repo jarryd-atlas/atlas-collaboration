@@ -11,6 +11,7 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@repo/ai": "workspace:*",
     "@repo/email": "workspace:*",
     "@repo/shared": "workspace:*",

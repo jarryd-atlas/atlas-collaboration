@@ -8,6 +8,11 @@
 import { createSupabaseServer, createSupabaseAdmin } from "../supabase/server";
 import type { SiteRow } from "@repo/supabase";
 
+// NOTE: Assessment tables not yet in generated Supabase types — cast to any.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fromTable = (sb: ReturnType<typeof createSupabaseAdmin>, table: string) =>
+  (sb as any).from(table);
+
 // ─── Customers ──────────────────────────────────────────────
 
 export async function getCustomers() {
@@ -92,11 +97,30 @@ export async function getMilestoneBySlug(siteId: string, milestoneSlug: string) 
   return data as any;
 }
 
-export async function getMilestoneTemplates() {
+/**
+ * Get milestone templates. Returns global ATLAS templates + any company-specific ones.
+ * @param customerId - If provided, includes company-specific templates alongside global ones
+ */
+export async function getMilestoneTemplates(customerId?: string) {
   const supabase = createSupabaseAdmin();
+
+  if (customerId) {
+    // Get global templates (customer_id is null) + company-specific ones
+    const { data, error } = await supabase
+      .from("milestone_templates")
+      .select("*")
+      .or(`customer_id.is.null,customer_id.eq.${customerId}`)
+      .order("sort_order");
+
+    if (error) throw error;
+    return (data ?? []) as any[];
+  }
+
+  // Global templates only
   const { data, error } = await supabase
     .from("milestone_templates")
     .select("*")
+    .is("customer_id", null)
     .order("sort_order");
 
   if (error) throw error;
@@ -271,6 +295,152 @@ export async function getPublicReport(slug: string) {
   return { report: reportData, sections: sections ?? [] };
 }
 
+// ─── Assignable Users (for task assignment) ─────────────────
+
+/**
+ * Get all users assignable for tasks within a customer context.
+ * Returns customer org members + CK team members assigned to this customer.
+ */
+export async function getAssignableUsersForCustomer(customerId: string) {
+  const supabase = createSupabaseAdmin();
+
+  // Get the customer's tenant_id
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("tenant_id")
+    .eq("id", customerId)
+    .single();
+
+  if (!customer) return { customerUsers: [], ckTeamMembers: [] };
+
+  // Customer org members
+  const { data: customerUsers } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, email, role")
+    .eq("tenant_id", (customer as any).tenant_id)
+    .eq("status", "active")
+    .order("full_name");
+
+  // CK team members assigned to this customer
+  const { data: ckTeam } = await supabase
+    .from("customer_team_members" as any)
+    .select("role_label, profile:profiles!inner(id, full_name, avatar_url, email)")
+    .eq("customer_id", customerId);
+
+  return {
+    customerUsers: (customerUsers ?? []) as any[],
+    ckTeamMembers: (ckTeam ?? []).map((row: any) => ({
+      ...(row.profile ?? {}),
+      role_label: row.role_label,
+    })),
+  };
+}
+
+/**
+ * Get CK team members assigned to a customer (for management UI).
+ */
+export async function getCKTeamForCustomer(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("customer_team_members" as any)
+    .select("id, role_label, created_at, profile:profiles!inner(id, full_name, avatar_url, email)")
+    .eq("customer_id", customerId)
+    .order("created_at");
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get site access restrictions for a profile.
+ * Empty array = company-level (unrestricted).
+ */
+export async function getSiteAccessForProfile(profileId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from("site_access" as any)
+    .select("site_id")
+    .eq("profile_id", profileId);
+
+  return (data ?? []).map((row: any) => row.site_id as string);
+}
+
+/**
+ * Get all active CK internal profiles (for CK team member picker).
+ */
+export async function getInternalProfiles() {
+  const supabase = createSupabaseAdmin();
+
+  // Get the internal tenant
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("type", "internal")
+    .single();
+
+  if (!tenant) return [];
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, email")
+    .eq("status", "active")
+    .eq("tenant_id", tenant.id)
+    .order("full_name");
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get tasks for a customer (company-level tasks not tied to a site).
+ */
+export async function getCustomerTasks(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*, assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url)")
+    .eq("customer_id", customerId)
+    .is("site_id", null)
+    .is("milestone_id", null)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get the latest comment for each task in a set of task IDs.
+ * Returns a map: { [taskId]: { body, authorName, createdAt } }
+ */
+export async function getLatestCommentsForTasks(
+  taskIds: string[],
+): Promise<Record<string, { body: string; authorName: string; createdAt: string }>> {
+  if (taskIds.length === 0) return {};
+
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("comments")
+    .select("entity_id, body, created_at, author:profiles!comments_author_id_fkey(full_name)")
+    .eq("entity_type", "task")
+    .in("entity_id", taskIds)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return {};
+
+  // Deduplicate: keep only the latest (first) comment per task
+  const result: Record<string, { body: string; authorName: string; createdAt: string }> = {};
+  for (const row of data as any[]) {
+    if (!result[row.entity_id]) {
+      result[row.entity_id] = {
+        body: row.body,
+        authorName: row.author?.full_name ?? "Unknown",
+        createdAt: row.created_at,
+      };
+    }
+  }
+  return result;
+}
+
 // ─── Dashboard stats ────────────────────────────────────────
 
 export async function getDashboardStats() {
@@ -417,18 +587,122 @@ export async function getAllOpenTasks() {
     .select(`
       *,
       assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
-      milestone:milestones!inner(
+      milestone:milestones(
         id, name, slug,
-        site:sites!inner(
+        site:sites(
           id, name, slug,
-          customer:customers!inner(id, name, slug)
+          customer:customers(id, name, slug)
         )
-      )
+      ),
+      direct_customer:customers!tasks_customer_id_fkey(id, name, slug)
     `)
     .neq("status", "done")
     .order("due_date", { ascending: true, nullsFirst: false });
 
   if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get ALL tasks for a customer — rolls up company-level, site-level, milestone-level,
+ * and multi-site tasks (via task_sites junction table).
+ * Includes site and milestone context for display.
+ */
+export async function getAllTasksForCustomer(customerId: string) {
+  const supabase = createSupabaseAdmin();
+
+  // First get all site IDs for this customer
+  const { data: sites } = await supabase
+    .from("sites")
+    .select("id")
+    .eq("customer_id", customerId);
+
+  const siteIds = (sites ?? []).map((s: any) => s.id);
+
+  // Get task IDs linked via task_sites junction table to any of this customer's sites
+  let linkedTaskIds: string[] = [];
+  if (siteIds.length > 0) {
+    const { data: taskSiteLinks } = await (supabase as any)
+      .from("task_sites")
+      .select("task_id")
+      .in("site_id", siteIds);
+    linkedTaskIds = (taskSiteLinks ?? []).map((ts: any) => ts.task_id);
+  }
+
+  let query = supabase
+    .from("tasks")
+    .select(`
+      *,
+      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
+      milestone:milestones(id, name, slug),
+      site:sites!tasks_site_id_fkey(id, name, slug)
+    `)
+    .neq("status", "done")
+    .order("created_at", { ascending: false });
+
+  // Build OR filter
+  const orConditions: string[] = [`customer_id.eq.${customerId}`];
+  if (siteIds.length > 0) {
+    orConditions.push(`site_id.in.(${siteIds.join(",")})`);
+  }
+  if (linkedTaskIds.length > 0) {
+    orConditions.push(`id.in.(${linkedTaskIds.join(",")})`);
+  }
+  query = query.or(orConditions.join(","));
+
+  const { data, error } = await query;
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get ALL tasks for a specific site — includes:
+ * 1. Direct site tasks (tasks.site_id)
+ * 2. Tasks in the site's milestones
+ * 3. Tasks linked via task_sites junction table (multi-site tasks)
+ */
+export async function getTasksForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+
+  // Get all milestone IDs for this site
+  const { data: milestones } = await supabase
+    .from("milestones")
+    .select("id")
+    .eq("site_id", siteId);
+
+  const milestoneIds = (milestones ?? []).map((m: any) => m.id);
+
+  // Get task IDs linked via task_sites junction table
+  const { data: taskSiteLinks } = await (supabase as any)
+    .from("task_sites")
+    .select("task_id")
+    .eq("site_id", siteId);
+
+  const linkedTaskIds = (taskSiteLinks ?? []).map((ts: any) => ts.task_id);
+
+  let query = supabase
+    .from("tasks")
+    .select(`
+      *,
+      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
+      milestone:milestones(id, name, slug)
+    `)
+    .neq("status", "done")
+    .order("created_at", { ascending: false });
+
+  // Build OR filter combining all three sources
+  const orConditions: string[] = [];
+  orConditions.push(`site_id.eq.${siteId}`);
+  if (milestoneIds.length > 0) {
+    orConditions.push(`milestone_id.in.(${milestoneIds.join(",")})`);
+  }
+  if (linkedTaskIds.length > 0) {
+    orConditions.push(`id.in.(${linkedTaskIds.join(",")})`);
+  }
+  query = query.or(orConditions.join(","));
+
+  const { data, error } = await query;
+  if (error) return [];
   return (data ?? []) as any[];
 }
 
@@ -445,6 +719,194 @@ export async function getFlaggedIssuesForCustomer(customerId: string) {
 
   const siteIds = (sites as any[]).map((s: any) => s.id);
   return getFlaggedIssuesForSites(siteIds);
+}
+
+// ─── Search ─────────────────────────────────────────────────
+
+// ─── Site Assessment ────────────────────────────────────
+
+export async function getAssessmentForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_assessments")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getEquipmentForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_equipment")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("category")
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getEnergyDataForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_energy_data")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("period_month", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getOperationalParamsForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_operational_params")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getOperationsForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_operations")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getRateStructureForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_rate_structure")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getLoadBreakdownForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_load_breakdown")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getArcoPerformanceForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_arco_performance")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getSavingsAnalysisForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_savings_analysis")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getLaborBaselineForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_labor_baseline")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getTouScheduleForSite(siteId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "site_tou_schedule")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getBaselineDataSources(assessmentId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "baseline_data_sources")
+    .select("*, attachments:attachment_id(id, file_name)")
+    .eq("assessment_id", assessmentId);
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+/**
+ * Get all assessment-related data for a site in one call.
+ * Used by the site page to hydrate all tabs.
+ */
+export async function getFullAssessmentData(siteId: string) {
+  const [
+    assessment,
+    equipment,
+    energyData,
+    operationalParams,
+    operations,
+    rateStructure,
+    loadBreakdown,
+    arcoPerformance,
+    savingsAnalysis,
+    laborBaseline,
+    touSchedule,
+  ] = await Promise.all([
+    getAssessmentForSite(siteId),
+    getEquipmentForSite(siteId),
+    getEnergyDataForSite(siteId),
+    getOperationalParamsForSite(siteId),
+    getOperationsForSite(siteId),
+    getRateStructureForSite(siteId),
+    getLoadBreakdownForSite(siteId),
+    getArcoPerformanceForSite(siteId),
+    getSavingsAnalysisForSite(siteId),
+    getLaborBaselineForSite(siteId),
+    getTouScheduleForSite(siteId),
+  ]);
+
+  // Fetch data sources only if assessment exists
+  const dataSources = assessment
+    ? await getBaselineDataSources(assessment.id)
+    : [];
+
+  return {
+    assessment,
+    equipment,
+    energyData,
+    operationalParams,
+    operations,
+    rateStructure,
+    loadBreakdown,
+    arcoPerformance,
+    savingsAnalysis,
+    laborBaseline,
+    touSchedule,
+    dataSources,
+  };
 }
 
 // ─── Search ─────────────────────────────────────────────────

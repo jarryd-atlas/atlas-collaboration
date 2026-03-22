@@ -33,6 +33,7 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
         "backdrop:bg-black/40 backdrop:backdrop-blur-sm",
         "rounded-xl border border-gray-200 shadow-dropdown p-0",
         "max-w-lg w-full",
+        "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0",
         className,
       )}
     >

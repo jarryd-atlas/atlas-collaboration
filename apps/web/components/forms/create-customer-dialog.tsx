@@ -36,7 +36,7 @@ export function CreateCustomerDialog({ open, onClose }: CreateCustomerDialogProp
   return (
     <Dialog open={open} onClose={onClose}>
       <form onSubmit={handleSubmit}>
-        <DialogHeader onClose={onClose}>Add Customer</DialogHeader>
+        <DialogHeader onClose={onClose}>Add Company</DialogHeader>
         <DialogBody className="space-y-4">
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
@@ -46,25 +46,43 @@ export function CreateCustomerDialog({ open, onClose }: CreateCustomerDialogProp
           <Input
             id="customer-name"
             name="name"
-            label="Customer Name"
+            label="Company Name"
             placeholder="e.g. Americold Realty Trust"
             required
           />
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Type</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="radio"
+                  name="companyType"
+                  value="customer"
+                  defaultChecked
+                  className="text-brand-green"
+                />
+                Customer
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="radio"
+                  name="companyType"
+                  value="prospect"
+                  className="text-brand-green"
+                />
+                Prospect
+              </label>
+            </div>
+          </div>
           <Input
             id="customer-domain"
             name="domain"
             label="Email Domain"
             placeholder="e.g. americold.com"
           />
-          <Input
-            id="customer-logo"
-            name="logoUrl"
-            label="Logo URL"
-            placeholder="https://..."
-          />
           <div className="rounded-lg bg-gray-50 p-3">
             <p className="text-xs text-gray-500">
-              A new tenant will be created for this customer. Users with matching email domains can request access.
+              A new tenant will be created for this company. Users with matching email domains can request access.
             </p>
           </div>
         </DialogBody>
@@ -73,7 +91,7 @@ export function CreateCustomerDialog({ open, onClose }: CreateCustomerDialogProp
             Cancel
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending ? "Creating..." : "Create Customer"}
+            {isPending ? "Creating..." : "Create Company"}
           </Button>
         </DialogFooter>
       </form>
@@ -89,7 +107,7 @@ export function AddCustomerButton() {
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
         </svg>
-        Add Customer
+        Add Company
       </Button>
       <CreateCustomerDialog open={open} onClose={() => setOpen(false)} />
     </>

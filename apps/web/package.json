@@ -13,6 +13,8 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@repo/ai": "workspace:*",
     "@repo/shared": "workspace:*",
     "@repo/supabase": "workspace:*",
     "@repo/ui": "workspace:*",

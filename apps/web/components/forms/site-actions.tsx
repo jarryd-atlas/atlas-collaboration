@@ -9,9 +9,11 @@ import type { SitePipelineStage } from "@repo/shared";
 
 interface AddMilestoneButtonProps {
   siteName: string;
+  siteId: string;
+  tenantId: string;
 }
 
-export function AddMilestoneButton({ siteName }: AddMilestoneButtonProps) {
+export function AddMilestoneButton({ siteName, siteId, tenantId }: AddMilestoneButtonProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -22,6 +24,8 @@ export function AddMilestoneButton({ siteName }: AddMilestoneButtonProps) {
         open={open}
         onClose={() => setOpen(false)}
         siteName={siteName}
+        siteId={siteId}
+        tenantId={tenantId}
       />
     </>
   );
@@ -29,10 +33,11 @@ export function AddMilestoneButton({ siteName }: AddMilestoneButtonProps) {
 
 interface ChangeStageButtonProps {
   siteName: string;
+  siteId: string;
   currentStage: SitePipelineStage;
 }
 
-export function ChangeStageButton({ siteName, currentStage }: ChangeStageButtonProps) {
+export function ChangeStageButton({ siteName, siteId, currentStage }: ChangeStageButtonProps) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -43,6 +48,7 @@ export function ChangeStageButton({ siteName, currentStage }: ChangeStageButtonP
         open={open}
         onClose={() => setOpen(false)}
         siteName={siteName}
+        siteId={siteId}
         currentStage={currentStage}
       />
     </>

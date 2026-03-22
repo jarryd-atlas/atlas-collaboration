@@ -85,6 +85,35 @@ export function canAccessAdmin(ctx: UserContext): boolean {
   return isCKAdmin(ctx);
 }
 
+// ─── Task-specific permissions ──────────────────────────────────
+
+/** Can this user create tasks? All authenticated users can. */
+export function canCreateTasks(_ctx: UserContext): boolean {
+  return true;
+}
+
+/** Can this user edit a task? CK admin always; CK member if assigned; customer users for tasks in their tenant */
+export function canEditTask(
+  ctx: UserContext,
+  task: { assignee_id?: string | null; created_by?: string | null; tenant_id: string },
+): boolean {
+  if (isCKAdmin(ctx)) return true;
+  if (isInternal(ctx) && ctx.role === "member" && task.assignee_id === ctx.userId) return true;
+  // Customer users can edit tasks in their tenant
+  if (isCustomer(ctx) && task.tenant_id === ctx.tenantId) return true;
+  return false;
+}
+
+/** Can this user manage CK team assignments for customers? (CK admin+) */
+export function canManageCustomerTeam(ctx: UserContext): boolean {
+  return isCKAdmin(ctx);
+}
+
+/** Can this user manage site access restrictions? (CK admin+) */
+export function canManageSiteAccess(ctx: UserContext): boolean {
+  return isCKAdmin(ctx);
+}
+
 // ─── Collaboration ──────────────────────────────────────────────
 
 /** Can this user comment on entities? (all authenticated users) */

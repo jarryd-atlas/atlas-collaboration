@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { transcribeAudio } from "@repo/ai";
 import { summarizeTranscript } from "@repo/ai";
+import { Storage } from "@google-cloud/storage";
 
 interface TranscribePayload {
   voice_note_id: string;
@@ -30,17 +31,18 @@ export async function processTranscriptionJob(
     .update({ status: "transcribing" })
     .eq("id", voice_note_id);
 
-  // 2. Download audio from Supabase Storage
+  // 2. Download audio from GCS
   console.log(`[Transcribe] Downloading audio: ${file_path}`);
-  const { data: audioData, error: downloadError } = await supabase.storage
-    .from("voice-notes")
-    .download(file_path);
 
-  if (downloadError || !audioData) {
-    throw new Error(`Failed to download audio: ${downloadError?.message}`);
-  }
+  const gcsBucket = process.env.GCS_BUCKET;
+  if (!gcsBucket) throw new Error("Missing GCS_BUCKET env var");
 
-  const audioBuffer = Buffer.from(await audioData.arrayBuffer());
+  const saJson = process.env.GCS_SERVICE_ACCOUNT_JSON;
+  if (!saJson) throw new Error("Missing GCS_SERVICE_ACCOUNT_JSON env var");
+
+  const storage = new Storage({ credentials: JSON.parse(saJson) });
+  const [fileContents] = await storage.bucket(gcsBucket).file(file_path).download();
+  const audioBuffer = Buffer.from(fileContents);
   console.log(`[Transcribe] Downloaded ${audioBuffer.length} bytes`);
 
   // 3. Transcribe with Deepgram

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, requireSession } from "../supabase/server";
+import { uploadFile } from "../storage/gcs";
 
 /**
  * Upload a voice note audio file and create processing job.
@@ -32,25 +33,26 @@ export async function uploadVoiceNote(formData: FormData) {
 
     const admin = createSupabaseAdmin();
 
-    // 1. Upload audio to Supabase Storage
+    // 1. Upload audio to GCS
     const fileExt = audio.name?.split(".").pop() || "webm";
-    const filePath = `${claims.tenantId}/${claims.profileId}/${Date.now()}.${fileExt}`;
+    const filePath = `voice-notes/${claims.tenantId}/${claims.profileId}/${Date.now()}.${fileExt}`;
+    const contentType = audio.type || "audio/webm";
 
-    const { error: uploadError } = await admin.storage
-      .from("voice-notes")
-      .upload(filePath, audio, {
-        contentType: audio.type || "audio/webm",
-        upsert: false,
-      });
+    let fileBytes: Uint8Array;
+    try {
+      const ab = await audio.arrayBuffer();
+      fileBytes = new Uint8Array(ab);
+    } catch {
+      return { error: "Failed to read audio data" };
+    }
 
-    if (uploadError) return { error: uploadError.message };
+    try {
+      await uploadFile(filePath, fileBytes, contentType);
+    } catch (uploadErr) {
+      return { error: uploadErr instanceof Error ? uploadErr.message : "Upload failed" };
+    }
 
-    // 2. Get public URL for the uploaded file
-    const { data: urlData } = admin.storage
-      .from("voice-notes")
-      .getPublicUrl(filePath);
-
-    // 3. Create voice_notes row
+    // 2. Create voice_notes row
     const { data: voiceNote, error: insertError } = await admin
       .from("voice_notes")
       .insert({

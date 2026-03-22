@@ -6,21 +6,19 @@ import {
   getCustomerBySlug,
   getTasksForMilestone,
   getCommentsForEntity,
-  getActiveProfiles,
+  getAssignableUsersForCustomer,
 } from "../../../../../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../../../../../lib/data/current-user";
 import { StatusBadge, PriorityBadge } from "../../../../../../../../components/ui/badge";
 import { ProgressBar } from "../../../../../../../../components/ui/progress-bar";
 import { Avatar } from "../../../../../../../../components/ui/avatar";
-import { EmptyState } from "../../../../../../../../components/ui/empty-state";
-import { AddTaskButton } from "../../../../../../../../components/forms/milestone-actions";
+import { MilestoneTaskBoard } from "../../../../../../../../components/tasks";
 import { CommentInput } from "../../../../../../../../components/forms/comment-input";
+import { SetPageContext } from "../../../../../../../../components/layout/page-context";
 import {
   Calendar,
-  ListTodo,
   MessageSquare,
 } from "lucide-react";
-import type { TaskStatus } from "@repo/shared";
 
 interface MilestonePageProps {
   params: Promise<{
@@ -29,13 +27,6 @@ interface MilestonePageProps {
     milestoneSlug: string;
   }>;
 }
-
-const TASK_COLUMNS: { status: TaskStatus; label: string }[] = [
-  { status: "todo", label: "To Do" },
-  { status: "in_progress", label: "In Progress" },
-  { status: "in_review", label: "In Review" },
-  { status: "done", label: "Done" },
-];
 
 export default async function MilestonePage({ params }: MilestonePageProps) {
   const { customerSlug, siteSlug, milestoneSlug } = await params;
@@ -65,16 +56,23 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
 
   let tasks: Awaited<ReturnType<typeof getTasksForMilestone>> = [];
   let comments: Awaited<ReturnType<typeof getCommentsForEntity>> = [];
-  let assignableUsers: Awaited<ReturnType<typeof getActiveProfiles>> = [];
+  let assignableUsers: Array<{ id: string; full_name: string; avatar_url: string | null; group?: string; [key: string]: unknown }> = [];
   let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
 
   try {
-    [tasks, comments, assignableUsers, currentUser] = await Promise.all([
+    const [tasksResult, commentsResult, assignableResult, currentUserResult] = await Promise.all([
       getTasksForMilestone(milestone.id),
       getCommentsForEntity("milestone", milestone.id),
-      getActiveProfiles(),
+      getAssignableUsersForCustomer(customer.id),
       getCurrentUser(),
     ]);
+    tasks = tasksResult;
+    comments = commentsResult;
+    currentUser = currentUserResult;
+    assignableUsers = [
+      ...assignableResult.customerUsers.map((u: any) => ({ ...u, group: "Customer Team" })),
+      ...assignableResult.ckTeamMembers.map((u: any) => ({ ...u, group: "CK Team" })),
+    ];
   } catch {
     // Show empty state
   }
@@ -83,10 +81,11 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
 
   return (
     <div className="space-y-8">
+      <SetPageContext siteId={site.id} siteName={site.name} customerId={customer.id} customerName={customer.name} milestoneId={milestone.id} tenantId={site.tenant_id} />
       {/* Breadcrumbs + header */}
       <div>
         <p className="text-sm text-gray-400 mb-1">
-          <Link href="/customers" className="hover:text-gray-600">Customers</Link>
+          <Link href="/customers" className="hover:text-gray-600">Companies</Link>
           {" / "}
           <Link href={`/customers/${customerSlug}`} className="hover:text-gray-600">{customer.name}</Link>
           {" / "}
@@ -139,66 +138,17 @@ export default async function MilestonePage({ params }: MilestonePageProps) {
         </div>
       </div>
 
-      {/* Task board (kanban) */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-          <AddTaskButton milestoneName={milestone.name} assignableUsers={assignableUsers} />
-        </div>
-
-        {tasks.length === 0 ? (
-          <EmptyState
-            icon={<ListTodo className="h-12 w-12" />}
-            title="No tasks yet"
-            description="Add tasks to track work within this milestone."
-            action={<AddTaskButton milestoneName={milestone.name} assignableUsers={assignableUsers} />}
-          />
-        ) : (
-          <div className="grid md:grid-cols-4 gap-4">
-            {TASK_COLUMNS.map((col) => {
-              const columnTasks = tasks.filter((t) => t.status === col.status);
-              return (
-                <div key={col.status}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-sm font-medium text-gray-700">{col.label}</h3>
-                    <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">
-                      {columnTasks.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {columnTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="rounded-lg border border-gray-100 bg-white p-3 shadow-card hover:shadow-card-hover transition-shadow"
-                      >
-                        <p className="text-sm font-medium text-gray-900 mb-2">{task.title}</p>
-                        <div className="flex items-center justify-between">
-                          <PriorityBadge priority={task.priority} />
-                          {task.assignee?.full_name ? (
-                            <Avatar name={task.assignee.full_name} size="sm" />
-                          ) : (
-                            <span className="text-xs text-gray-300">Unassigned</span>
-                          )}
-                        </div>
-                        {task.due_date && (
-                          <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" /> {task.due_date}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                    {columnTasks.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center">
-                        <p className="text-xs text-gray-400">No tasks</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Task board (kanban) + inline creation + AI creator */}
+      <MilestoneTaskBoard
+        tasks={tasks}
+        milestoneName={milestone.name}
+        milestoneId={milestone.id}
+        siteId={site.id}
+        tenantId={milestone.tenant_id}
+        customerName={customer.name}
+        siteName={site.name}
+        assignableUsers={assignableUsers}
+      />
 
       {/* Comments */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-card">

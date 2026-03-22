@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCustomers } from "../../../lib/data/queries";
 import { Building2, ArrowRight } from "lucide-react";
 import { AddCustomerButton } from "../../../components/forms/create-customer-dialog";
+import { CompanyTypeBadge } from "../../../components/ui/badge";
 
 export default async function CustomersListPage() {
   let customers: Awaited<ReturnType<typeof getCustomers>> = [];
@@ -16,8 +17,8 @@ export default async function CustomersListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-500 mt-1">{customers.length} customer accounts</p>
+          <h1 className="text-2xl font-bold text-gray-900">Companies</h1>
+          <p className="text-gray-500 mt-1">{customers.length} companies</p>
         </div>
         <AddCustomerButton />
       </div>
@@ -27,9 +28,9 @@ export default async function CustomersListPage() {
           <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
             <Building2 className="h-6 w-6 text-gray-400" />
           </div>
-          <h3 className="text-sm font-medium text-gray-900">No customers yet</h3>
+          <h3 className="text-sm font-medium text-gray-900">No companies yet</h3>
           <p className="text-sm text-gray-400 mt-1 max-w-sm">
-            Add your first customer to get started.
+            Add your first company to get started.
           </p>
         </div>
       ) : (
@@ -44,8 +45,11 @@ export default async function CustomersListPage() {
                 <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center">
                   <Building2 className="h-6 w-6 text-gray-400" />
                 </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 group-hover:text-brand-dark">{customer.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-brand-dark truncate">{customer.name}</h3>
+                    <CompanyTypeBadge type={customer.company_type ?? "customer"} />
+                  </div>
                   {customer.domain && (
                     <p className="text-xs text-gray-400">{customer.domain}</p>
                   )}

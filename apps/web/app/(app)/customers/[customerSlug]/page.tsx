@@ -4,16 +4,21 @@ import {
   getCustomerBySlug,
   getSitesForCustomer,
   getFlaggedIssuesForCustomer,
+  getCKTeamForCustomer,
+  getInternalProfiles,
+  getAssignableUsersForCustomer,
+  getAllTasksForCustomer,
+  getLatestCommentsForTasks,
 } from "../../../../lib/data/queries";
-import { PipelineStageBadge, SeverityBadge, StatusBadge } from "../../../../components/ui/badge";
-import { ProgressBar } from "../../../../components/ui/progress-bar";
-import { Button } from "../../../../components/ui/button";
-import { EmptyState } from "../../../../components/ui/empty-state";
+import { getCurrentUser } from "../../../../lib/data/current-user";
+import { getSession } from "../../../../lib/supabase/server";
+import { SeverityBadge, StatusBadge, CompanyTypeBadge } from "../../../../components/ui/badge";
 import { CustomerActions, AddSiteButton } from "../../../../components/forms/customer-actions";
-import {
-  MapPin,
-  Plus,
-} from "lucide-react";
+import { SetPageContext } from "../../../../components/layout/page-context";
+import { CustomerPortalLink } from "../../../../components/layout/customer-portal-link";
+import { SitesList } from "../../../../components/sites/sites-list";
+import { CustomerTeamManager } from "../../../../components/forms/customer-team-manager";
+import { CustomerTasksSection } from "../../../../components/tasks/customer-tasks-section";
 
 interface CustomerPageProps {
   params: Promise<{ customerSlug: string }>;
@@ -33,15 +38,62 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
 
   let sites: Awaited<ReturnType<typeof getSitesForCustomer>> = [];
   let issues: Awaited<ReturnType<typeof getFlaggedIssuesForCustomer>> = [];
+  let customerTasks: any[] = [];
+  let ckTeam: any[] = [];
+  let allInternalProfiles: any[] = [];
+  let assignableUsers: { id: string; full_name: string; avatar_url: string | null; group?: string }[] = [];
+
+  const [session, currentUser] = await Promise.all([
+    getSession(),
+    getCurrentUser(),
+  ]);
+  const isCKInternal = session?.claims?.tenantType === "internal";
 
   try {
-    [sites, issues] = await Promise.all([
+    const promises: Promise<any>[] = [
       getSitesForCustomer(customer.id),
       getFlaggedIssuesForCustomer(customer.id),
-    ]);
+      getAssignableUsersForCustomer(customer.id),
+      getAllTasksForCustomer(customer.id),
+    ];
+    if (isCKInternal) {
+      promises.push(getCKTeamForCustomer(customer.id));
+      promises.push(getInternalProfiles());
+    }
+
+    const results = await Promise.all(promises);
+    sites = results[0] ?? [];
+    issues = results[1] ?? [];
+    const { customerUsers = [], ckTeamMembers = [] } = results[2] ?? {};
+    assignableUsers = [
+      ...customerUsers.map((u: any) => ({ ...u, group: "Your Team" })),
+      ...ckTeamMembers.map((u: any) => ({ ...u, group: "CK Team" })),
+    ];
+    customerTasks = results[3] ?? [];
+    if (isCKInternal) {
+      ckTeam = results[4] ?? [];
+      allInternalProfiles = results[5] ?? [];
+    }
   } catch {
     // Show empty state if queries fail
   }
+
+  // Fetch latest comments for tasks
+  const taskIds = customerTasks.map((t: any) => t.id);
+  let latestComments: Record<string, { body: string; authorName: string; createdAt: string }> = {};
+  try {
+    latestComments = await getLatestCommentsForTasks(taskIds);
+  } catch {
+    // non-critical
+  }
+  const tasksWithComments = customerTasks.map((t: any) => ({
+    ...t,
+    latestComment: latestComments[t.id] ?? null,
+  }));
+
+  // Current user info for comment input
+  const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
+  const currentUserAvatar = currentUser?.avatarUrl ?? null;
 
   const activeSites = sites.filter((s) => s.pipeline_stage === "active");
   const deployingSites = sites.filter((s) => s.pipeline_stage === "deployment");
@@ -51,29 +103,58 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
 
   return (
     <div className="space-y-8">
+      <SetPageContext customerId={customer.id} customerName={customer.name} tenantId={customer.tenant_id} />
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-400 mb-1">
-            <Link href="/customers" className="hover:text-gray-600">Customers</Link>
+            <Link href="/customers" className="hover:text-gray-600">Companies</Link>
           </p>
-          <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
+            <CompanyTypeBadge type={customer.company_type ?? "customer"} />
+          </div>
           {customer.domain && (
             <p className="text-gray-500 mt-1">{customer.domain}</p>
           )}
         </div>
+        <CustomerPortalLink
+          currentPath={`/customers/${customerSlug}`}
+          customerSlug={customerSlug}
+        />
       </div>
+
+      {/* CK Team — directly below header */}
+      {isCKInternal && (
+        <CustomerTeamManager
+          customerId={customer.id}
+          teamMembers={ckTeam}
+          internalProfiles={allInternalProfiles}
+        />
+      )}
 
       {/* Quick actions */}
       <CustomerActions customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} sites={sites} />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <MiniStat label="Active Sites" value={activeSites.length} />
         <MiniStat label="In Evaluation" value={evaluatingSites.length} />
         <MiniStat label="Deploying" value={deployingSites.length} />
+        <MiniStat label="Open Tasks" value={customerTasks.filter((t: any) => t.status !== "done").length} />
         <MiniStat label="Open Issues" value={issues.filter((i) => i.status === "open").length} accent />
       </div>
+
+      {/* Tasks — below stats, above sites */}
+      <CustomerTasksSection
+        tasks={tasksWithComments}
+        customerId={customer.id}
+        tenantId={customer.tenant_id}
+        assignableUsers={assignableUsers}
+        assignableSites={sites.map((s: any) => ({ id: s.id, name: s.name, slug: s.slug }))}
+        currentUserName={currentUserName as string}
+        currentUserAvatar={currentUserAvatar as string | undefined}
+      />
 
       {/* Sites */}
       <div className="space-y-4">
@@ -82,60 +163,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
           <AddSiteButton customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} />
         </div>
 
-        {sites.length === 0 ? (
-          <EmptyState
-            icon={<MapPin className="h-12 w-12" />}
-            title="No sites yet"
-            description="Add a site to start tracking milestones and tasks."
-            action={<AddSiteButton customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} />}
-          />
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sites.map((site) => (
-              <Link
-                key={site.slug}
-                href={`/customers/${customerSlug}/sites/${site.slug}`}
-                className={`group rounded-xl border bg-white p-5 shadow-card hover:shadow-card-hover transition-shadow ${
-                  site.pipeline_stage === "disqualified" ? "border-gray-200 opacity-60" : "border-gray-100"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 group-hover:text-brand-dark">
-                      {site.name}
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {site.city}, {site.state}
-                    </p>
-                  </div>
-                  <PipelineStageBadge stage={site.pipeline_stage} />
-                </div>
-
-                {site.pipeline_stage === "disqualified" ? (
-                  <div className="text-xs text-gray-400">
-                    <p>{site.dq_reason}</p>
-                    {site.dq_reeval_date && <p className="mt-1">Re-eval: {site.dq_reeval_date}</p>}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{site.milestone_count ?? 0} milestones</span>
-                      <span>
-                        {site.completed_task_count ?? 0}/{site.task_count ?? 0} tasks
-                      </span>
-                    </div>
-                    {(site.task_count ?? 0) > 0 && (
-                      <ProgressBar
-                        value={Math.round(((site.completed_task_count ?? 0) / (site.task_count ?? 1)) * 100)}
-                        size="sm"
-                      />
-                    )}
-                  </div>
-                )}
-              </Link>
-            ))}
-          </div>
-        )}
+        <SitesList sites={sites} customerSlug={customerSlug} />
       </div>
 
       {/* Flagged issues */}

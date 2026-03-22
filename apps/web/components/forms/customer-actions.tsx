@@ -6,11 +6,12 @@ import { CreateSiteDialog } from "./create-site-dialog";
 import { CreateMilestoneDialog } from "./create-milestone-dialog";
 import { FlagIssueDialog } from "./flag-issue-dialog";
 import { Plus, Mic, Flag, Target } from "lucide-react";
+
 interface CustomerActionsProps {
   customerName: string;
   customerId: string;
   customerTenantId: string;
-  sites: Array<{ id: string; name: string; slug: string; [key: string]: unknown }>;
+  sites: Array<{ id: string; name: string; slug: string; tenant_id: string; [key: string]: unknown }>;
 }
 
 export function CustomerActions({ customerName, customerId, customerTenantId, sites }: CustomerActionsProps) {
@@ -27,12 +28,16 @@ export function CustomerActions({ customerName, customerId, customerTenantId, si
         <Button variant="outline" size="sm" disabled>
           <Mic className="h-4 w-4" /> Quick Note
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setShowFlagIssue(true)}>
-          <Flag className="h-4 w-4" /> Flag Issue
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setShowAddMilestone(true)}>
-          <Target className="h-4 w-4" /> New Milestone
-        </Button>
+        {sites.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setShowFlagIssue(true)}>
+            <Flag className="h-4 w-4" /> Flag Issue
+          </Button>
+        )}
+        {sites.length > 0 && (
+          <Button variant="outline" size="sm" onClick={() => setShowAddMilestone(true)}>
+            <Target className="h-4 w-4" /> New Milestone
+          </Button>
+        )}
       </div>
 
       <CreateSiteDialog
@@ -42,16 +47,22 @@ export function CustomerActions({ customerName, customerId, customerTenantId, si
         customerId={customerId}
         customerTenantId={customerTenantId}
       />
-      <FlagIssueDialog
-        open={showFlagIssue}
-        onClose={() => setShowFlagIssue(false)}
-        sites={sites}
-      />
-      <CreateMilestoneDialog
-        open={showAddMilestone}
-        onClose={() => setShowAddMilestone(false)}
-        siteName={sites[0]?.name ?? "Site"}
-      />
+      {sites.length > 0 && (
+        <FlagIssueDialog
+          open={showFlagIssue}
+          onClose={() => setShowFlagIssue(false)}
+          sites={sites}
+        />
+      )}
+      {sites.length > 0 && (
+        <CreateMilestoneDialog
+          open={showAddMilestone}
+          onClose={() => setShowAddMilestone(false)}
+          tenantId={customerTenantId}
+          sites={sites}
+          customerName={customerName}
+        />
+      )}
     </>
   );
 }

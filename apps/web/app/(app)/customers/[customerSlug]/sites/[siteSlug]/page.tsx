@@ -4,31 +4,25 @@ import {
   getSiteBySlug,
   getCustomerBySlug,
   getMilestonesForSite,
+  getAssignableUsersForCustomer,
+  getTasksForSite,
+  getLatestCommentsForTasks,
+  getFullAssessmentData,
 } from "../../../../../../lib/data/queries";
-import { PipelineStageBadge, StatusBadge, PriorityBadge } from "../../../../../../components/ui/badge";
-import { ProgressBar } from "../../../../../../components/ui/progress-bar";
-import { EmptyState } from "../../../../../../components/ui/empty-state";
-import { AddMilestoneButton, ChangeStageButton } from "../../../../../../components/forms/site-actions";
-import {
-  ArrowRight,
-  MapPin,
-  Calendar,
-  Target,
-} from "lucide-react";
-import type { SitePipelineStage } from "@repo/shared";
+import { getCurrentUser } from "../../../../../../lib/data/current-user";
+import { createOrGetAssessment } from "../../../../../../lib/actions/assessment";
+import { PipelineStageBadge } from "../../../../../../components/ui/badge";
+import { SetPageContext } from "../../../../../../components/layout/page-context";
+import { CustomerPortalLink } from "../../../../../../components/layout/customer-portal-link";
+import { SiteTabLayout } from "../../../../../../components/assessment/site-tab-layout";
+import { OverviewTab } from "../../../../../../components/assessment/overview-tab";
+import { BaselineTab } from "../../../../../../components/assessment/baseline-tab";
+import { LaborTab } from "../../../../../../components/assessment/labor-tab";
+import { MapPin } from "lucide-react";
 
 interface SitePageProps {
   params: Promise<{ customerSlug: string; siteSlug: string }>;
 }
-
-const PIPELINE_STEPS: SitePipelineStage[] = [
-  "prospect",
-  "evaluation",
-  "qualified",
-  "contracted",
-  "deployment",
-  "active",
-];
 
 export default async function SitePage({ params }: SitePageProps) {
   const { customerSlug, siteSlug } = await params;
@@ -47,19 +41,73 @@ export default async function SitePage({ params }: SitePageProps) {
 
   if (!site || !customer) return notFound();
 
-  let milestones: Awaited<ReturnType<typeof getMilestonesForSite>> = [];
+  // Fetch all data in parallel
+  let milestones: any[] = [];
+  let assignableUsers: any[] = [];
+  let siteTasks: any[] = [];
+  let currentUser: any = null;
+  let assessmentData: Awaited<ReturnType<typeof getFullAssessmentData>> | null = null;
+
   try {
-    milestones = await getMilestonesForSite(site.id);
+    const [ms, assignable, tasks, user, aData] = await Promise.all([
+      getMilestonesForSite(site.id),
+      getAssignableUsersForCustomer(customer.id),
+      getTasksForSite(site.id),
+      getCurrentUser(),
+      getFullAssessmentData(site.id),
+    ]);
+    milestones = ms;
+    siteTasks = tasks;
+    currentUser = user;
+    assessmentData = aData;
+    const { customerUsers = [], ckTeamMembers = [] } = assignable ?? {};
+    assignableUsers = [
+      ...customerUsers.map((u: any) => ({ ...u, group: "Your Team" })),
+      ...ckTeamMembers.map((u: any) => ({ ...u, group: "CK Team" })),
+    ];
   } catch {
-    // Show empty milestones
+    // Show empty state gracefully
   }
 
+  // Auto-create assessment if none exists (idempotent)
+  let assessment = assessmentData?.assessment ?? null;
+  if (!assessment) {
+    try {
+      const result = await createOrGetAssessment(site.id, site.tenant_id);
+      if (result.assessment) {
+        assessment = result.assessment;
+      }
+    } catch {
+      // Non-critical — tabs will show empty states
+    }
+  }
+
+  // Fetch latest comments for site tasks
+  const taskIds = siteTasks.map((t: any) => t.id);
+  let latestComments: Record<string, { body: string; authorName: string; createdAt: string }> = {};
+  try {
+    latestComments = await getLatestCommentsForTasks(taskIds);
+  } catch {
+    // non-critical
+  }
+  const tasksWithComments = siteTasks.map((t: any) => ({
+    ...t,
+    latestComment: latestComments[t.id] ?? null,
+  }));
+
+  const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
+  const currentUserAvatar = currentUser?.avatarUrl ?? null;
+  const isLocked = assessment?.status === "locked";
+  const isInternal = currentUser?.sessionClaims?.tenantType === "internal";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <SetPageContext siteId={site.id} siteName={site.name} customerId={customer.id} customerName={customer.name} tenantId={site.tenant_id} />
+
       {/* Breadcrumb + header */}
       <div>
         <p className="text-sm text-gray-400 mb-1">
-          <Link href="/customers" className="hover:text-gray-600">Customers</Link>
+          <Link href="/customers" className="hover:text-gray-600">Companies</Link>
           {" / "}
           <Link href={`/customers/${customerSlug}`} className="hover:text-gray-600">{customer.name}</Link>
         </p>
@@ -73,99 +121,68 @@ export default async function SitePage({ params }: SitePageProps) {
               </p>
             )}
           </div>
-          <PipelineStageBadge stage={site.pipeline_stage} />
+          <div className="flex items-center gap-2 shrink-0">
+            <CustomerPortalLink
+              currentPath={`/customers/${customerSlug}/sites/${siteSlug}`}
+              customerSlug={customerSlug}
+            />
+            <PipelineStageBadge stage={site.pipeline_stage} />
+            {isLocked && (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
+                Locked
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Pipeline stage tracker */}
-      {site.pipeline_stage !== "disqualified" && site.pipeline_stage !== "paused" && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-900">Pipeline Stage</h2>
-            <ChangeStageButton siteName={site.name} currentStage={site.pipeline_stage} />
-          </div>
-          <div className="flex items-center gap-1">
-            {PIPELINE_STEPS.map((step, i) => {
-              const currentIdx = PIPELINE_STEPS.indexOf(site.pipeline_stage as SitePipelineStage);
-              const isCompleted = i < currentIdx;
-              const isCurrent = i === currentIdx;
-              return (
-                <div key={step} className="flex-1">
-                  <div
-                    className={`h-2 rounded-full ${
-                      isCompleted
-                        ? "bg-brand-green"
-                        : isCurrent
-                          ? "bg-brand-green/50"
-                          : "bg-gray-100"
-                    }`}
-                  />
-                  <p
-                    className={`text-xs mt-1.5 ${
-                      isCurrent ? "text-gray-900 font-medium" : "text-gray-400"
-                    }`}
-                  >
-                    {step.charAt(0).toUpperCase() + step.slice(1)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Milestones */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Milestones ({milestones.length})
-          </h2>
-          <AddMilestoneButton siteName={site.name} />
-        </div>
-
-        {milestones.length === 0 ? (
-          <EmptyState
-            icon={<Target className="h-12 w-12" />}
-            title="No milestones yet"
-            description="Create milestones to track project progress at this site."
-            action={<AddMilestoneButton siteName={site.name} />}
-          />
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-card divide-y divide-gray-50">
-            {milestones.map((milestone) => (
-              <Link
-                key={milestone.slug}
-                href={`/customers/${customerSlug}/sites/${siteSlug}/milestones/${milestone.slug}`}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-medium text-gray-900 truncate">
-                      {milestone.name}
-                    </h3>
-                    <StatusBadge status={milestone.status} />
-                    <PriorityBadge priority={milestone.priority} />
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-gray-400">
-                    {milestone.due_date && (
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Due {milestone.due_date}
-                      </span>
-                    )}
-                    <span>
-                      {milestone.completed_task_count ?? 0}/{milestone.task_count ?? 0} tasks
-                    </span>
-                  </div>
-                </div>
-                <div className="w-32 shrink-0">
-                  <ProgressBar value={milestone.progress ?? 0} size="sm" showLabel />
-                </div>
-                <ArrowRight className="h-4 w-4 text-gray-300 shrink-0" />
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Tabbed layout — Overview | Baseline | Labor */}
+      <SiteTabLayout>
+        {{
+          overview: (
+            <OverviewTab
+              site={site}
+              customer={customer}
+              customerSlug={customerSlug}
+              siteSlug={siteSlug}
+              milestones={milestones}
+              tasksWithComments={tasksWithComments}
+              assignableUsers={assignableUsers}
+              currentUserName={currentUserName as string}
+              currentUserAvatar={currentUserAvatar as string | undefined}
+              canAnalyze={isInternal}
+              assessmentId={assessment?.id}
+            />
+          ),
+          baseline: (
+            <BaselineTab
+              assessment={assessment}
+              equipment={assessmentData?.equipment ?? []}
+              energyData={assessmentData?.energyData ?? []}
+              rateStructure={assessmentData?.rateStructure ?? null}
+              touSchedule={assessmentData?.touSchedule ?? null}
+              operationalParams={assessmentData?.operationalParams ?? null}
+              operations={assessmentData?.operations ?? null}
+              loadBreakdown={assessmentData?.loadBreakdown ?? null}
+              arcoPerformance={assessmentData?.arcoPerformance ?? null}
+              savingsAnalysis={assessmentData?.savingsAnalysis ?? null}
+              siteId={site.id}
+              tenantId={site.tenant_id}
+              isLocked={isLocked}
+              dataSources={assessmentData?.dataSources ?? []}
+            />
+          ),
+          labor: (
+            <LaborTab
+              assessment={assessment}
+              laborBaseline={assessmentData?.laborBaseline ?? null}
+              siteId={site.id}
+              tenantId={site.tenant_id}
+              isLocked={isLocked}
+            />
+          ),
+        }}
+      </SiteTabLayout>
     </div>
   );
 }

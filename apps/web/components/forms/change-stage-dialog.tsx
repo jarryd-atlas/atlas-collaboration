@@ -1,32 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from "../ui/dialog";
-import { Textarea } from "../ui/input";
+import { Input, Textarea } from "../ui/input";
 import { Button } from "../ui/button";
 import { SITE_PIPELINE_STAGES } from "@repo/shared";
 import type { SitePipelineStage } from "@repo/shared";
 import { formatLabel } from "../../lib/utils";
+import { updateSitePipelineStage } from "../../lib/actions";
 
 interface ChangeStageDialogProps {
   open: boolean;
   onClose: () => void;
   siteName: string;
+  siteId: string;
   currentStage: SitePipelineStage;
 }
 
-export function ChangeStageDialog({ open, onClose, siteName, currentStage }: ChangeStageDialogProps) {
+export function ChangeStageDialog({ open, onClose, siteName, siteId, currentStage }: ChangeStageDialogProps) {
   const [selected, setSelected] = useState<SitePipelineStage>(currentStage);
-  const [submitting, setSubmitting] = useState(false);
+  const [dqReason, setDqReason] = useState("");
+  const [dqReevalDate, setDqReevalDate] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSubmitting(true);
-    // TODO: Replace with Supabase update
-    setTimeout(() => {
-      setSubmitting(false);
-      onClose();
-    }, 500);
+    setError("");
+
+    startTransition(async () => {
+      const result = await updateSitePipelineStage(
+        siteId,
+        selected,
+        selected === "disqualified" ? dqReason : undefined,
+        selected === "disqualified" ? dqReevalDate : undefined,
+      );
+      if ("error" in result) {
+        setError(result.error ?? "Unknown error");
+      } else {
+        onClose();
+        router.refresh();
+      }
+    });
   }
 
   return (
@@ -34,6 +51,11 @@ export function ChangeStageDialog({ open, onClose, siteName, currentStage }: Cha
       <form onSubmit={handleSubmit}>
         <DialogHeader onClose={onClose}>Change Pipeline Stage</DialogHeader>
         <DialogBody className="space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
           <p className="text-sm text-gray-500">
             Move <span className="font-medium text-gray-900">{siteName}</span> to a new pipeline stage.
           </p>
@@ -60,21 +82,34 @@ export function ChangeStageDialog({ open, onClose, siteName, currentStage }: Cha
           </div>
 
           {selected === "disqualified" && (
-            <Textarea
-              id="dq-reason"
-              label="Disqualification Reason"
-              placeholder="Why is this site being disqualified?"
-              rows={2}
-              required
-            />
+            <>
+              <Textarea
+                id="dq-reason"
+                name="dqReason"
+                label="Disqualification Reason"
+                placeholder="Why is this site being disqualified?"
+                value={dqReason}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDqReason(e.target.value)}
+                rows={2}
+                required
+              />
+              <Input
+                id="dq-reeval"
+                name="dqReevalDate"
+                label="Re-evaluation Date (optional)"
+                type="date"
+                value={dqReevalDate}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDqReevalDate(e.target.value)}
+              />
+            </>
           )}
         </DialogBody>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting || selected === currentStage}>
-            {submitting ? "Updating..." : "Update Stage"}
+          <Button type="submit" disabled={isPending || selected === currentStage}>
+            {isPending ? "Updating..." : "Update Stage"}
           </Button>
         </DialogFooter>
       </form>

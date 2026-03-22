@@ -43,7 +43,7 @@ export default async function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatCard icon={<Building2 className="h-5 w-5" />} label="Customers" value={stats.totalCustomers} />
+        <StatCard icon={<Building2 className="h-5 w-5" />} label="Companies" value={stats.totalCustomers} />
         <StatCard icon={<MapPin className="h-5 w-5" />} label="Active Sites" value={stats.activeSites} />
         <StatCard icon={<Target className="h-5 w-5" />} label="Active Milestones" value={stats.activeMilestones} />
         <StatCard icon={<ListTodo className="h-5 w-5" />} label="Open Tasks" value={stats.openTasks} />
@@ -59,14 +59,14 @@ export default async function DashboardPage() {
         {/* Customer list */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-card">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Customers</h2>
+            <h2 className="text-base font-semibold text-gray-900">Companies</h2>
             <Link href="/customers" className="text-sm text-brand-green font-medium hover:underline">
               View all
             </Link>
           </div>
           <div className="divide-y divide-gray-50">
             {customers.length === 0 ? (
-              <p className="px-6 py-8 text-sm text-gray-400 text-center">No customers yet</p>
+              <p className="px-6 py-8 text-sm text-gray-400 text-center">No companies yet</p>
             ) : (
               customers.map((customer) => (
                 <Link

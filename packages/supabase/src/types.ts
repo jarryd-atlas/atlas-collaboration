@@ -885,9 +885,10 @@ export type Database = {
           due_date: string | null
           id: string
           metadata: Json | null
-          milestone_id: string
+          milestone_id: string | null
           priority: Database["public"]["Enums"]["priority_level"]
           search_vector: unknown
+          site_id: string | null
           sort_order: number
           source: Database["public"]["Enums"]["task_source"]
           status: Database["public"]["Enums"]["task_status"]
@@ -902,9 +903,10 @@ export type Database = {
           due_date?: string | null
           id?: string
           metadata?: Json | null
-          milestone_id: string
+          milestone_id?: string | null
           priority?: Database["public"]["Enums"]["priority_level"]
           search_vector?: unknown
+          site_id?: string | null
           sort_order?: number
           source?: Database["public"]["Enums"]["task_source"]
           status?: Database["public"]["Enums"]["task_status"]
@@ -919,9 +921,10 @@ export type Database = {
           due_date?: string | null
           id?: string
           metadata?: Json | null
-          milestone_id?: string
+          milestone_id?: string | null
           priority?: Database["public"]["Enums"]["priority_level"]
           search_vector?: unknown
+          site_id?: string | null
           sort_order?: number
           source?: Database["public"]["Enums"]["task_source"]
           status?: Database["public"]["Enums"]["task_status"]
@@ -942,6 +945,13 @@ export type Database = {
             columns: ["milestone_id"]
             isOneToOne: false
             referencedRelation: "milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
           {

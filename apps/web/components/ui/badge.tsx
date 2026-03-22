@@ -100,6 +100,16 @@ export function SeverityBadge({ severity, className }: { severity: string; class
   );
 }
 
+/** Company type badge (internal view only) */
+export function CompanyTypeBadge({ type, className }: { type: string; className?: string }) {
+  const variant: BadgeVariant = type === "prospect" ? "warning" : "success";
+  return (
+    <Badge variant={variant} className={className}>
+      {formatLabel(type)}
+    </Badge>
+  );
+}
+
 /** Pipeline stage badge with colored dot */
 export function PipelineStageBadge({ stage, className }: { stage: string; className?: string }) {
   const dotColors: Record<string, string> = {

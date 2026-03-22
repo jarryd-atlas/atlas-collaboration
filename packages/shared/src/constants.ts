@@ -105,7 +105,7 @@ export const ENTITY_TYPES = [
   "task",
   "report",
   "issue",
-  "customer",
+  "customer", // DB column name remains "customer" for backwards compat
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -139,6 +139,11 @@ export const REPORT_CADENCES = [
 ] as const;
 
 export type ReportCadence = (typeof REPORT_CADENCES)[number];
+
+/** Company types — whether a company is a customer or prospect */
+export const COMPANY_TYPES = ["customer", "prospect"] as const;
+
+export type CompanyType = (typeof COMPANY_TYPES)[number];
 
 /** Standardized ATLAS deployment lifecycle milestone templates */
 export const ATLAS_MILESTONE_TEMPLATES = [
@@ -177,6 +182,127 @@ export const JOB_TYPES = [
   "generate_report",
   "send_email",
   "send_notification",
+  "extract_document",
+  "analyze_savings",
 ] as const;
 
 export type JobType = (typeof JOB_TYPES)[number];
+
+// ═══════════════════════════════════════════════════════════════
+// Site Assessment Constants
+// ═══════════════════════════════════════════════════════════════
+
+/** Equipment categories for refrigeration systems */
+export const EQUIPMENT_CATEGORIES = [
+  "compressor", "condenser", "evaporator", "vessel", "vfd", "pump", "controls", "other",
+] as const;
+export type EquipmentCategory = (typeof EQUIPMENT_CATEGORIES)[number];
+
+/** Equipment category display labels */
+export const EQUIPMENT_CATEGORY_LABELS: Record<EquipmentCategory, string> = {
+  compressor: "Compressors",
+  condenser: "Condensers",
+  evaporator: "Evaporators",
+  vessel: "Vessels",
+  vfd: "VFDs",
+  pump: "Pumps",
+  controls: "Controls",
+  other: "Other",
+};
+
+/** Compressor types */
+export const COMPRESSOR_TYPES = ["screw", "reciprocating", "rotary"] as const;
+export type CompressorType = (typeof COMPRESSOR_TYPES)[number];
+
+/** Condenser types */
+export const CONDENSER_TYPES = ["evaporative", "air_cooled"] as const;
+export type CondenserType = (typeof CONDENSER_TYPES)[number];
+
+/** Evaporator types */
+export const EVAPORATOR_TYPES = ["unit_cooler", "pencoil", "plate"] as const;
+export type EvaporatorType = (typeof EVAPORATOR_TYPES)[number];
+
+/** Vessel types */
+export const VESSEL_TYPES = ["receiver", "intercooler", "accumulator", "economizer"] as const;
+export type VesselType = (typeof VESSEL_TYPES)[number];
+
+/** Defrost types */
+export const DEFROST_TYPES = ["electric", "hot_gas", "air", "none"] as const;
+export type DefrostType = (typeof DEFROST_TYPES)[number];
+
+/** Refrigeration loop types */
+export const REFRIGERATION_LOOPS = ["low", "high", "blast"] as const;
+export type RefrigerationLoop = (typeof REFRIGERATION_LOOPS)[number];
+
+/** Assessment statuses */
+export const ASSESSMENT_STATUSES = ["draft", "in_progress", "complete", "locked"] as const;
+export type AssessmentStatus = (typeof ASSESSMENT_STATUSES)[number];
+
+/** Site assessment tab keys */
+export const SITE_ASSESSMENT_TABS = ["overview", "baseline", "labor"] as const;
+export type SiteAssessmentTab = (typeof SITE_ASSESSMENT_TABS)[number];
+
+/** Tab display labels */
+export const SITE_ASSESSMENT_TAB_LABELS: Record<SiteAssessmentTab, string> = {
+  overview: "Overview",
+  baseline: "Baseline",
+  labor: "Labor",
+};
+
+/** Energy AI savings opportunity types */
+export const SAVINGS_OPPORTUNITY_TYPES = [
+  "refrigeration_efficiency",
+  "demand_stabilization",
+  "rate_arbitrage",
+  "coincident_peak_avoidance",
+  "blast_optimization",
+] as const;
+export type SavingsOpportunityType = (typeof SAVINGS_OPPORTUNITY_TYPES)[number];
+
+/** Savings opportunity display labels */
+export const SAVINGS_OPPORTUNITY_LABELS: Record<SavingsOpportunityType, string> = {
+  refrigeration_efficiency: "Refrigeration Efficiency",
+  demand_stabilization: "Demand Stabilization",
+  rate_arbitrage: "Rate Arbitrage",
+  coincident_peak_avoidance: "Coincident Peak Avoidance",
+  blast_optimization: "Blast Optimization",
+};
+
+/** Common refrigerants */
+export const REFRIGERANTS = ["ammonia", "R-22", "R-404A", "R-507", "CO2", "R-134a"] as const;
+
+/** Facility types */
+export const FACILITY_TYPES = ["cold_storage", "processing", "distribution", "mixed"] as const;
+export type FacilityType = (typeof FACILITY_TYPES)[number];
+
+/** System types */
+export const SYSTEM_TYPES = ["single_stage", "two_stage", "cascade"] as const;
+export type SystemType = (typeof SYSTEM_TYPES)[number];
+
+/** HP to kW conversion factor */
+export const HP_TO_KW = 0.7457;
+
+/** Labor roles for baseline tracking */
+export const LABOR_ROLES = [
+  "refrigeration_engineer",
+  "operator",
+  "maintenance_tech",
+  "contractor",
+  "supervisor",
+  "other",
+] as const;
+export type LaborRole = (typeof LABOR_ROLES)[number];
+
+/** Labor role display labels */
+export const LABOR_ROLE_LABELS: Record<LaborRole, string> = {
+  refrigeration_engineer: "Refrigeration Engineer",
+  operator: "Operator",
+  maintenance_tech: "Maintenance Technician",
+  contractor: "Contractor",
+  supervisor: "Supervisor",
+  other: "Other",
+};
+
+/** Baseline sections for collapsible layout */
+export const BASELINE_SECTIONS = ["equipment", "energy", "operations", "savings"] as const;
+export type BaselineSection = (typeof BASELINE_SECTIONS)[number];

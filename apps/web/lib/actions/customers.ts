@@ -15,6 +15,7 @@ export async function createCustomer(formData: FormData) {
     const name = formData.get("name") as string;
     const domain = (formData.get("domain") as string) || null;
     const logoUrl = (formData.get("logoUrl") as string) || null;
+    const companyType = (formData.get("companyType") as string) || "customer";
     const slug = slugify(name);
 
     const admin = createSupabaseAdmin();
@@ -28,7 +29,7 @@ export async function createCustomer(formData: FormData) {
 
     if (tenantErr) return { error: `Failed to create tenant: ${tenantErr.message}` };
 
-    // Create the customer record
+    // Create the company record
     const { error: customerErr } = await admin
       .from("customers")
       .insert({
@@ -36,6 +37,7 @@ export async function createCustomer(formData: FormData) {
         name,
         slug,
         logo_url: logoUrl,
+        company_type: companyType,
       });
 
     if (customerErr) return { error: `Failed to create customer: ${customerErr.message}` };

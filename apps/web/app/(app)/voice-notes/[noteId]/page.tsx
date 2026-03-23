@@ -2,24 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ChevronRight,
-  FileAudio,
   Clock,
   CheckCircle,
   AlertCircle,
   Loader2,
-  ListTodo,
   MessageSquare,
   Lightbulb,
   ArrowUpRight,
-  Check,
-  Pencil,
-  X,
   MapPin,
 } from "lucide-react";
-import { Button } from "../../../../components/ui/button";
 import { Badge } from "../../../../components/ui/badge";
 import { Avatar } from "../../../../components/ui/avatar";
 import { getVoiceNoteById, getCommentsForEntity } from "../../../../lib/data/queries";
+import { ExtractedTasksSection } from "./_components/extracted-tasks-actions";
+import { DeleteVoiceNoteButton } from "./_components/delete-voice-note-button";
 
 type VoiceNoteStatus = "uploading" | "transcribing" | "summarizing" | "ready" | "error";
 
@@ -119,7 +115,7 @@ export default async function VoiceNoteDetailPage({ params }: PageProps) {
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900 truncate">{note.title}</h1>
             <Badge variant={config.variant} className="shrink-0 gap-1">
@@ -152,6 +148,7 @@ export default async function VoiceNoteDetailPage({ params }: PageProps) {
             </div>
           )}
         </div>
+        <DeleteVoiceNoteButton voiceNoteId={note.id} />
       </div>
 
       {/* Audio player */}
@@ -219,22 +216,14 @@ export default async function VoiceNoteDetailPage({ params }: PageProps) {
       {/* Extracted items */}
       {noteStatus === "ready" && (
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Tasks */}
-          {extractedTasks.length > 0 && (
-            <section className="rounded-xl border border-gray-100 bg-white shadow-card lg:col-span-2">
-              <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
-                <ListTodo className="h-4 w-4 text-brand-green" />
-                <h2 className="text-base font-semibold text-gray-900">
-                  Extracted Tasks ({extractedTasks.length})
-                </h2>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {extractedTasks.map((task) => (
-                  <ExtractedTaskRow key={task.id} task={task} />
-                ))}
-              </div>
-            </section>
-          )}
+          {/* Tasks — interactive client component with Approve/Dismiss */}
+          <ExtractedTasksSection
+            tasks={extractedTasks}
+            voiceNoteId={note.id}
+            siteId={note.site_id}
+            milestoneId={note.milestone_id}
+            tenantId={note.tenant_id}
+          />
 
           {/* Decisions */}
           {extractedDecisions.length > 0 && (
@@ -303,45 +292,3 @@ export default async function VoiceNoteDetailPage({ params }: PageProps) {
   );
 }
 
-function ExtractedTaskRow({ task }: { task: ExtractedTask }) {
-  const assigneeName = task.assignee_name ?? task.assigneeName ?? null;
-  const dueDate = task.due_date ?? task.dueDate ?? null;
-
-  return (
-    <div className="flex items-center justify-between px-6 py-3 gap-4">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-900 truncate">{task.title}</p>
-          <span className={`text-xs font-medium capitalize ${priorityColors[task.priority] ?? "text-gray-500"}`}>
-            {task.priority}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-400">
-          {assigneeName && <span>Assigned to {assigneeName}</span>}
-          {dueDate && <span>Due {dueDate}</span>}
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        {task.status === "pending" ? (
-          <>
-            <Button variant="primary" size="sm" className="gap-1 text-xs">
-              <Check className="h-3 w-3" />
-              Approve
-            </Button>
-            <Button variant="ghost" size="sm" className="gap-1 text-xs">
-              <Pencil className="h-3 w-3" />
-              Edit
-            </Button>
-            <Button variant="ghost" size="sm" className="text-gray-400 text-xs">
-              <X className="h-3 w-3" />
-            </Button>
-          </>
-        ) : task.status === "approved" ? (
-          <Badge variant="success">Approved</Badge>
-        ) : (
-          <Badge variant="default">Dismissed</Badge>
-        )}
-      </div>
-    </div>
-  );
-}

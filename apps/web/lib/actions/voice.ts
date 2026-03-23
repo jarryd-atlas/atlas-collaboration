@@ -89,3 +89,35 @@ export async function uploadVoiceNote(formData: FormData) {
     return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
   }
 }
+
+/**
+ * Delete a voice note and cancel any pending processing jobs.
+ */
+export async function deleteVoiceNote(voiceNoteId: string) {
+  try {
+    const { claims } = await requireSession();
+    if (!claims.profileId) return { error: "Missing profile" };
+
+    const admin = createSupabaseAdmin();
+
+    // Cancel any pending/processing jobs for this voice note
+    await admin
+      .from("job_queue")
+      .update({ status: "failed", error: "Voice note deleted by user" })
+      .match({ "payload->>voice_note_id": voiceNoteId })
+      .in("status", ["pending", "processing"]);
+
+    // Delete the voice note (cascades to transcriptions via FK)
+    const { error } = await admin
+      .from("voice_notes")
+      .delete()
+      .eq("id", voiceNoteId);
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/voice-notes");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}

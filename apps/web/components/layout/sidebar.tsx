@@ -14,6 +14,7 @@ import {
   Users,
   Settings,
   Plug,
+  Sparkles,
   ChevronDown,
   ChevronLeft,
   LogOut,
@@ -60,6 +61,7 @@ const CK_NAV: NavItem[] = [
 const CK_ADMIN_NAV: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: <Users className="h-5 w-5" />, matchPrefix: "/admin/users" },
   { label: "Integrations", href: "/admin/integrations", icon: <Plug className="h-5 w-5" />, matchPrefix: "/admin/integrations" },
+  { label: "AI Instructions", href: "/admin/ai-instructions", icon: <Sparkles className="h-5 w-5" />, matchPrefix: "/admin/ai-instructions" },
   { label: "Settings", href: "/admin/settings", icon: <Settings className="h-5 w-5" />, matchPrefix: "/admin/settings" },
 ];
 

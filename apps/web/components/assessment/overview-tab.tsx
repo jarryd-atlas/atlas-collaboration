@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { PipelineStageBadge, StatusBadge, PriorityBadge } from "../ui/badge";
 import { ProgressBar } from "../ui/progress-bar";
@@ -8,7 +7,6 @@ import { EmptyState } from "../ui/empty-state";
 import { AddMilestoneButton, ChangeStageButton } from "../forms/site-actions";
 import { SiteDocumentsManager } from "../documents";
 import { SiteTasksSection } from "../tasks/site-tasks-section";
-import { AIExtractionReview } from "./ai-extraction-review";
 import { ArrowRight, Calendar, Target } from "lucide-react";
 import type { SitePipelineStage } from "@repo/shared";
 
@@ -48,21 +46,6 @@ export function OverviewTab({
   canAnalyze = false,
   assessmentId,
 }: OverviewTabProps) {
-  // AI extraction review dialog state
-  const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewExtractionId, setReviewExtractionId] = useState("");
-  const [reviewExtraction, setReviewExtraction] = useState<any>(null);
-  const [reviewAttachmentName, setReviewAttachmentName] = useState("");
-  const [reviewAttachmentId, setReviewAttachmentId] = useState("");
-
-  function handleExtractionComplete(extractionId: string, extraction: any) {
-    setReviewExtractionId(extractionId);
-    setReviewExtraction(extraction);
-    setReviewAttachmentName(extraction?.sourceFileName ?? "Document");
-    setReviewAttachmentId(extraction?.attachmentId ?? "");
-    setReviewOpen(true);
-  }
-
   return (
     <div className="space-y-8">
       {/* Pipeline stage tracker */}
@@ -173,26 +156,7 @@ export function OverviewTab({
         tenantId={site.tenant_id}
         canAnalyze={canAnalyze}
         siteId={site.id}
-        onExtractionComplete={handleExtractionComplete}
       />
-
-      {/* AI Extraction Review Dialog */}
-      {assessmentId && reviewExtraction && (
-        <AIExtractionReview
-          open={reviewOpen}
-          onClose={() => {
-            setReviewOpen(false);
-            setReviewExtraction(null);
-          }}
-          extractionId={reviewExtractionId}
-          extraction={reviewExtraction}
-          attachmentName={reviewAttachmentName}
-          assessmentId={assessmentId}
-          siteId={site.id}
-          tenantId={site.tenant_id}
-          attachmentId={reviewAttachmentId}
-        />
-      )}
     </div>
   );
 }

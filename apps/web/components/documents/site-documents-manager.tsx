@@ -263,9 +263,18 @@ export function SiteDocumentsManager({
       if (!res.ok || result.error) {
         setUploadError(result.error ?? "Analysis failed");
       } else {
-        onExtractionComplete?.(result.extractionId, result.extraction);
-        setUploadSuccess("Document analyzed successfully! Review extracted data.");
-        setTimeout(() => setUploadSuccess(""), 6000);
+        // Auto-applied — update local state with AI summary
+        const summary = result.summary || `Applied: ${(result.sectionsApplied || []).join(", ")}`;
+        setAttachments((prev) =>
+          prev.map((a) =>
+            a.id === attachmentId
+              ? { ...a, ai_summary: summary }
+              : a,
+          ),
+        );
+        setUploadSuccess(`✨ ${summary}`);
+        setTimeout(() => setUploadSuccess(""), 8000);
+        router.refresh();
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Failed to connect to analysis service. Please try again.");
@@ -758,6 +767,13 @@ function DocRow({
               </>
             )}
           </div>
+          {/* AI summary badge */}
+          {(att as any).ai_summary && (
+            <div className="mt-1 flex items-center gap-1 text-xs text-purple-600">
+              <Sparkles className="h-3 w-3 shrink-0" />
+              <span className="truncate">{(att as any).ai_summary}</span>
+            </div>
+          )}
           {/* Note display (when not editing) */}
           {att.note && !editingNote && (
             <button

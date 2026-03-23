@@ -225,6 +225,7 @@ export async function fetchAttachments(
           uploader_name: (att.profiles as any)?.full_name ?? "Unknown",
           category: (meta.category as string) ?? null,
           note: (meta.note as string) ?? null,
+          ai_summary: (meta.ai_summary as string) ?? null,
         };
       }),
     );

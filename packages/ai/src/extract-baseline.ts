@@ -144,6 +144,7 @@ export interface BaselineExtraction {
   siteContacts?: ExtractedSiteContact[];
   confidence: number;
   notes: string;
+  summary: string;
   sectionsFound: string[];
 }
 
@@ -264,6 +265,7 @@ Respond with a JSON object (no markdown fences) with these fields. Only include 
 }
 
 Rules:
+- Include a "summary" field (1-2 sentences, max 150 chars) describing what the document contains and key data points found. Example: "12 months of 15-min interval kW data (Jan-Dec 2025). Peak demand: 1,247 kW."
 - Only include sections where you found clear data. Don't guess or fabricate values.
 - For utility bills, extract ALL visible line items including on-peak/off-peak breakdowns.
 - For equipment, use the correct category and include all nameplate data visible.
@@ -365,6 +367,7 @@ export async function extractBaseline(
       siteContacts: parsed.siteContacts,
       confidence: parsed.confidence ?? 0.5,
       notes: parsed.notes ?? "",
+      summary: parsed.summary ?? "",
       sectionsFound: parsed.sectionsFound ?? [],
     };
   } catch {

@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin, getSession } from "../../../../lib/supabase/server";
 import { downloadFile } from "../../../../lib/storage/gcs";
 import { extractBaseline } from "@repo/ai";
-// XLSX imported dynamically to avoid module-level crashes on Workers
+import { applyExtraction } from "../../../../lib/ai/apply-extraction";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fromTable = (admin: ReturnType<typeof createSupabaseAdmin>, table: string) =>
+  (admin as any).from(table);
 
 /**
  * POST /api/ai/analyze-document
- * Analyzes an uploaded document with Claude to extract baseline assessment data.
- * Only accessible by CK internal users.
+ * Analyzes an uploaded document with Claude, auto-applies extracted data to baseline,
+ * and saves an AI summary on the file. No review step required.
  */
 export async function POST(req: NextRequest) {
   try {
-    // Auth check — must be internal user
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,17 +24,13 @@ export async function POST(req: NextRequest) {
     }
 
     const { attachmentId, siteId } = await req.json();
-
     if (!attachmentId || !siteId) {
-      return NextResponse.json(
-        { error: "attachmentId and siteId are required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "attachmentId and siteId are required" }, { status: 400 });
     }
 
     const admin = createSupabaseAdmin();
 
-    // Look up the attachment
+    // 1. Look up the attachment
     const { data: attachment, error: attachErr } = await admin
       .from("attachments")
       .select("*")
@@ -42,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
     }
 
-    // Look up the site to get tenant_id
+    // 2. Look up site + assessment
     const { data: siteRow } = await admin
       .from("sites")
       .select("tenant_id")
@@ -50,15 +49,42 @@ export async function POST(req: NextRequest) {
       .single();
 
     const tenantId = siteRow?.tenant_id;
+    if (!tenantId) {
+      return NextResponse.json({ error: "Site not found" }, { status: 404 });
+    }
 
-    // Look up the assessment for this site
-    const { data: assessment } = await (admin as any)
-      .from("site_assessments")
+    // Ensure assessment exists (create if needed)
+    let { data: assessment } = await fromTable(admin, "site_assessments")
       .select("id")
       .eq("site_id", siteId)
       .single();
 
-    // Download the file from GCS
+    if (!assessment) {
+      const { data: newAssessment } = await fromTable(admin, "site_assessments")
+        .insert({ site_id: siteId, tenant_id: tenantId, status: "in_progress" })
+        .select("id")
+        .single();
+      assessment = newAssessment;
+    }
+
+    if (!assessment) {
+      return NextResponse.json({ error: "Could not create assessment" }, { status: 500 });
+    }
+
+    // 3. Load category-specific AI instructions
+    const category = (attachment.metadata as Record<string, unknown>)?.category as string | undefined;
+    let categoryInstructions: string | undefined;
+    if (category) {
+      const { data: catInstr } = await fromTable(admin, "ai_category_instructions")
+        .select("instructions")
+        .eq("tenant_id", tenantId)
+        .eq("category_key", category)
+        .eq("is_active", true)
+        .maybeSingle();
+      categoryInstructions = catInstr?.instructions as string | undefined;
+    }
+
+    // 4. Download file from GCS
     let fileBuffer: ArrayBuffer;
     try {
       fileBuffer = await downloadFile(attachment.file_path);
@@ -69,12 +95,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Convert to appropriate format for Claude
+    // 5. Convert to appropriate format for Claude
     let content: string;
     let mimeType = attachment.mime_type || "application/octet-stream";
     const fileName = attachment.file_name || "";
 
-    // Spreadsheet files (.xlsx, .xls, .xlsm) — convert to CSV text
     const isSpreadsheet =
       mimeType.includes("spreadsheetml") ||
       mimeType.includes("ms-excel") ||
@@ -82,7 +107,6 @@ export async function POST(req: NextRequest) {
       /\.xlsx?$|\.xlsm$/i.test(fileName);
 
     if (isSpreadsheet) {
-      // Parse Excel to CSV using SheetJS (dynamic import for Workers compat)
       const XLSX = await import("xlsx");
       const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
       const csvParts: string[] = [];
@@ -93,17 +117,14 @@ export async function POST(req: NextRequest) {
         csvParts.push(XLSX.utils.sheet_to_csv(sheet));
       }
       content = csvParts.join("\n\n");
-      // Treat as text for the AI extraction
       mimeType = "text/csv";
     } else if (
       mimeType.startsWith("text/") ||
       mimeType === "application/csv" ||
       mimeType === "text/csv"
     ) {
-      // Text documents — send as plain text
       content = new TextDecoder().decode(fileBuffer);
     } else {
-      // Binary documents (PDFs, images) — send as base64
       const bytes = new Uint8Array(fileBuffer);
       let binary = "";
       for (let i = 0; i < bytes.length; i++) {
@@ -112,14 +133,10 @@ export async function POST(req: NextRequest) {
       content = btoa(binary);
     }
 
-    // Call Claude to extract baseline data
+    // 6. Call Claude with category instructions
     let extraction;
     try {
-      extraction = await extractBaseline(
-        content,
-        mimeType,
-        attachment.file_name,
-      );
+      extraction = await extractBaseline(content, mimeType, fileName, categoryInstructions);
     } catch (aiErr) {
       return NextResponse.json(
         { error: `AI extraction failed: ${aiErr instanceof Error ? aiErr.message : String(aiErr)}` },
@@ -127,62 +144,74 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a document_extractions record
-    const { data: extractionRecord, error: extErr } = await (admin as any)
-      .from("document_extractions")
+    // 7. Save extraction record (status: accepted — auto-applied)
+    const { data: extractionRecord, error: extErr } = await fromTable(admin, "document_extractions")
       .insert({
         attachment_id: attachmentId,
         site_id: siteId,
         tenant_id: tenantId,
-        assessment_id: assessment?.id || null,
-        document_type: guessDocumentType(attachment.file_name, extraction.sectionsFound),
-        status: "review",
+        assessment_id: assessment.id,
+        document_type: guessDocumentType(fileName, extraction.sectionsFound),
+        status: "accepted",
         extracted_data: extraction,
         confidence: extraction.confidence,
+        reviewed_by: session.claims.profileId,
+        reviewed_at: new Date().toISOString(),
       })
-      .select()
+      .select("id")
       .single();
 
-    if (extErr) {
+    if (extErr || !extractionRecord) {
       console.error("Failed to save extraction:", extErr);
-      return NextResponse.json(
-        { error: "Failed to save extraction record" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Failed to save extraction record" }, { status: 500 });
     }
+
+    // 8. Auto-apply all extracted sections to baseline tables
+    let appliedSections: string[] = [];
+    try {
+      appliedSections = await applyExtraction({
+        extractionId: extractionRecord.id as string,
+        assessmentId: assessment.id as string,
+        siteId,
+        tenantId,
+        attachmentId,
+        data: extraction,
+        reviewedBy: session.claims.profileId,
+      });
+    } catch (applyErr) {
+      console.error("Auto-apply failed:", applyErr);
+      // Don't fail the whole request — extraction is saved, apply can be retried
+    }
+
+    // 9. Save AI summary to attachment metadata
+    const summary = extraction.summary || `Extracted: ${extraction.sectionsFound.join(", ")}`;
+    const existingMetadata = (attachment.metadata || {}) as Record<string, unknown>;
+    await admin
+      .from("attachments")
+      .update({
+        metadata: { ...existingMetadata, ai_summary: summary },
+      })
+      .eq("id", attachmentId);
 
     return NextResponse.json({
       extractionId: extractionRecord.id,
-      extraction,
+      summary,
+      sectionsApplied: appliedSections,
+      confidence: extraction.confidence,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : "";
-    console.error("Document analysis error:", message, stack);
-    return NextResponse.json(
-      { error: message, detail: stack },
-      { status: 500 },
-    );
+    console.error("Document analysis error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-function guessDocumentType(
-  fileName: string,
-  sectionsFound: string[],
-): string {
+function guessDocumentType(fileName: string, sectionsFound: string[]): string {
   const lower = fileName.toLowerCase();
-  if (lower.includes("bill") || lower.includes("utility") || lower.includes("invoice")) {
-    return "utility_bill";
-  }
-  if (lower.includes("p&id") || lower.includes("pid") || lower.includes("diagram")) {
-    return "p_and_id";
-  }
-  if (lower.includes("round") || lower.includes("log")) {
-    return "round_sheet";
-  }
-  if (lower.includes("interval") || lower.includes("kwh") || lower.includes("demand")) {
-    return "interval_data";
-  }
+  if (lower.includes("bill") || lower.includes("utility") || lower.includes("invoice")) return "utility_bill";
+  if (lower.includes("p&id") || lower.includes("pid") || lower.includes("diagram")) return "p_and_id";
+  if (lower.includes("round") || lower.includes("log")) return "round_sheet";
+  if (lower.includes("interval") || lower.includes("kwh") || lower.includes("demand")) return "interval_data";
   if (sectionsFound.includes("equipment")) return "equipment_list";
   if (sectionsFound.includes("energyData")) return "utility_bill";
   return "other";

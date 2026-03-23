@@ -27,6 +27,7 @@ export interface ExtractedUpdate {
 }
 
 export interface SummarizationResult {
+  title: string;
   summary: string;
   extractedTasks: ExtractedTask[];
   extractedDecisions: ExtractedDecision[];
@@ -39,6 +40,7 @@ You are processing a voice note transcript from a CK team member. Your job is to
 
 Respond with a JSON object (no markdown fences) with these fields:
 {
+  "title": "Short descriptive title for this voice note (3-8 words, e.g. 'Vernon Site Walk Equipment Review')",
   "summary": "2-3 sentence summary of the voice note",
   "extractedTasks": [
     {
@@ -101,6 +103,7 @@ export async function summarizeTranscript(
   try {
     const parsed = JSON.parse(textBlock.text) as SummarizationResult;
     return {
+      title: parsed.title ?? "",
       summary: parsed.summary ?? "",
       extractedTasks: Array.isArray(parsed.extractedTasks)
         ? parsed.extractedTasks
@@ -115,6 +118,7 @@ export async function summarizeTranscript(
   } catch {
     // If JSON parsing fails, return the text as summary with no extractions
     return {
+      title: "",
       summary: textBlock.text,
       extractedTasks: [],
       extractedDecisions: [],

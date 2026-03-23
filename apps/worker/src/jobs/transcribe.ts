@@ -115,10 +115,28 @@ export async function processTranscriptionJob(
     throw new Error(`Failed to save transcription: ${saveError.message}`);
   }
 
-  // 8. Update voice note status to ready
+  // 8. Update voice note status to ready + AI title if default
+  const updates: Record<string, unknown> = { status: "ready" };
+
+  // If the title is the default "Voice Note - <date>" pattern, replace with AI-generated title
+  if (summary.title) {
+    const { data: currentNote } = await supabase
+      .from("voice_notes")
+      .select("title")
+      .eq("id", voice_note_id)
+      .single();
+
+    const currentTitle = currentNote?.title ?? "";
+    const isDefaultTitle = /^voice note\s*[-–—]\s*/i.test(currentTitle) || currentTitle.trim() === "";
+    if (isDefaultTitle && summary.title.trim()) {
+      updates.title = summary.title.trim();
+      console.log(`[Transcribe] AI title: "${summary.title}"`);
+    }
+  }
+
   await supabase
     .from("voice_notes")
-    .update({ status: "ready" })
+    .update(updates)
     .eq("id", voice_note_id);
 
   console.log(`[Transcribe] Complete for voice note ${voice_note_id}`);

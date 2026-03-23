@@ -4,7 +4,7 @@
  * and other documents to extract structured assessment data.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+// Using direct fetch instead of SDK for Cloudflare Workers compatibility
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -293,25 +293,22 @@ export async function extractBaseline(
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
 
-  const client = new Anthropic({ apiKey });
-
-  // Build the user message based on content type
-  const userContent: Anthropic.MessageCreateParams["messages"][0]["content"] = [];
+  // Build the user message content blocks
+  const userContent: unknown[] = [];
 
   if (mimeType.startsWith("image/") || mimeType === "application/pdf") {
-    // Use vision for images and PDFs
     const mediaType = mimeType === "application/pdf"
-      ? "application/pdf" as const
-      : mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      ? "application/pdf"
+      : mimeType;
 
     userContent.push({
-      type: "document" as any,
+      type: mimeType === "application/pdf" ? "document" : "image",
       source: {
         type: "base64",
         media_type: mediaType,
         data: content,
       },
-    } as any);
+    });
   }
 
   // Add text context
@@ -327,15 +324,30 @@ export async function extractBaseline(
 
   userContent.push({ type: "text", text: textPrompt });
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userContent }],
+  // Direct fetch to Anthropic API (avoids SDK compatibility issues on Cloudflare Workers)
+  const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 8192,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
+    }),
   });
 
+  if (!anthropicRes.ok) {
+    const errBody = await anthropicRes.text();
+    throw new Error(`Anthropic API error (${anthropicRes.status}): ${errBody}`);
+  }
+
+  const response = await anthropicRes.json() as { content: { type: string; text: string }[] };
   const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  if (!textBlock) {
     throw new Error("No text response from Claude");
   }
 

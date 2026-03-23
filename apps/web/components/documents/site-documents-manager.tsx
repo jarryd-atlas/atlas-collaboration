@@ -259,55 +259,35 @@ export function SiteDocumentsManager({
     }
 
     try {
-      // 1. Download file in browser via signed GCS URL
-      setAnalyzing({ id: attachmentId, status: "Downloading file..." });
-      const fileRes = await fetch(att.url);
-      if (!fileRes.ok) throw new Error("Failed to download file from storage");
-      const fileBuffer = await fileRes.arrayBuffer();
-
-      // 2. Process file client-side (no server CPU needed)
-      let textContent: string;
-      let processedMimeType: string;
       const mime = att.mime_type || "";
       const fname = att.file_name || "";
-
       const isXlsx = mime.includes("spreadsheetml") || mime.includes("ms-excel") || /\.xlsx?$/i.test(fname);
+      const isBinary = mime === "application/pdf" || mime.startsWith("image/");
+
+      let content: string | undefined;
+      let processedMimeType: string | undefined;
 
       if (isXlsx) {
+        // Spreadsheets: parse client-side (heavy CPU, but browser has no limits)
+        setAnalyzing({ id: attachmentId, status: "Downloading file..." });
+        const fileRes = await fetch(att.url);
+        if (!fileRes.ok) throw new Error("Failed to download file from storage");
+        const fileBuffer = await fileRes.arrayBuffer();
+
         setAnalyzing({ id: attachmentId, status: "Processing spreadsheet..." });
-        textContent = await parseSpreadsheetClientSide(fileBuffer);
+        content = await parseSpreadsheetClientSide(fileBuffer);
         processedMimeType = "text/csv";
-      } else if (mime === "application/pdf") {
-        setAnalyzing({ id: attachmentId, status: "Preparing document..." });
-        // Send PDF as base64 — Claude supports PDF natively
-        const bytes = new Uint8Array(fileBuffer);
-        // Cap at ~4MB base64 to stay under Claude's token limit
-        const maxBytes = 3 * 1024 * 1024; // 3MB raw = ~4MB base64
-        const slice = bytes.length > maxBytes ? bytes.slice(0, maxBytes) : bytes;
-        let binary = "";
-        for (let i = 0; i < slice.length; i++) {
-          binary += String.fromCharCode(slice[i]!);
-        }
-        textContent = btoa(binary);
-        if (bytes.length > maxBytes) {
-          textContent = textContent; // base64 of truncated file
-        }
-        processedMimeType = "application/pdf";
-      } else if (mime.startsWith("image/")) {
-        setAnalyzing({ id: attachmentId, status: "Preparing image..." });
-        const bytes = new Uint8Array(fileBuffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]!);
-        }
-        textContent = btoa(binary);
-        processedMimeType = mime;
-      } else {
-        textContent = new TextDecoder().decode(fileBuffer);
+      } else if (!isBinary) {
+        // Text files: read client-side
+        setAnalyzing({ id: attachmentId, status: "Downloading file..." });
+        const fileRes = await fetch(att.url);
+        if (!fileRes.ok) throw new Error("Failed to download file from storage");
+        content = await fileRes.text();
         processedMimeType = mime || "text/plain";
       }
+      // PDFs and images: let the server download from GCS (lightweight fetch, no parsing)
+      // We send content=undefined and the server uses the attachment's file_path
 
-      // 3. Send processed content to thin API route
       setAnalyzing({ id: attachmentId, status: "Analyzing with AI..." });
       const res = await fetch("/api/ai/analyze-document", {
         method: "POST",
@@ -315,7 +295,7 @@ export function SiteDocumentsManager({
         body: JSON.stringify({
           attachmentId,
           siteId,
-          content: textContent,
+          content: content, // undefined for PDFs/images → server downloads from GCS
           mimeType: processedMimeType,
           fileName: fname,
           category: att.category,

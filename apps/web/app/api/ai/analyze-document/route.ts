@@ -110,44 +110,132 @@ export async function POST(req: NextRequest) {
       const XLSX = await import("xlsx");
       const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
       const csvParts: string[] = [];
-      let totalRows = 0;
+      let totalDataRows = 0;
+      let isLargeTimeSeries = false;
+
+      // First pass: check if this is large time-series data (interval/demand data)
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) continue;
-        const csv = XLSX.utils.sheet_to_csv(sheet);
-        const lines = csv.split("\n");
-        totalRows += lines.length;
-        csvParts.push(`=== Sheet: ${sheetName} (${lines.length} rows) ===`);
-        csvParts.push(csv);
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+        totalDataRows += rows.length;
+        if (rows.length > 1000) isLargeTimeSeries = true;
       }
-      content = csvParts.join("\n\n");
 
-      // Large spreadsheets (>500K chars ≈ 125K tokens) — smart truncation
-      // Keep header rows + first/last samples from each sheet so Claude sees the structure
-      const MAX_CHARS = 400_000; // ~100K tokens, safe under 200K limit with system prompt
-      if (content.length > MAX_CHARS) {
-        const truncatedParts: string[] = [];
-        truncatedParts.push(`[NOTE: Original file has ${totalRows} rows across ${workbook.SheetNames.length} sheet(s). Showing representative samples for extraction.]`);
+      if (isLargeTimeSeries) {
+        // Pre-aggregate large time-series data instead of sending raw rows
+        // This gives Claude accurate monthly summaries computed from ALL rows
+        csvParts.push(`[PRE-AGGREGATED DATA: Computed from ${totalDataRows.toLocaleString()} rows of interval/demand data in the original file. All values are exact calculations from the complete dataset.]`);
+
         for (const sheetName of workbook.SheetNames) {
           const sheet = workbook.Sheets[sheetName];
           if (!sheet) continue;
-          const csv = XLSX.utils.sheet_to_csv(sheet);
-          const lines = csv.split("\n");
-          if (lines.length <= 200) {
-            truncatedParts.push(`=== Sheet: ${sheetName} (${lines.length} rows, complete) ===`);
-            truncatedParts.push(csv);
-          } else {
-            // Header + first 100 rows + last 50 rows
-            const header = lines.slice(0, 1);
-            const firstBlock = lines.slice(1, 101);
-            const lastBlock = lines.slice(-50);
-            truncatedParts.push(`=== Sheet: ${sheetName} (${lines.length} rows, sampled) ===`);
-            truncatedParts.push([...header, ...firstBlock].join("\n"));
-            truncatedParts.push(`\n... [${lines.length - 151} rows omitted] ...\n`);
-            truncatedParts.push(lastBlock.join("\n"));
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+          if (rows.length < 2) continue;
+
+          const headerRow = rows[0] as string[];
+          csvParts.push(`\n=== Sheet: ${sheetName} (${rows.length - 1} data rows) ===`);
+          csvParts.push(`Column headers: ${headerRow.join(", ")}`);
+
+          // Show first 5 raw rows so Claude understands the format
+          csvParts.push(`\nSample rows (first 5):`);
+          for (let i = 1; i <= Math.min(5, rows.length - 1); i++) {
+            csvParts.push((rows[i] as unknown[]).join(","));
+          }
+
+          // Find numeric columns and date/time column
+          const numCols: { idx: number; name: string }[] = [];
+          let dateColIdx = -1;
+          for (let c = 0; c < headerRow.length; c++) {
+            const name = String(headerRow[c] ?? "").toLowerCase();
+            if (name.includes("date") || name.includes("time") || name.includes("timestamp") || c === 0) {
+              if (dateColIdx === -1) dateColIdx = c;
+            }
+            // Check if column has numeric data
+            const sampleVal = rows[1]?.[c];
+            if (typeof sampleVal === "number" || (typeof sampleVal === "string" && !isNaN(Number(sampleVal)) && sampleVal.trim() !== "")) {
+              numCols.push({ idx: c, name: String(headerRow[c] ?? `col_${c}`) });
+            }
+          }
+
+          // Aggregate by month
+          const monthlyData = new Map<string, { count: number; sums: number[]; maxes: number[]; mins: number[] }>();
+
+          for (let r = 1; r < rows.length; r++) {
+            const row = rows[r] as unknown[];
+            let monthKey = "unknown";
+
+            // Try to parse date from the date column
+            if (dateColIdx >= 0 && row[dateColIdx] != null) {
+              const raw = row[dateColIdx];
+              let d: Date | null = null;
+              if (typeof raw === "number") {
+                // Excel serial date
+                d = new Date((raw - 25569) * 86400 * 1000);
+              } else if (typeof raw === "string" && raw.trim()) {
+                d = new Date(raw);
+              }
+              if (d && !isNaN(d.getTime())) {
+                monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+              }
+            }
+
+            if (!monthlyData.has(monthKey)) {
+              monthlyData.set(monthKey, {
+                count: 0,
+                sums: numCols.map(() => 0),
+                maxes: numCols.map(() => -Infinity),
+                mins: numCols.map(() => Infinity),
+              });
+            }
+            const bucket = monthlyData.get(monthKey)!;
+            bucket.count++;
+
+            for (let nc = 0; nc < numCols.length; nc++) {
+              const val = Number(row[numCols[nc]!.idx]);
+              if (!isNaN(val)) {
+                bucket.sums[nc]! += val;
+                if (val > bucket.maxes[nc]!) bucket.maxes[nc] = val;
+                if (val < bucket.mins[nc]!) bucket.mins[nc] = val;
+              }
+            }
+          }
+
+          // Format monthly aggregates as a table Claude can parse
+          if (monthlyData.size > 0 && numCols.length > 0) {
+            csvParts.push(`\nMonthly aggregated summary (computed from all ${rows.length - 1} rows):`);
+            const colNames = numCols.map((c) => c.name);
+            csvParts.push(`Month,Readings,${colNames.map((n) => `${n}_sum,${n}_max,${n}_min,${n}_avg`).join(",")}`);
+
+            const sortedMonths = [...monthlyData.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+            for (const [month, data] of sortedMonths) {
+              const vals = numCols.map((_, nc) => {
+                const sum = data.sums[nc] ?? 0;
+                const max = data.maxes[nc] === -Infinity ? 0 : (data.maxes[nc] ?? 0);
+                const min = data.mins[nc] === Infinity ? 0 : (data.mins[nc] ?? 0);
+                const avg = data.count > 0 ? sum / data.count : 0;
+                return `${sum.toFixed(2)},${max.toFixed(2)},${min.toFixed(2)},${avg.toFixed(2)}`;
+              });
+              csvParts.push(`${month},${data.count},${vals.join(",")}`);
+            }
           }
         }
-        content = truncatedParts.join("\n\n");
+      } else {
+        // Small spreadsheet — send full content
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          if (!sheet) continue;
+          csvParts.push(`=== Sheet: ${sheetName} ===`);
+          csvParts.push(XLSX.utils.sheet_to_csv(sheet));
+        }
+      }
+
+      content = csvParts.join("\n");
+
+      // Final safety check — if still too large, hard truncate
+      const MAX_CHARS = 400_000;
+      if (content.length > MAX_CHARS) {
+        content = content.substring(0, MAX_CHARS) + "\n\n[Content truncated at 400K characters]";
       }
       mimeType = "text/csv";
     } else if (

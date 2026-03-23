@@ -8,7 +8,7 @@ const fromTable = (admin: ReturnType<typeof createSupabaseAdmin>, table: string)
 
 const DEFAULT_INSTRUCTIONS: Record<string, string> = {
   "interval-data":
-    "This is interval demand data (typically 15-min or hourly kW readings). Extract monthly peak demand, total kWh, load factor, and on-peak/off-peak/shoulder breakdowns if time-of-use periods are apparent. Identify the billing demand vs actual peak.",
+    "This is interval demand data. For large files, the raw 15-min/hourly readings have been pre-aggregated into monthly summaries (sum, max, min, avg) computed from the complete dataset — these values are exact. Use the monthly _sum columns for total kWh, _max for peak demand kW, and _avg for average demand. Calculate load factor as avg/max. If column names suggest TOU periods (on-peak, off-peak, shoulder), extract those breakdowns. The _max value is the actual metered peak — note if it differs significantly from what a utility bill might show as billing demand.",
   "utility-bills":
     "This is an electric utility bill. Extract provider names, account/meter numbers, rate schedule name, all line item charges, total kWh consumption, peak demand kW, PLC/transmission tags, TOU period breakdowns, and sales tax. Map charges to supply vs distribution.",
   "round-sheets":

@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Users,
   Settings,
+  Plug,
   ChevronDown,
   ChevronLeft,
   LogOut,
@@ -58,6 +59,7 @@ const CK_NAV: NavItem[] = [
 
 const CK_ADMIN_NAV: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: <Users className="h-5 w-5" />, matchPrefix: "/admin/users" },
+  { label: "Integrations", href: "/admin/integrations", icon: <Plug className="h-5 w-5" />, matchPrefix: "/admin/integrations" },
   { label: "Settings", href: "/admin/settings", icon: <Settings className="h-5 w-5" />, matchPrefix: "/admin/settings" },
 ];
 

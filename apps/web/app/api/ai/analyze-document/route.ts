@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin, getSession } from "../../../../lib/supabase/server";
 import { downloadFile } from "../../../../lib/storage/gcs";
 import { extractBaseline } from "@repo/ai";
-import * as XLSX from "xlsx";
+// XLSX imported dynamically to avoid module-level crashes on Workers
 
 /**
  * POST /api/ai/analyze-document
@@ -59,7 +59,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     // Download the file from GCS
-    const fileBuffer = await downloadFile(attachment.file_path);
+    let fileBuffer: ArrayBuffer;
+    try {
+      fileBuffer = await downloadFile(attachment.file_path);
+    } catch (dlErr) {
+      return NextResponse.json(
+        { error: `GCS download failed: ${dlErr instanceof Error ? dlErr.message : String(dlErr)}` },
+        { status: 500 },
+      );
+    }
 
     // Convert to appropriate format for Claude
     let content: string;
@@ -74,7 +82,8 @@ export async function POST(req: NextRequest) {
       /\.xlsx?$|\.xlsm$/i.test(fileName);
 
     if (isSpreadsheet) {
-      // Parse Excel to CSV using SheetJS
+      // Parse Excel to CSV using SheetJS (dynamic import for Workers compat)
+      const XLSX = await import("xlsx");
       const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
       const csvParts: string[] = [];
       for (const sheetName of workbook.SheetNames) {
@@ -104,11 +113,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Call Claude to extract baseline data
-    const extraction = await extractBaseline(
-      content,
-      mimeType,
-      attachment.file_name,
-    );
+    let extraction;
+    try {
+      extraction = await extractBaseline(
+        content,
+        mimeType,
+        attachment.file_name,
+      );
+    } catch (aiErr) {
+      return NextResponse.json(
+        { error: `AI extraction failed: ${aiErr instanceof Error ? aiErr.message : String(aiErr)}` },
+        { status: 500 },
+      );
+    }
 
     // Create a document_extractions record
     const { data: extractionRecord, error: extErr } = await (admin as any)
@@ -139,9 +156,11 @@ export async function POST(req: NextRequest) {
       extraction,
     });
   } catch (err) {
-    console.error("Document analysis error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : "";
+    console.error("Document analysis error:", message, stack);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to analyze document" },
+      { error: message, detail: stack },
       { status: 500 },
     );
   }

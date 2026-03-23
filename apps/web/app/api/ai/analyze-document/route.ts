@@ -95,12 +95,20 @@ export async function POST(req: NextRequest) {
       try {
         const fileBuffer = await downloadFile(attachment.file_path);
         const bytes = new Uint8Array(fileBuffer);
-        // Cap at 3MB raw to keep base64 under ~4MB (Claude's practical limit)
-        const maxBytes = 3 * 1024 * 1024;
-        const slice = bytes.length > maxBytes ? bytes.slice(0, maxBytes) : bytes;
+
+        // Claude supports PDFs up to ~30MB base64, but has a 200K token limit
+        // ~4.5MB raw PDF ≈ ~6MB base64 ≈ ~100K tokens (practical limit)
+        const maxBytes = 4.5 * 1024 * 1024;
+        if (bytes.length > maxBytes) {
+          return NextResponse.json(
+            { error: `File too large for AI analysis (${(bytes.length / 1024 / 1024).toFixed(1)}MB). Maximum is ~4.5MB. Try splitting large P&IDs into individual pages.` },
+            { status: 400 },
+          );
+        }
+
         let binary = "";
-        for (let i = 0; i < slice.length; i++) {
-          binary += String.fromCharCode(slice[i]!);
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]!);
         }
         content = btoa(binary);
         mimeType = attachment.mime_type ?? undefined;

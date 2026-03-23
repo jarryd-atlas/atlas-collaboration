@@ -267,8 +267,8 @@ export function SiteDocumentsManager({
         setUploadSuccess("Document analyzed successfully! Review extracted data.");
         setTimeout(() => setUploadSuccess(""), 6000);
       }
-    } catch {
-      setUploadError("Failed to analyze document");
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to connect to analysis service. Please try again.");
     } finally {
       setAnalyzingId(null);
     }

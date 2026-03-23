@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin, getSession } from "../../../../lib/supabase/server";
 import { downloadFile } from "../../../../lib/storage/gcs";
 import { extractBaseline } from "@repo/ai";
+import * as XLSX from "xlsx";
 
 /**
  * POST /api/ai/analyze-document
@@ -60,12 +61,32 @@ export async function POST(req: NextRequest) {
     // Download the file from GCS
     const fileBuffer = await downloadFile(attachment.file_path);
 
-    // Convert to base64 for Claude vision (images/PDFs)
-    // or to text for text-based documents
+    // Convert to appropriate format for Claude
     let content: string;
-    const mimeType = attachment.mime_type || "application/octet-stream";
+    let mimeType = attachment.mime_type || "application/octet-stream";
+    const fileName = attachment.file_name || "";
 
-    if (
+    // Spreadsheet files (.xlsx, .xls, .xlsm) — convert to CSV text
+    const isSpreadsheet =
+      mimeType.includes("spreadsheetml") ||
+      mimeType.includes("ms-excel") ||
+      mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      /\.xlsx?$|\.xlsm$/i.test(fileName);
+
+    if (isSpreadsheet) {
+      // Parse Excel to CSV using SheetJS
+      const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
+      const csvParts: string[] = [];
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
+        csvParts.push(`=== Sheet: ${sheetName} ===`);
+        csvParts.push(XLSX.utils.sheet_to_csv(sheet));
+      }
+      content = csvParts.join("\n\n");
+      // Treat as text for the AI extraction
+      mimeType = "text/csv";
+    } else if (
       mimeType.startsWith("text/") ||
       mimeType === "application/csv" ||
       mimeType === "text/csv"

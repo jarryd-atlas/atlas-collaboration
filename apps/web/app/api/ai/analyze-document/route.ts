@@ -113,13 +113,14 @@ export async function POST(req: NextRequest) {
       let totalDataRows = 0;
       let isLargeTimeSeries = false;
 
-      // First pass: check if this is large time-series data (interval/demand data)
+      // Check sheet sizes using range (no materialization)
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        if (!sheet) continue;
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
-        totalDataRows += rows.length;
-        if (rows.length > 1000) isLargeTimeSeries = true;
+        if (!sheet || !sheet["!ref"]) continue;
+        const range = XLSX.utils.decode_range(sheet["!ref"]);
+        const rowCount = range.e.r - range.s.r + 1;
+        totalDataRows += rowCount;
+        if (rowCount > 1000) isLargeTimeSeries = true;
       }
 
       if (isLargeTimeSeries) {

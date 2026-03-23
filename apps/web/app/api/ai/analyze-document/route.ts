@@ -110,13 +110,45 @@ export async function POST(req: NextRequest) {
       const XLSX = await import("xlsx");
       const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
       const csvParts: string[] = [];
+      let totalRows = 0;
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) continue;
-        csvParts.push(`=== Sheet: ${sheetName} ===`);
-        csvParts.push(XLSX.utils.sheet_to_csv(sheet));
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        const lines = csv.split("\n");
+        totalRows += lines.length;
+        csvParts.push(`=== Sheet: ${sheetName} (${lines.length} rows) ===`);
+        csvParts.push(csv);
       }
       content = csvParts.join("\n\n");
+
+      // Large spreadsheets (>500K chars ≈ 125K tokens) — smart truncation
+      // Keep header rows + first/last samples from each sheet so Claude sees the structure
+      const MAX_CHARS = 400_000; // ~100K tokens, safe under 200K limit with system prompt
+      if (content.length > MAX_CHARS) {
+        const truncatedParts: string[] = [];
+        truncatedParts.push(`[NOTE: Original file has ${totalRows} rows across ${workbook.SheetNames.length} sheet(s). Showing representative samples for extraction.]`);
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          if (!sheet) continue;
+          const csv = XLSX.utils.sheet_to_csv(sheet);
+          const lines = csv.split("\n");
+          if (lines.length <= 200) {
+            truncatedParts.push(`=== Sheet: ${sheetName} (${lines.length} rows, complete) ===`);
+            truncatedParts.push(csv);
+          } else {
+            // Header + first 100 rows + last 50 rows
+            const header = lines.slice(0, 1);
+            const firstBlock = lines.slice(1, 101);
+            const lastBlock = lines.slice(-50);
+            truncatedParts.push(`=== Sheet: ${sheetName} (${lines.length} rows, sampled) ===`);
+            truncatedParts.push([...header, ...firstBlock].join("\n"));
+            truncatedParts.push(`\n... [${lines.length - 151} rows omitted] ...\n`);
+            truncatedParts.push(lastBlock.join("\n"));
+          }
+        }
+        content = truncatedParts.join("\n\n");
+      }
       mimeType = "text/csv";
     } else if (
       mimeType.startsWith("text/") ||

@@ -264,7 +264,9 @@ export function SiteDocumentsManager({
       const isXlsx = mime.includes("spreadsheetml") || mime.includes("ms-excel") || /\.xlsx?$/i.test(fname);
       const isBinary = mime === "application/pdf" || mime.startsWith("image/");
 
+      // Content can be: text string, or array of base64 image strings (for PDFs)
       let content: string | undefined;
+      let pageImages: string[] | undefined;
       let processedMimeType: string | undefined;
 
       if (isXlsx) {
@@ -277,6 +279,29 @@ export function SiteDocumentsManager({
         setAnalyzing({ id: attachmentId, status: "Processing spreadsheet..." });
         content = await parseSpreadsheetClientSide(fileBuffer);
         processedMimeType = "text/csv";
+      } else if (mime === "application/pdf") {
+        // PDFs: render pages as images in browser using pdf.js
+        setAnalyzing({ id: attachmentId, status: "Downloading PDF..." });
+        const fileRes = await fetch(att.url);
+        if (!fileRes.ok) throw new Error("Failed to download file from storage");
+        const fileBuffer = await fileRes.arrayBuffer();
+
+        setAnalyzing({ id: attachmentId, status: "Rendering PDF pages..." });
+        pageImages = await renderPdfPagesAsImages(fileBuffer, (current, total) => {
+          setAnalyzing({ id: attachmentId, status: `Rendering page ${current} of ${total}...` });
+        });
+        processedMimeType = "image/jpeg";
+      } else if (mime.startsWith("image/")) {
+        // Single images: download and base64 encode
+        setAnalyzing({ id: attachmentId, status: "Downloading image..." });
+        const fileRes = await fetch(att.url);
+        if (!fileRes.ok) throw new Error("Failed to download file from storage");
+        const buf = await fileRes.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+        pageImages = [btoa(binary)];
+        processedMimeType = mime;
       } else if (!isBinary) {
         // Text files: read client-side
         setAnalyzing({ id: attachmentId, status: "Downloading file..." });
@@ -285,8 +310,6 @@ export function SiteDocumentsManager({
         content = await fileRes.text();
         processedMimeType = mime || "text/plain";
       }
-      // PDFs and images: let the server download from GCS (lightweight fetch, no parsing)
-      // We send content=undefined and the server uses the attachment's file_path
 
       setAnalyzing({ id: attachmentId, status: "Analyzing with AI..." });
       const res = await fetch("/api/ai/analyze-document", {
@@ -295,7 +318,8 @@ export function SiteDocumentsManager({
         body: JSON.stringify({
           attachmentId,
           siteId,
-          content: content, // undefined for PDFs/images → server downloads from GCS
+          content,
+          pageImages, // array of base64 JPEG strings for PDFs/images
           mimeType: processedMimeType,
           fileName: fname,
           category: att.category,
@@ -422,6 +446,53 @@ export function SiteDocumentsManager({
     }
 
     return parts.join("\n");
+  }
+
+  /** Render PDF pages as JPEG images in the browser using pdf.js */
+  async function renderPdfPagesAsImages(
+    buffer: ArrayBuffer,
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<string[]> {
+    const pdfjsLib = await import("pdfjs-dist");
+
+    // Set worker source — use CDN to avoid bundling issues
+    const version = pdfjsLib.version;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.mjs`;
+
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const totalPages = pdf.numPages;
+    // Cap at 30 pages to stay under Claude's token limit (~48K image tokens)
+    const maxPages = Math.min(totalPages, 30);
+    const images: string[] = [];
+
+    for (let i = 1; i <= maxPages; i++) {
+      onProgress?.(i, maxPages);
+      const page = await pdf.getPage(i);
+      // Scale to max 1568px on longest edge (Claude's optimal resolution)
+      const unscaledViewport = page.getViewport({ scale: 1.0 });
+      const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height);
+      const scale = Math.min(1568 / maxDim, 2.0); // Don't upscale past 2x
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Failed to create canvas context");
+
+      await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+      // Convert to JPEG base64
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = dataUrl.split(",")[1]!;
+      images.push(base64);
+
+      // Clean up
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+
+    return images;
   }
 
   async function handleNoteChange(attachmentId: string, note: string) {

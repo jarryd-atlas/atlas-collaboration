@@ -37,10 +37,11 @@ export async function processTranscriptionJob(
   const gcsBucket = process.env.GCS_BUCKET;
   if (!gcsBucket) throw new Error("Missing GCS_BUCKET env var");
 
+  // Support both inline JSON credentials and GOOGLE_APPLICATION_CREDENTIALS file path
   const saJson = process.env.GCS_SERVICE_ACCOUNT_JSON;
-  if (!saJson) throw new Error("Missing GCS_SERVICE_ACCOUNT_JSON env var");
-
-  const storage = new Storage({ credentials: JSON.parse(saJson) });
+  const storage = saJson
+    ? new Storage({ credentials: JSON.parse(saJson) })
+    : new Storage(); // Falls back to GOOGLE_APPLICATION_CREDENTIALS or ADC
   const [fileContents] = await storage.bucket(gcsBucket).file(file_path).download();
   const audioBuffer = Buffer.from(fileContents);
   console.log(`[Transcribe] Downloaded ${audioBuffer.length} bytes`);

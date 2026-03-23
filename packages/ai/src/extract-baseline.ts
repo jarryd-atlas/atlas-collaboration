@@ -291,6 +291,7 @@ export async function extractBaseline(
   mimeType: string,
   fileName: string,
   existingContext?: string,
+  pageImages?: string[],
 ): Promise<BaselineExtraction> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
@@ -298,16 +299,25 @@ export async function extractBaseline(
   // Build the user message content blocks
   const userContent: unknown[] = [];
 
-  if (mimeType.startsWith("image/") || mimeType === "application/pdf") {
-    const mediaType = mimeType === "application/pdf"
-      ? "application/pdf"
-      : mimeType;
-
+  // Page images (PDF rendered as JPEGs, or standalone images)
+  if (pageImages && pageImages.length > 0) {
+    for (const imgBase64 of pageImages) {
+      userContent.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/jpeg",
+          data: imgBase64,
+        },
+      });
+    }
+  } else if (mimeType.startsWith("image/")) {
+    // Single image sent as content string
     userContent.push({
-      type: mimeType === "application/pdf" ? "document" : "image",
+      type: "image",
       source: {
         type: "base64",
-        media_type: mediaType,
+        media_type: mimeType,
         data: content,
       },
     });
@@ -315,12 +325,15 @@ export async function extractBaseline(
 
   // Add text context
   let textPrompt = `Analyze this document and extract baseline assessment data.\n\nFile: ${fileName}`;
+  if (pageImages && pageImages.length > 0) {
+    textPrompt += `\n\n[${pageImages.length} page(s) rendered as images from a PDF document]`;
+  }
   if (existingContext) {
-    textPrompt += `\n\nExisting data context: ${existingContext}`;
+    textPrompt += `\n\nCategory-specific instructions: ${existingContext}`;
   }
 
   // For text-based documents, include the content directly
-  if (mimeType.startsWith("text/") || mimeType === "application/csv") {
+  if (content && (mimeType.startsWith("text/") || mimeType === "application/csv")) {
     textPrompt += `\n\nDocument content:\n${content}`;
   }
 

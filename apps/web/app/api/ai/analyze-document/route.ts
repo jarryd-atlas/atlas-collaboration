@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin, getSession } from "../../../../lib/supabase/server";
-import { downloadFile } from "../../../../lib/storage/gcs";
 import { extractBaseline } from "@repo/ai";
 import { applyExtraction } from "../../../../lib/ai/apply-extraction";
 
@@ -26,14 +25,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Only CK users can analyze documents" }, { status: 403 });
     }
 
-    const { attachmentId, siteId, content: clientContent, mimeType: clientMimeType, fileName, category } = await req.json();
+    const { attachmentId, siteId, content: clientContent, pageImages: clientPageImages, mimeType: clientMimeType, fileName, category } = await req.json();
     if (!attachmentId || !siteId) {
       return NextResponse.json({ error: "attachmentId and siteId are required" }, { status: 400 });
     }
 
-    // For PDFs/images, client sends no content — we download from GCS server-side
-    // (lightweight fetch, no CPU-heavy parsing needed)
     let content = clientContent as string | undefined;
+    let pageImages = clientPageImages as string[] | undefined;
     let mimeType = clientMimeType as string | undefined;
 
     const admin = createSupabaseAdmin();
@@ -80,50 +78,21 @@ export async function POST(req: NextRequest) {
       categoryInstructions = catInstr?.instructions as string | undefined;
     }
 
-    // 4. If no content from browser (PDFs/images), download from GCS and base64-encode
-    if (!content) {
-      const { data: attachment } = await admin
-        .from("attachments")
-        .select("file_path, mime_type")
-        .eq("id", attachmentId)
-        .single();
-
-      if (!attachment) {
-        return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
-      }
-
-      try {
-        const fileBuffer = await downloadFile(attachment.file_path);
-        const bytes = new Uint8Array(fileBuffer);
-
-        // Claude supports PDFs up to ~30MB base64, but has a 200K token limit
-        // ~4.5MB raw PDF ≈ ~6MB base64 ≈ ~100K tokens (practical limit)
-        const maxBytes = 4.5 * 1024 * 1024;
-        if (bytes.length > maxBytes) {
-          return NextResponse.json(
-            { error: `File too large for AI analysis (${(bytes.length / 1024 / 1024).toFixed(1)}MB). Maximum is ~4.5MB. Try splitting large P&IDs into individual pages.` },
-            { status: 400 },
-          );
-        }
-
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]!);
-        }
-        content = btoa(binary);
-        mimeType = attachment.mime_type ?? undefined;
-      } catch (dlErr) {
-        return NextResponse.json(
-          { error: `File download failed: ${dlErr instanceof Error ? dlErr.message : String(dlErr)}` },
-          { status: 500 },
-        );
-      }
+    // 4. Validate we have something to analyze
+    if (!content && (!pageImages || pageImages.length === 0)) {
+      return NextResponse.json({ error: "No content provided for analysis" }, { status: 400 });
     }
 
     // 5. Call Claude
     let extraction;
     try {
-      extraction = await extractBaseline(content!, mimeType || "text/plain", fileName || "document", categoryInstructions);
+      extraction = await extractBaseline(
+        content || "",
+        mimeType || "text/plain",
+        fileName || "document",
+        categoryInstructions,
+        pageImages,
+      );
     } catch (aiErr) {
       return NextResponse.json(
         { error: `AI extraction failed: ${aiErr instanceof Error ? aiErr.message : String(aiErr)}` },

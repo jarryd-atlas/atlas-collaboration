@@ -581,6 +581,9 @@ export function SiteDocumentsManager({
                 onUploadVersion={handleUploadVersion}
                 onFileNameChange={handleFileNameChange}
                 onNoteChange={handleNoteChange}
+                canAnalyze={canAnalyze}
+                analyzingId={analyzingId}
+                onAnalyze={handleAnalyze}
               />
             ))
           )}

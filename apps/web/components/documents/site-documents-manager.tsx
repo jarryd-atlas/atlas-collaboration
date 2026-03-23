@@ -95,7 +95,7 @@ export function SiteDocumentsManager({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<CategoryKey | "all">("all");
   const [analyzeOnUpload, setAnalyzeOnUpload] = useState(false);
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState<{ id: string; status: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -252,35 +252,196 @@ export function SiteDocumentsManager({
 
   async function handleAnalyze(attachmentId: string) {
     if (!siteId) return;
-    setAnalyzingId(attachmentId);
+    const att = attachments.find((a) => a.id === attachmentId);
+    if (!att || !att.url) {
+      setUploadError("File URL not available. Try refreshing the page.");
+      return;
+    }
+
     try {
+      // 1. Download file in browser via signed GCS URL
+      setAnalyzing({ id: attachmentId, status: "Downloading file..." });
+      const fileRes = await fetch(att.url);
+      if (!fileRes.ok) throw new Error("Failed to download file from storage");
+      const fileBuffer = await fileRes.arrayBuffer();
+
+      // 2. Process file client-side (no server CPU needed)
+      let textContent: string;
+      let processedMimeType: string;
+      const mime = att.mime_type || "";
+      const fname = att.file_name || "";
+
+      const isXlsx = mime.includes("spreadsheetml") || mime.includes("ms-excel") || /\.xlsx?$/i.test(fname);
+
+      if (isXlsx) {
+        setAnalyzing({ id: attachmentId, status: "Processing spreadsheet..." });
+        textContent = await parseSpreadsheetClientSide(fileBuffer);
+        processedMimeType = "text/csv";
+      } else if (mime === "application/pdf") {
+        setAnalyzing({ id: attachmentId, status: "Preparing document..." });
+        // Send PDF as base64 — Claude supports PDF natively
+        const bytes = new Uint8Array(fileBuffer);
+        // Cap at ~4MB base64 to stay under Claude's token limit
+        const maxBytes = 3 * 1024 * 1024; // 3MB raw = ~4MB base64
+        const slice = bytes.length > maxBytes ? bytes.slice(0, maxBytes) : bytes;
+        let binary = "";
+        for (let i = 0; i < slice.length; i++) {
+          binary += String.fromCharCode(slice[i]!);
+        }
+        textContent = btoa(binary);
+        if (bytes.length > maxBytes) {
+          textContent = textContent; // base64 of truncated file
+        }
+        processedMimeType = "application/pdf";
+      } else if (mime.startsWith("image/")) {
+        setAnalyzing({ id: attachmentId, status: "Preparing image..." });
+        const bytes = new Uint8Array(fileBuffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]!);
+        }
+        textContent = btoa(binary);
+        processedMimeType = mime;
+      } else {
+        textContent = new TextDecoder().decode(fileBuffer);
+        processedMimeType = mime || "text/plain";
+      }
+
+      // 3. Send processed content to thin API route
+      setAnalyzing({ id: attachmentId, status: "Analyzing with AI..." });
       const res = await fetch("/api/ai/analyze-document", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ attachmentId, siteId }),
+        body: JSON.stringify({
+          attachmentId,
+          siteId,
+          content: textContent,
+          mimeType: processedMimeType,
+          fileName: fname,
+          category: att.category,
+        }),
       });
       const result = await res.json();
+
       if (!res.ok || result.error) {
         setUploadError(result.error ?? "Analysis failed");
       } else {
-        // Auto-applied — update local state with AI summary
         const summary = result.summary || `Applied: ${(result.sectionsApplied || []).join(", ")}`;
         setAttachments((prev) =>
-          prev.map((a) =>
-            a.id === attachmentId
-              ? { ...a, ai_summary: summary }
-              : a,
-          ),
+          prev.map((a) => (a.id === attachmentId ? { ...a, ai_summary: summary } : a)),
         );
         setUploadSuccess(`✨ ${summary}`);
         setTimeout(() => setUploadSuccess(""), 8000);
         router.refresh();
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Failed to connect to analysis service. Please try again.");
+      setUploadError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
     } finally {
-      setAnalyzingId(null);
+      setAnalyzing(null);
     }
+  }
+
+  /** Parse xlsx/xls in the browser and return text (CSV or pre-aggregated monthly summary) */
+  async function parseSpreadsheetClientSide(buffer: ArrayBuffer): Promise<string> {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+    const parts: string[] = [];
+    let totalRows = 0;
+    let hasLargeSheet = false;
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet || !sheet["!ref"]) continue;
+      const range = XLSX.utils.decode_range(sheet["!ref"]);
+      const rowCount = range.e.r - range.s.r + 1;
+      totalRows += rowCount;
+      if (rowCount > 1000) hasLargeSheet = true;
+    }
+
+    if (hasLargeSheet) {
+      // Pre-aggregate large time-series data
+      parts.push(`[PRE-AGGREGATED DATA: Computed from ${totalRows.toLocaleString()} rows. All values are exact calculations from the complete dataset.]`);
+
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+        if (rows.length < 2) continue;
+
+        const headerRow = rows[0] as string[];
+        parts.push(`\n=== Sheet: ${sheetName} (${rows.length - 1} data rows) ===`);
+        parts.push(`Column headers: ${headerRow.join(", ")}`);
+
+        // Sample rows
+        parts.push(`\nSample rows (first 5):`);
+        for (let i = 1; i <= Math.min(5, rows.length - 1); i++) {
+          parts.push((rows[i] as unknown[]).join(","));
+        }
+
+        // Find numeric + date columns
+        const numCols: { idx: number; name: string }[] = [];
+        let dateColIdx = -1;
+        for (let c = 0; c < headerRow.length; c++) {
+          const name = String(headerRow[c] ?? "").toLowerCase();
+          if ((name.includes("date") || name.includes("time") || name.includes("timestamp") || c === 0) && dateColIdx === -1) {
+            dateColIdx = c;
+          }
+          const sample = rows[1]?.[c];
+          if (typeof sample === "number" || (typeof sample === "string" && !isNaN(Number(sample)) && sample.trim() !== "")) {
+            numCols.push({ idx: c, name: String(headerRow[c] ?? `col_${c}`) });
+          }
+        }
+
+        // Monthly aggregation
+        const monthly = new Map<string, { count: number; sums: number[]; maxes: number[]; mins: number[] }>();
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r] as unknown[];
+          let monthKey = "unknown";
+          if (dateColIdx >= 0 && row[dateColIdx] != null) {
+            const raw = row[dateColIdx];
+            let d: Date | null = null;
+            if (typeof raw === "number") d = new Date((raw - 25569) * 86400 * 1000);
+            else if (typeof raw === "string" && raw.trim()) d = new Date(raw);
+            if (d && !isNaN(d.getTime())) monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          }
+          if (!monthly.has(monthKey)) {
+            monthly.set(monthKey, { count: 0, sums: numCols.map(() => 0), maxes: numCols.map(() => -Infinity), mins: numCols.map(() => Infinity) });
+          }
+          const b = monthly.get(monthKey)!;
+          b.count++;
+          for (let nc = 0; nc < numCols.length; nc++) {
+            const val = Number(row[numCols[nc]!.idx]);
+            if (!isNaN(val)) { b.sums[nc]! += val; if (val > b.maxes[nc]!) b.maxes[nc] = val; if (val < b.mins[nc]!) b.mins[nc] = val; }
+          }
+        }
+
+        if (monthly.size > 0 && numCols.length > 0) {
+          parts.push(`\nMonthly summary (from all ${rows.length - 1} rows):`);
+          const colNames = numCols.map((c) => c.name);
+          parts.push(`Month,Readings,${colNames.map((n) => `${n}_sum,${n}_max,${n}_min,${n}_avg`).join(",")}`);
+          for (const [month, data] of [...monthly.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+            const vals = numCols.map((_, nc) => {
+              const sum = data.sums[nc] ?? 0;
+              const max = data.maxes[nc] === -Infinity ? 0 : (data.maxes[nc] ?? 0);
+              const min = data.mins[nc] === Infinity ? 0 : (data.mins[nc] ?? 0);
+              const avg = data.count > 0 ? sum / data.count : 0;
+              return `${sum.toFixed(2)},${max.toFixed(2)},${min.toFixed(2)},${avg.toFixed(2)}`;
+            });
+            parts.push(`${month},${data.count},${vals.join(",")}`);
+          }
+        }
+      }
+    } else {
+      // Small spreadsheet — send full CSV
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
+        parts.push(`=== Sheet: ${sheetName} ===`);
+        parts.push(XLSX.utils.sheet_to_csv(sheet));
+      }
+    }
+
+    return parts.join("\n");
   }
 
   async function handleNoteChange(attachmentId: string, note: string) {
@@ -554,7 +715,7 @@ export function SiteDocumentsManager({
                       onFileNameChange={handleFileNameChange}
                       onNoteChange={handleNoteChange}
                       canAnalyze={canAnalyze}
-                      analyzingId={analyzingId}
+                      analyzing={analyzing}
                       onAnalyze={handleAnalyze}
                     />
                   ))}
@@ -582,7 +743,7 @@ export function SiteDocumentsManager({
                 onFileNameChange={handleFileNameChange}
                 onNoteChange={handleNoteChange}
                 canAnalyze={canAnalyze}
-                analyzingId={analyzingId}
+                analyzing={analyzing}
                 onAnalyze={handleAnalyze}
               />
             ))
@@ -603,7 +764,7 @@ function DocRow({
   onFileNameChange,
   onNoteChange,
   canAnalyze = false,
-  analyzingId = null,
+  analyzing = null,
   onAnalyze,
 }: {
   att: Attachment;
@@ -614,7 +775,7 @@ function DocRow({
   onFileNameChange: (id: string, newName: string) => void;
   onNoteChange: (id: string, note: string) => void;
   canAnalyze?: boolean;
-  analyzingId?: string | null;
+  analyzing?: { id: string; status: string } | null;
   onAnalyze?: (id: string) => void;
 }) {
   const [editingCategory, setEditingCategory] = useState(false);
@@ -770,8 +931,15 @@ function DocRow({
               </>
             )}
           </div>
-          {/* AI summary badge */}
-          {(att as any).ai_summary && (
+          {/* AI analysis status (in-progress) */}
+          {analyzing?.id === att.id && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-purple-500 animate-pulse">
+              <div className="h-3 w-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <span>{analyzing.status}</span>
+            </div>
+          )}
+          {/* AI summary badge (completed) */}
+          {(att as any).ai_summary && analyzing?.id !== att.id && (
             <div className="mt-1 flex items-center gap-1 text-xs text-purple-600">
               <Sparkles className="h-3 w-3 shrink-0" />
               <span className="truncate">{(att as any).ai_summary}</span>
@@ -829,15 +997,19 @@ function DocRow({
             <button
               type="button"
               onClick={() => onAnalyze(att.id)}
-              disabled={analyzingId === att.id}
+              disabled={analyzing?.id === att.id}
               className={`p-1.5 rounded-md hover:bg-purple-50 transition-colors ${
-                analyzingId === att.id
-                  ? "text-purple-500 animate-pulse"
+                analyzing?.id === att.id
+                  ? "text-purple-500"
                   : "text-gray-400 hover:text-purple-600"
               }`}
               title="Analyze with AI to fill baseline data"
             >
-              <Sparkles className="h-4 w-4" />
+              {analyzing?.id === att.id ? (
+                <div className="h-4 w-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
             </button>
           )}
           {/* Change category */}

@@ -99,7 +99,10 @@ export default async function VoiceNoteDetailPage({ params }: PageProps) {
   const siteName = note.site?.name ?? null;
   const milestoneName = note.milestone?.name ?? null;
 
-  const extractedTasks = (Array.isArray(note.extracted_tasks) ? note.extracted_tasks : []) as ExtractedTask[];
+  const extractedTasks = (Array.isArray(note.extracted_tasks) ? note.extracted_tasks : []).map((t: any) => ({
+    ...t,
+    status: t.status ?? "pending", // Default to pending if AI didn't set status
+  })) as ExtractedTask[];
   const extractedDecisions = (Array.isArray(note.extracted_decisions) ? note.extracted_decisions : []) as string[];
   const extractedUpdates = (Array.isArray(note.extracted_updates) ? note.extracted_updates : []) as string[];
 

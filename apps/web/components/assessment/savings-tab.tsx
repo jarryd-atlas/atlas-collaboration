@@ -196,6 +196,45 @@ export function SavingsTab({
         </div>
       )}
 
+      {/* Power Results */}
+      {savingsAnalysis && (savingsAnalysis.pre_atlas_annual_kwh || savingsAnalysis.post_atlas_annual_kwh) && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6 shadow-card space-y-4">
+          <h3 className="text-sm font-semibold text-gray-900">Power Results</h3>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full text-sm min-w-[400px]">
+              <thead>
+                <tr className="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                  <th className="text-left py-2 font-medium">Measure</th>
+                  <th className="text-right py-2 font-medium">Pre-ATLAS</th>
+                  <th className="text-right py-2 font-medium">Post-ATLAS</th>
+                  <th className="text-right py-2 font-medium">Reduction</th>
+                  <th className="text-right py-2 font-medium">%</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {[
+                  { label: "Annual kWh", pre: savingsAnalysis.pre_atlas_annual_kwh, post: savingsAnalysis.post_atlas_annual_kwh, fmt: formatKwh },
+                  { label: "Avg Power (kW)", pre: savingsAnalysis.pre_atlas_avg_power_kw, post: savingsAnalysis.post_atlas_avg_power_kw, fmt: formatKw },
+                  { label: "Peak Demand (kW)", pre: savingsAnalysis.avg_peak_demand_kw, post: savingsAnalysis.post_atlas_peak_demand_kw, fmt: formatKw },
+                ].map(({ label, pre, post, fmt }) => {
+                  const reduction = pre != null && post != null ? pre - post : null;
+                  const pct = pre != null && post != null && pre > 0 ? ((pre - post) / pre) * 100 : null;
+                  return (
+                    <tr key={label}>
+                      <td className="py-2 text-gray-700">{label}</td>
+                      <td className="py-2 text-right font-mono text-gray-900">{pre != null ? fmt(pre) : "—"}</td>
+                      <td className="py-2 text-right font-mono text-gray-900">{post != null ? fmt(post) : "—"}</td>
+                      <td className="py-2 text-right font-mono text-green-700">{reduction != null ? fmt(reduction) : "—"}</td>
+                      <td className="py-2 text-right font-mono text-green-700">{pct != null ? pct.toFixed(0) + "%" : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Savings Opportunities */}
       <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card space-y-4">
         <div className="flex items-center justify-between">

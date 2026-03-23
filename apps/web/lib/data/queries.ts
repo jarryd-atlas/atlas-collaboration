@@ -857,6 +857,61 @@ export async function getBaselineDataSources(assessmentId: string) {
   return (data ?? []) as any[];
 }
 
+// ─── Site Contacts ──────────────────────────────────────────
+
+export async function getSiteContactsForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "site_contacts")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("sort_order");
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+// ─── Handoff Reports ────────────────────────────────────────
+
+export async function getHandoffReportForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "handoff_reports")
+    .select("*")
+    .eq("site_id", siteId)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return data as any;
+}
+
+export async function getPublicHandoff(slug: string) {
+  const admin = createSupabaseAdmin();
+
+  // Look up handoff by slug
+  const { data: handoff, error } = await fromTable(admin, "handoff_reports")
+    .select("*")
+    .eq("slug", slug)
+    .single();
+
+  if (error || !handoff) return null;
+
+  // Get site info
+  const { data: site } = await admin
+    .from("sites")
+    .select("*, customers!inner(name, slug)")
+    .eq("id", handoff.site_id)
+    .single();
+
+  if (!site) return null;
+
+  // Get full assessment data (includes siteContacts)
+  const assessmentData = await getFullAssessmentData(handoff.site_id);
+
+  return {
+    handoff,
+    site,
+    customer: (site as any).customers,
+    ...assessmentData,
+  };
+}
+
 /**
  * Get all assessment-related data for a site in one call.
  * Used by the site page to hydrate all tabs.
@@ -874,6 +929,7 @@ export async function getFullAssessmentData(siteId: string) {
     savingsAnalysis,
     laborBaseline,
     touSchedule,
+    siteContacts,
   ] = await Promise.all([
     getAssessmentForSite(siteId),
     getEquipmentForSite(siteId),
@@ -886,6 +942,7 @@ export async function getFullAssessmentData(siteId: string) {
     getSavingsAnalysisForSite(siteId),
     getLaborBaselineForSite(siteId),
     getTouScheduleForSite(siteId),
+    getSiteContactsForSite(siteId),
   ]);
 
   // Fetch data sources only if assessment exists
@@ -906,6 +963,7 @@ export async function getFullAssessmentData(siteId: string) {
     laborBaseline,
     touSchedule,
     dataSources,
+    siteContacts,
   };
 }
 

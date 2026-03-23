@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { updateTouSchedule, updateRateStructure } from "../../lib/actions/assessment";
-import { Clock, DollarSign } from "lucide-react";
+import { Clock, DollarSign, Building2 } from "lucide-react";
+import { DEMAND_RESPONSE_STATUSES, DEMAND_RESPONSE_LABELS, type DemandResponseStatus } from "@repo/shared";
 
 interface TouScheduleSectionProps {
   assessment: any;
@@ -69,6 +70,44 @@ export function TouScheduleSection({
 
   return (
     <div className="space-y-6">
+      {/* Utility Account */}
+      <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-card space-y-4">
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-gray-400" />
+          <h4 className="text-sm font-semibold text-gray-900">Utility Account</h4>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Account Number</label>
+            <input type="text" className={inputClass} defaultValue={touSchedule?.account_number ?? ""} placeholder="e.g. 1040077-002" disabled={isLocked} onBlur={handleBlurText("account_number", saveTou)} />
+          </div>
+          <div>
+            <label className={labelClass}>Meter Number</label>
+            <input type="text" className={inputClass} defaultValue={touSchedule?.meter_number ?? ""} placeholder="e.g. 87975735" disabled={isLocked} onBlur={handleBlurText("meter_number", saveTou)} />
+          </div>
+          <div>
+            <label className={labelClass}>Rate Name</label>
+            <input type="text" className={inputClass} defaultValue={touSchedule?.rate_name ?? ""} placeholder="e.g. Rate LP-14 Large Power Secondary" disabled={isLocked} onBlur={handleBlurText("rate_name", saveTou)} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>External Rate ID (MTID)</label>
+            <input type="text" className={inputClass} defaultValue={touSchedule?.rate_id_external ?? ""} placeholder="e.g. Genability MTID" disabled={isLocked} onBlur={handleBlurText("rate_id_external", saveTou)} />
+          </div>
+          <div>
+            <label className={labelClass}>Demand Response</label>
+            <select className={inputClass} defaultValue={touSchedule?.demand_response_status ?? "not_evaluated"} disabled={isLocked} onChange={(e) => saveTou("demand_response_status", e.target.value)}>
+              {DEMAND_RESPONSE_STATUSES.map((s) => (
+                <option key={s} value={s}>{DEMAND_RESPONSE_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Providers */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-card space-y-4">
         <div className="flex items-center gap-2">
@@ -77,7 +116,7 @@ export function TouScheduleSection({
           {saving && <span className="text-xs text-gray-400">Saving...</span>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Supply Provider</label>
             <input
@@ -113,7 +152,7 @@ export function TouScheduleSection({
         {/* On-Peak */}
         <div className="space-y-3">
           <h5 className="text-xs font-semibold text-red-600 uppercase tracking-wide">On-Peak</h5>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className={labelClass}>Energy Rate ($/kWh)</label>
               <input
@@ -179,7 +218,7 @@ export function TouScheduleSection({
         {/* Off-Peak */}
         <div className="space-y-3">
           <h5 className="text-xs font-semibold text-green-600 uppercase tracking-wide">Off-Peak</h5>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className={labelClass}>Energy Rate ($/kWh)</label>
               <input
@@ -211,7 +250,7 @@ export function TouScheduleSection({
         {/* Shoulder */}
         <div className="space-y-3">
           <h5 className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Shoulder (optional)</h5>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className={labelClass}>Energy Rate ($/kWh)</label>
               <input
@@ -275,7 +314,7 @@ export function TouScheduleSection({
         {/* Super-Peak */}
         <div className="space-y-3">
           <h5 className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Super-Peak (optional)</h5>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className={labelClass}>Energy Rate ($/kWh)</label>
               <input

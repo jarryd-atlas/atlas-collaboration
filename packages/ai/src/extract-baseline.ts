@@ -38,6 +38,11 @@ export interface ExtractedEnergyData {
 export interface ExtractedTouSchedule {
   supplyProvider?: string;
   distributionProvider?: string;
+  accountNumber?: string;
+  meterNumber?: string;
+  rateName?: string;
+  rateIdExternal?: string;
+  demandResponseStatus?: string;
   onPeakEnergyRate?: number;
   onPeakDemandRate?: number;
   onPeakStartHour?: number;
@@ -78,6 +83,9 @@ export interface ExtractedOperationalParams {
   runs247?: boolean;
   hasSubMetering?: boolean;
   hasBlastFreezing?: boolean;
+  requiredUpgrades?: string;
+  estimatedUpgradeCost?: number;
+  surveyNotes?: string;
 }
 
 export interface ExtractedOperations {
@@ -109,6 +117,21 @@ export interface ExtractedLabor {
   automationOpportunities?: string;
 }
 
+export interface ExtractedSavingsResults {
+  postAtlasAnnualKwh?: number;
+  preAtlasAvgPowerKw?: number;
+  postAtlasAvgPowerKw?: number;
+  postAtlasPeakDemandKw?: number;
+  dsCompressorFlexibilityPct?: number;
+}
+
+export interface ExtractedSiteContact {
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+}
+
 export interface BaselineExtraction {
   equipment?: ExtractedEquipment[];
   energyData?: ExtractedEnergyData[];
@@ -117,6 +140,8 @@ export interface BaselineExtraction {
   operationalParams?: ExtractedOperationalParams;
   operations?: ExtractedOperations;
   labor?: ExtractedLabor;
+  savingsResults?: ExtractedSavingsResults;
+  siteContacts?: ExtractedSiteContact[];
   confidence: number;
   notes: string;
   sectionsFound: string[];
@@ -324,6 +349,8 @@ export async function extractBaseline(
       operationalParams: parsed.operationalParams,
       operations: parsed.operations,
       labor: parsed.labor,
+      savingsResults: parsed.savingsResults,
+      siteContacts: parsed.siteContacts,
       confidence: parsed.confidence ?? 0.5,
       notes: parsed.notes ?? "",
       sectionsFound: parsed.sectionsFound ?? [],

@@ -11,6 +11,7 @@ import {
 } from "../../../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../../../lib/data/current-user";
 import { createOrGetAssessment } from "../../../../../../lib/actions/assessment";
+import { getHandoffReportForSite } from "../../../../../../lib/data/queries";
 import { PipelineStageBadge } from "../../../../../../components/ui/badge";
 import { SetPageContext } from "../../../../../../components/layout/page-context";
 import { CustomerPortalLink } from "../../../../../../components/layout/customer-portal-link";
@@ -170,6 +171,7 @@ export default async function SitePage({ params }: SitePageProps) {
               tenantId={site.tenant_id}
               isLocked={isLocked}
               dataSources={assessmentData?.dataSources ?? []}
+              siteContacts={assessmentData?.siteContacts ?? []}
             />
           ),
           labor: (

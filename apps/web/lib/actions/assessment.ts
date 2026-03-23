@@ -623,3 +623,92 @@ export async function saveBaselineDataSource(data: {
     return { error: err instanceof Error ? err.message : "Unexpected error" };
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Site Contacts CRUD
+// ═══════════════════════════════════════════════════════════════
+
+export async function addSiteContact(data: {
+  assessmentId: string;
+  siteId: string;
+  tenantId: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  isPrimary?: boolean;
+}) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+
+    const { data: existing } = await fromTable(admin, "site_contacts")
+      .select("sort_order")
+      .eq("assessment_id", data.assessmentId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+
+    const sortOrder = existing && existing.length > 0 ? (existing[0].sort_order ?? 0) + 1 : 0;
+
+    const { data: row, error } = await fromTable(admin, "site_contacts")
+      .insert({
+        assessment_id: data.assessmentId,
+        site_id: data.siteId,
+        tenant_id: data.tenantId,
+        name: data.name,
+        title: data.title || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        is_primary: data.isPrimary ?? false,
+        sort_order: sortOrder,
+      })
+      .select()
+      .single();
+
+    if (error) return { error: error.message };
+    revalidatePath("/customers");
+    return { contact: row };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function updateSiteContact(
+  contactId: string,
+  data: Partial<{ name: string; title: string; email: string; phone: string; isPrimary: boolean }>,
+) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const dbData: Record<string, unknown> = {};
+    if (data.name !== undefined) dbData.name = data.name;
+    if (data.title !== undefined) dbData.title = data.title || null;
+    if (data.email !== undefined) dbData.email = data.email || null;
+    if (data.phone !== undefined) dbData.phone = data.phone || null;
+    if (data.isPrimary !== undefined) dbData.is_primary = data.isPrimary;
+
+    const { error } = await fromTable(admin, "site_contacts")
+      .update(dbData)
+      .eq("id", contactId);
+    if (error) return { error: error.message };
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function deleteSiteContact(contactId: string) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error } = await fromTable(admin, "site_contacts")
+      .delete()
+      .eq("id", contactId);
+    if (error) return { error: error.message };
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}

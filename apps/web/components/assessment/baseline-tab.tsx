@@ -7,6 +7,7 @@ import { EnergyTab } from "./energy-tab";
 import { OperationsTab } from "./operations-tab";
 import { SavingsTab } from "./savings-tab";
 import { TouScheduleSection } from "./tou-schedule-section";
+import { SiteContactsSection } from "./site-contacts-section";
 
 interface BaselineTabProps {
   assessment: any;
@@ -23,6 +24,7 @@ interface BaselineTabProps {
   tenantId: string;
   isLocked: boolean;
   dataSources: any[];
+  siteContacts: any[];
 }
 
 function CollapsibleSection({
@@ -89,6 +91,7 @@ export function BaselineTab({
   tenantId,
   isLocked,
   dataSources,
+  siteContacts,
 }: BaselineTabProps) {
   // Group data sources by table for attribution badges
   const sourcesByTable = dataSources.reduce(
@@ -103,6 +106,21 @@ export function BaselineTab({
 
   return (
     <div className="space-y-4">
+      {/* Key Site Contacts */}
+      <CollapsibleSection
+        title="Key Site Contacts"
+        count={siteContacts.length}
+        defaultOpen={true}
+      >
+        <SiteContactsSection
+          assessment={assessment}
+          siteContacts={siteContacts}
+          siteId={siteId}
+          tenantId={tenantId}
+          isLocked={isLocked}
+        />
+      </CollapsibleSection>
+
       {/* Equipment Section */}
       <CollapsibleSection
         title="Equipment"

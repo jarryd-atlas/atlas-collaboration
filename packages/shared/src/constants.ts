@@ -306,3 +306,20 @@ export const LABOR_ROLE_LABELS: Record<LaborRole, string> = {
 /** Baseline sections for collapsible layout */
 export const BASELINE_SECTIONS = ["equipment", "energy", "operations", "savings"] as const;
 export type BaselineSection = (typeof BASELINE_SECTIONS)[number];
+
+/** Demand response evaluation statuses */
+export const DEMAND_RESPONSE_STATUSES = [
+  "not_evaluated",
+  "enrolled",
+  "not_available",
+  "evaluated_not_enrolled",
+] as const;
+export type DemandResponseStatus = (typeof DEMAND_RESPONSE_STATUSES)[number];
+
+/** Demand response status labels */
+export const DEMAND_RESPONSE_LABELS: Record<DemandResponseStatus, string> = {
+  not_evaluated: "Not Evaluated",
+  enrolled: "Enrolled",
+  not_available: "Not Available",
+  evaluated_not_enrolled: "Evaluated — Not Enrolled",
+};

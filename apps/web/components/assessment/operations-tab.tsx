@@ -45,6 +45,10 @@ export function OperationsTab({
     facility_type: operationalParams?.facility_type ?? "",
     runs_24_7: operationalParams?.runs_24_7 ?? false,
     has_blast_freezing: operationalParams?.has_blast_freezing ?? false,
+    required_upgrades: operationalParams?.required_upgrades ?? "",
+    estimated_upgrade_cost: operationalParams?.estimated_upgrade_cost ?? "",
+    survey_completed_date: operationalParams?.survey_completed_date ?? "",
+    survey_notes: operationalParams?.survey_notes ?? "",
   }));
 
   // Local state for operations
@@ -77,7 +81,7 @@ export function OperationsTab({
     for (const [k, v] of Object.entries(params)) {
       if (typeof v === "string" && v === "") {
         data[k] = null;
-      } else if (typeof v === "string" && !isNaN(Number(v)) && k !== "system_type" && k !== "refrigerant" && k !== "control_system" && k !== "control_hardware" && k !== "micro_panel_type" && k !== "facility_type") {
+      } else if (typeof v === "string" && !isNaN(Number(v)) && k !== "system_type" && k !== "refrigerant" && k !== "control_system" && k !== "control_hardware" && k !== "micro_panel_type" && k !== "facility_type" && k !== "required_upgrades" && k !== "survey_notes" && k !== "survey_completed_date") {
         data[k] = parseFloat(v);
       } else {
         data[k] = v;
@@ -131,7 +135,7 @@ export function OperationsTab({
       <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card space-y-5">
         <h3 className="text-sm font-semibold text-gray-900">System Parameters</h3>
 
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <label className={labelCls}>Days/Week</label>
             <input
@@ -178,7 +182,7 @@ export function OperationsTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>System Type</label>
             <select
@@ -220,7 +224,7 @@ export function OperationsTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>Control System</label>
             <input
@@ -297,7 +301,7 @@ export function OperationsTab({
       <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card space-y-5">
         <h3 className="text-sm font-semibold text-gray-900">Operational Details</h3>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Discharge Pressure (psig)</label>
             <input
@@ -355,7 +359,7 @@ export function OperationsTab({
           </label>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Shutdown Constraints</label>
             <textarea
@@ -382,7 +386,7 @@ export function OperationsTab({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Curtailment Frequency</label>
             <input
@@ -421,7 +425,7 @@ export function OperationsTab({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Product Notes</label>
             <textarea
@@ -446,6 +450,32 @@ export function OperationsTab({
               placeholder="e.g. no refrigeration engineer on staff"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Site Survey & Upgrades */}
+      <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card space-y-5">
+        <h3 className="text-sm font-semibold text-gray-900">Site Survey & Upgrades</h3>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Survey Completed Date</label>
+            <input type="date" value={params.survey_completed_date} onChange={(e) => setParams({ ...params, survey_completed_date: e.target.value })} onBlur={saveParams} disabled={isLocked} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Estimated Upgrade Cost ($)</label>
+            <input type="number" step="100" value={params.estimated_upgrade_cost} onChange={(e) => setParams({ ...params, estimated_upgrade_cost: e.target.value })} onBlur={saveParams} disabled={isLocked} placeholder="e.g. 15000" className={inputCls} />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Required Upgrades</label>
+          <textarea value={params.required_upgrades} onChange={(e) => setParams({ ...params, required_upgrades: e.target.value })} onBlur={saveParams} disabled={isLocked} rows={3} className={inputCls} placeholder="e.g. Opto-22 serial boards on 21 racks must upgrade to Ethernet comms" />
+        </div>
+
+        <div>
+          <label className={labelCls}>Survey Notes</label>
+          <textarea value={params.survey_notes} onChange={(e) => setParams({ ...params, survey_notes: e.target.value })} onBlur={saveParams} disabled={isLocked} rows={3} className={inputCls} placeholder="Additional survey observations, room counts, equipment notes..." />
         </div>
       </div>
     </div>

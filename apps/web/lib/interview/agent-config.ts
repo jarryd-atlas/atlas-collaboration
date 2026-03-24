@@ -58,7 +58,6 @@ export function buildAgentSettings(context: AgentConfigContext) {
             url: "https://api.anthropic.com/v1/messages",
             headers: {
               "x-api-key": context.anthropicApiKey,
-              "anthropic-version": "2023-06-01",
             },
           },
         } : {}),

@@ -2,24 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession, createSupabaseAdmin } from "../../../../lib/supabase/server";
 import type { CollectedField } from "../../../../lib/interview/interview-types";
 
-export const runtime = "edge";
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromTable = (admin: ReturnType<typeof createSupabaseAdmin>, table: string) =>
   (admin as any).from(table);
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const { functionName, args, siteId, assessmentId, tenantId, interviewId } = body;
-
-  const admin = createSupabaseAdmin();
-
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { functionName, args, siteId, assessmentId, tenantId, interviewId } = body;
+
+    const admin = createSupabaseAdmin();
     // ── Special: create interview record ─────────────
     if (functionName === "_create_interview") {
       const { data } = await fromTable(admin, "site_interviews")
@@ -194,7 +191,7 @@ export async function POST(request: NextRequest) {
 
     // ── save_operations_detail ────────────────────────
     if (functionName === "save_operations_detail") {
-      const { data: existing } = await fromTable(admin, "site_operations")
+      const { data: existing } = await fromTable(admin, "site_operational_params")
         .select("id").eq("assessment_id", assessmentId).maybeSingle();
 
       const updateData: Record<string, unknown> = {};
@@ -203,9 +200,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (existing) {
-        await fromTable(admin, "site_operations").update(updateData).eq("assessment_id", assessmentId);
+        await fromTable(admin, "site_operational_params").update(updateData).eq("assessment_id", assessmentId);
       } else {
-        await fromTable(admin, "site_operations").insert({ assessment_id: assessmentId, site_id: siteId, tenant_id: tenantId, ...updateData });
+        await fromTable(admin, "site_operational_params").insert({ assessment_id: assessmentId, site_id: siteId, tenant_id: tenantId, ...updateData });
       }
 
       const fieldsSaved: CollectedField[] = Object.entries(args)

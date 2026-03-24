@@ -19,7 +19,7 @@ import { SiteTabLayout } from "../../../../../../components/assessment/site-tab-
 import { OverviewTab } from "../../../../../../components/assessment/overview-tab";
 import { BaselineTab } from "../../../../../../components/assessment/baseline-tab";
 import { LaborTab } from "../../../../../../components/assessment/labor-tab";
-import { MapPin } from "lucide-react";
+import { MapPin, Mic } from "lucide-react";
 
 interface SitePageProps {
   params: Promise<{ customerSlug: string; siteSlug: string }>;
@@ -123,6 +123,15 @@ export default async function SitePage({ params }: SitePageProps) {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {isInternal && (
+              <Link
+                href={`/customers/${customerSlug}/sites/${siteSlug}/interview`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+              >
+                <Mic className="h-4 w-4" />
+                AI Interview
+              </Link>
+            )}
             <CustomerPortalLink
               currentPath={`/customers/${customerSlug}/sites/${siteSlug}`}
               customerSlug={customerSlug}

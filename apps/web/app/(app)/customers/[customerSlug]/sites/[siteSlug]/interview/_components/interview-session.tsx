@@ -55,7 +55,9 @@ export function InterviewSession({
     durationSec: 0,
   });
 
-  // ─── Audio Playback ────────────────────────────────────
+  // ─── Audio Playback (gapless scheduling) ───────────────
+
+  const nextPlayTimeRef = useRef(0);
 
   const playAudioChunk = useCallback((pcmData: Int16Array) => {
     if (!audioContextRef.current) return;
@@ -69,20 +71,20 @@ export function InterviewSession({
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    source.start();
+
+    // Schedule gaplessly — each chunk starts exactly when the previous ends
+    const now = ctx.currentTime;
+    const startTime = Math.max(now, nextPlayTimeRef.current);
+    source.start(startTime);
+    nextPlayTimeRef.current = startTime + buffer.duration;
   }, []);
 
   const processPlaybackQueue = useCallback(() => {
-    if (isPlayingRef.current || playbackQueueRef.current.length === 0) return;
-    isPlayingRef.current = true;
-    const chunk = playbackQueueRef.current.shift()!;
-    playAudioChunk(chunk);
-    // Estimate duration: samples / sampleRate * 1000
-    const durationMs = (chunk.length / 24000) * 1000;
-    setTimeout(() => {
-      isPlayingRef.current = false;
-      processPlaybackQueue();
-    }, durationMs);
+    // Process all queued chunks immediately — scheduling handles timing
+    while (playbackQueueRef.current.length > 0) {
+      const chunk = playbackQueueRef.current.shift()!;
+      playAudioChunk(chunk);
+    }
   }, [playAudioChunk]);
 
   // ─── Function Call Handler ─────────────────────────────
@@ -186,13 +188,18 @@ export function InterviewSession({
           const role = msg.role === "assistant" ? "agent" : "user";
           const text = msg.content ?? "";
           if (!text) break;
-          setState((prev) => ({
-            ...prev,
-            transcript: [
-              ...prev.transcript,
-              { role, text, timestamp: Date.now() } as TranscriptEntry,
-            ],
-          }));
+          setState((prev) => {
+            // Deduplicate: skip if last entry has same role and text
+            const last = prev.transcript[prev.transcript.length - 1];
+            if (last && last.role === role && last.text === text) return prev;
+            return {
+              ...prev,
+              transcript: [
+                ...prev.transcript,
+                { role, text, timestamp: Date.now() } as TranscriptEntry,
+              ],
+            };
+          });
           break;
         }
 

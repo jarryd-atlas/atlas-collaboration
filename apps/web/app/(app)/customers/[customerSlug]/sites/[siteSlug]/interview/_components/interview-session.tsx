@@ -64,7 +64,7 @@ export function InterviewSession({
     for (let i = 0; i < pcmData.length; i++) {
       float32[i] = pcmData[i]! / 32768;
     }
-    const buffer = ctx.createBuffer(1, float32.length, 16000);
+    const buffer = ctx.createBuffer(1, float32.length, 24000);
     buffer.copyToChannel(float32, 0);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -78,7 +78,7 @@ export function InterviewSession({
     const chunk = playbackQueueRef.current.shift()!;
     playAudioChunk(chunk);
     // Estimate duration: samples / sampleRate * 1000
-    const durationMs = (chunk.length / 16000) * 1000;
+    const durationMs = (chunk.length / 24000) * 1000;
     setTimeout(() => {
       isPlayingRef.current = false;
       processPlaybackQueue();
@@ -263,12 +263,12 @@ export function InterviewSession({
 
       // Get mic access
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
       mediaStreamRef.current = stream;
 
       // Create audio context
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      const audioCtx = new AudioContext({ sampleRate: 24000 });
       audioContextRef.current = audioCtx;
 
       // Connect WebSocket

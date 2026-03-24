@@ -25,11 +25,11 @@ export function buildAgentSettings(context: AgentConfigContext) {
     audio: {
       input: {
         encoding: "linear16",
-        sample_rate: 16000,
+        sample_rate: 24000,
       },
       output: {
         encoding: "linear16",
-        sample_rate: 16000,
+        sample_rate: 24000,
         container: "none",
       },
     },
@@ -53,14 +53,12 @@ export function buildAgentSettings(context: AgentConfigContext) {
           type: "anthropic",
           model: "claude-3-5-haiku-latest",
         },
-        ...(context.anthropicApiKey ? {
-          endpoint: {
-            url: "https://api.anthropic.com/v1/messages",
-            headers: {
-              "x-api-key": context.anthropicApiKey,
-            },
+        endpoint: context.anthropicApiKey ? {
+          url: "https://api.anthropic.com/v1/messages",
+          headers: {
+            "x-api-key": context.anthropicApiKey,
           },
-        } : {}),
+        } : undefined,
         prompt: systemPrompt,
         functions: INTERVIEW_FUNCTIONS,
       },

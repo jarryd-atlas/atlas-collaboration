@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession, createSupabaseAdmin } from "../../../../lib/supabase/server";
 import { getDealProperties } from "../../../../lib/hubspot/client";
 
-export const runtime = "edge";
-
 export async function GET() {
+  try {
   const session = await getSession();
   if (!session || session.claims.tenantType !== "internal") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -41,7 +40,13 @@ export async function GET() {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "HubSpot API error" },
-      { status: 502 }
+      { status: 500 }
+    );
+  }
+  } catch (outerErr) {
+    return NextResponse.json(
+      { error: outerErr instanceof Error ? outerErr.message : "Server error" },
+      { status: 500 }
     );
   }
 }

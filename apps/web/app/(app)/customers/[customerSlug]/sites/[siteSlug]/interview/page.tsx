@@ -98,6 +98,7 @@ export default async function InterviewPage({ params }: PageProps) {
       assessmentId={assessment?.id ?? ""}
       existingData={Object.keys(existingData).length > 0 ? existingData : undefined}
       deepgramApiKey={process.env.DEEPGRAM_API_KEY ?? ""}
+      anthropicApiKey={process.env.ANTHROPIC_API_KEY ?? ""}
     />
   );
 }

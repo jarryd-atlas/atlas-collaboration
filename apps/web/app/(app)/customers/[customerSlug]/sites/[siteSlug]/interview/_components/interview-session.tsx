@@ -23,11 +23,12 @@ interface Props {
   assessmentId: string;
   existingData?: Record<string, unknown>;
   deepgramApiKey: string;
+  anthropicApiKey?: string;
 }
 
 export function InterviewSession({
   siteId, siteName, siteSlug, customerName, customerSlug,
-  tenantId, assessmentId, existingData, deepgramApiKey,
+  tenantId, assessmentId, existingData, deepgramApiKey, anthropicApiKey,
 }: Props) {
   const router = useRouter();
   const wsRef = useRef<WebSocket | null>(null);
@@ -284,6 +285,7 @@ export function InterviewSession({
           siteName,
           customerName,
           existingData,
+          anthropicApiKey,
         });
         ws.send(JSON.stringify(settings));
 
@@ -357,7 +359,7 @@ export function InterviewSession({
         error: err instanceof Error ? err.message : "Failed to start interview",
       }));
     }
-  }, [deepgramApiKey, siteName, customerName, existingData, siteId, assessmentId, tenantId, handleMessage, state.status]);
+  }, [deepgramApiKey, anthropicApiKey, siteName, customerName, existingData, siteId, assessmentId, tenantId, handleMessage, state.status]);
 
   // ─── Cleanup ───────────────────────────────────────────
 

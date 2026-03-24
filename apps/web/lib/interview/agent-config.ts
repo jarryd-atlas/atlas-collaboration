@@ -10,6 +10,7 @@ export interface AgentConfigContext {
   siteName: string;
   customerName: string;
   existingData?: Record<string, unknown>;
+  anthropicApiKey?: string;
 }
 
 /**
@@ -52,6 +53,15 @@ export function buildAgentSettings(context: AgentConfigContext) {
           type: "anthropic",
           model: "claude-3-5-haiku-latest",
         },
+        ...(context.anthropicApiKey ? {
+          endpoint: {
+            url: "https://api.anthropic.com/v1/messages",
+            headers: {
+              "x-api-key": context.anthropicApiKey,
+              "anthropic-version": "2023-06-01",
+            },
+          },
+        } : {}),
         prompt: systemPrompt,
         functions: INTERVIEW_FUNCTIONS,
       },

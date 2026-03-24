@@ -222,11 +222,12 @@ export function InterviewSession({
           break;
 
         case "Error":
-          console.error("Deepgram error:", msg);
+        case "Warning":
+          console.error("Deepgram error:", JSON.stringify(msg));
           setState((prev) => ({
             ...prev,
             status: "error",
-            error: msg.message ?? "Agent error",
+            error: msg.message ?? msg.description ?? msg.error ?? JSON.stringify(msg),
           }));
           break;
       }

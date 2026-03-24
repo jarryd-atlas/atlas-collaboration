@@ -50,7 +50,7 @@ export function buildAgentSettings(context: AgentConfigContext) {
       think: {
         provider: {
           type: "anthropic",
-          model: "claude-4-5-haiku-latest",
+          model: "claude-3-5-haiku-latest",
         },
         prompt: systemPrompt,
         functions: INTERVIEW_FUNCTIONS,

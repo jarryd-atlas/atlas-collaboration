@@ -108,9 +108,10 @@ export default async function SitePage({ params }: SitePageProps) {
   let hubspotPortalId: string | undefined;
   if (isInternal) {
     try {
+      const internalTenantId = currentUser?.sessionClaims?.tenantId ?? site.tenant_id;
       const [config, links] = await Promise.all([
-        getHubSpotConfig(site.tenant_id),
-        getHubSpotSiteLinks(site.tenant_id),
+        getHubSpotConfig(internalTenantId),
+        getHubSpotSiteLinks(internalTenantId),
       ]);
       if (config?.is_active) {
         hubspotPortalId = config.portal_id;

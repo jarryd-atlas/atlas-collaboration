@@ -13,6 +13,8 @@ import { getCurrentUser } from "../../../../../../lib/data/current-user";
 import { createOrGetAssessment } from "../../../../../../lib/actions/assessment";
 import { getHandoffReportForSite } from "../../../../../../lib/data/queries";
 import { PipelineStageBadge } from "../../../../../../components/ui/badge";
+import { SiteDealLink } from "../../../../../../components/hubspot/site-deal-link";
+import { getHubSpotConfig, getHubSpotSiteLinks } from "../../../../../../lib/data/hubspot-queries";
 import { SetPageContext } from "../../../../../../components/layout/page-context";
 import { CustomerPortalLink } from "../../../../../../components/layout/customer-portal-link";
 import { SiteTabLayout } from "../../../../../../components/assessment/site-tab-layout";
@@ -101,6 +103,26 @@ export default async function SitePage({ params }: SitePageProps) {
   const isLocked = assessment?.status === "locked";
   const isInternal = currentUser?.sessionClaims?.tenantType === "internal";
 
+  // Load HubSpot deal links for this site (non-critical)
+  let hubspotLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean }[] = [];
+  let hubspotPortalId: string | undefined;
+  if (isInternal) {
+    try {
+      const [config, links] = await Promise.all([
+        getHubSpotConfig(site.tenant_id),
+        getHubSpotSiteLinks(site.tenant_id),
+      ]);
+      if (config?.is_active) {
+        hubspotPortalId = config.portal_id;
+        hubspotLinks = (links ?? [])
+          .filter((l) => l.site_id === site.id)
+          .map((l) => ({ id: l.id, hubspot_deal_id: l.hubspot_deal_id, deal_name: l.deal_name, is_primary: false }));
+      }
+    } catch {
+      // Non-critical — don't block page load
+    }
+  }
+
   return (
     <div className="space-y-6">
       <SetPageContext siteId={site.id} siteName={site.name} customerId={customer.id} customerName={customer.name} tenantId={site.tenant_id} />
@@ -120,6 +142,11 @@ export default async function SitePage({ params }: SitePageProps) {
                 <MapPin className="h-4 w-4" />
                 {site.address && `${site.address}, `}{site.city}, {site.state}
               </p>
+            )}
+            {isInternal && hubspotPortalId && (
+              <div className="mt-2">
+                <SiteDealLink siteId={site.id} existingLinks={hubspotLinks} portalId={hubspotPortalId} />
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">

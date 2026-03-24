@@ -191,12 +191,11 @@ function LinkSiteButton({
     setOpen(true);
     setLoading(true);
     try {
-      const res = await fetch("/api/search?q=&type=sites&limit=100");
+      const res = await fetch("/api/sites/list");
       const data = await res.json();
       setSites(
         (data.results ?? [])
-          .filter((s: { id: string }) => !linkedSiteIds.has(s.id))
-          .map((s: { id: string; title: string }) => ({ id: s.id, name: s.title }))
+          .map((s: { id: string; name: string; customerName?: string }) => ({ id: s.id, name: s.customerName ? `${s.name} (${s.customerName})` : s.name }))
       );
     } catch {
       setSites([]);

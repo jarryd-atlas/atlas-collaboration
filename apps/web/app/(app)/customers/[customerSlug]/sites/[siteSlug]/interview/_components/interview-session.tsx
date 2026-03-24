@@ -34,11 +34,15 @@ export function InterviewSession({
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const micLevelFrameRef = useRef<number>(0);
   const playbackQueueRef = useRef<Int16Array[]>([]);
   const isPlayingRef = useRef(false);
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interviewIdRef = useRef<string | null>(null);
+
+  const [micLevel, setMicLevel] = useState(0);
 
   const [state, setState] = useState<InterviewState>({
     status: "ready",
@@ -301,6 +305,25 @@ export function InterviewSession({
         source.connect(processor);
         processor.connect(audioCtx.destination);
 
+        // Mic level analyser
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyserRef.current = analyser;
+
+        const updateMicLevel = () => {
+          if (!analyserRef.current) return;
+          const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+          analyserRef.current.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]!;
+          const avg = sum / dataArray.length;
+          const level = Math.min(100, Math.round((avg / 128) * 100));
+          setMicLevel(level);
+          micLevelFrameRef.current = requestAnimationFrame(updateMicLevel);
+        };
+        micLevelFrameRef.current = requestAnimationFrame(updateMicLevel);
+
         // Start keep-alive
         keepAliveRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -340,6 +363,8 @@ export function InterviewSession({
   const cleanup = useCallback(() => {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
+    if (micLevelFrameRef.current) cancelAnimationFrame(micLevelFrameRef.current);
+    if (analyserRef.current) analyserRef.current.disconnect();
     if (processorRef.current) processorRef.current.disconnect();
     if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach((t) => t.stop());
     if (audioContextRef.current?.state !== "closed") audioContextRef.current?.close().catch(() => {});
@@ -485,6 +510,7 @@ export function InterviewSession({
           <InterviewControls
             status={state.status}
             agentState={state.agentState}
+            micLevel={micLevel}
             onEnd={endInterview}
           />
         </div>
@@ -527,6 +553,11 @@ export function InterviewSession({
           currentSection={state.currentSection}
           collectedFields={state.collectedFields}
           progress={state.progress}
+          onSendNote={(text) => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "InjectUserMessage", message: text }));
+            }
+          }}
         />
       </div>
     </div>

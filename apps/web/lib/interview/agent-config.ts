@@ -61,9 +61,22 @@ export function buildAgentSettings(context: AgentConfigContext) {
           model: "aura-2-thalia-en",
         },
       },
-      greeting: `Hi there! I'm the ATLAS interview assistant from CrossnoKaye. I'm here to learn about the refrigeration system at ${context.siteName} so we can identify energy saving opportunities. This usually takes about 20 to 30 minutes. Let's start — can you tell me who's in the room today and your roles at the facility?`,
+      greeting: buildGreeting(context),
     },
   };
+}
+
+/** Build a context-aware greeting based on existing site data */
+function buildGreeting(context: AgentConfigContext): string {
+  const contacts = context.existingData?.contacts as { name: string; title?: string }[] | undefined;
+  const intro = `Hi there! I'm the ATLAS interview assistant from CrossnoKaye. I'm here to learn about the refrigeration system at ${context.siteName} so we can identify energy saving opportunities. This usually takes about 20 to 30 minutes.`;
+
+  if (contacts && contacts.length > 0) {
+    const names = contacts.map((c) => c.title ? `${c.name}, ${c.title}` : c.name).join(", and ");
+    return `${intro} I see we have ${names} on file for this site. Is that who I'm speaking with today? Anyone else joining us?`;
+  }
+
+  return `${intro} Let's start — can you tell me who's in the room today and your roles at the facility?`;
 }
 
 /**

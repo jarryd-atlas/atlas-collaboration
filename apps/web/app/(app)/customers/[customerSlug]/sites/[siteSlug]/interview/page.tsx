@@ -51,19 +51,40 @@ export default async function InterviewPage({ params }: PageProps) {
     assessment = newAssessment;
   }
 
-  // Load any existing baseline data for context
+  // Load ALL existing baseline data for context — agent skips what's already known
   const existingData: Record<string, unknown> = {};
+  const aid = assessment?.id;
 
-  const { data: opParams } = await fromTable(admin, "site_operational_params")
-    .select("*")
-    .eq("assessment_id", assessment?.id)
-    .maybeSingle();
-  if (opParams) existingData.operationalParams = opParams;
+  if (aid) {
+    const [
+      { data: contacts },
+      { data: opParams },
+      { data: equipment },
+      { data: touSchedule },
+      { data: savings },
+      { data: operations },
+      { data: labor },
+      { data: energyData },
+    ] = await Promise.all([
+      fromTable(admin, "site_contacts").select("name, title, email, phone, is_primary").eq("assessment_id", aid),
+      fromTable(admin, "site_operational_params").select("*").eq("assessment_id", aid).maybeSingle(),
+      fromTable(admin, "site_equipment").select("category, name, manufacturer, model, specs").eq("assessment_id", aid),
+      fromTable(admin, "site_tou_schedule").select("supply_provider, distribution_provider, rate_name, account_number, demand_response_status").eq("assessment_id", aid).maybeSingle(),
+      fromTable(admin, "site_savings_analysis").select("annual_energy_spend, pre_atlas_kwh, peak_demand_kw, refrigeration_pct, compressor_load_pct").eq("assessment_id", aid).maybeSingle(),
+      fromTable(admin, "site_operations").select("*").eq("assessment_id", aid).maybeSingle(),
+      fromTable(admin, "site_labor_baseline").select("headcount, qualitative_assessment").eq("assessment_id", aid).maybeSingle(),
+      fromTable(admin, "site_energy_data").select("id").eq("assessment_id", aid).limit(1),
+    ]);
 
-  const { data: equipment } = await fromTable(admin, "site_equipment")
-    .select("category, name, manufacturer, model, specs")
-    .eq("assessment_id", assessment?.id);
-  if (equipment?.length) existingData.equipment = equipment;
+    if (contacts?.length) existingData.contacts = contacts;
+    if (opParams) existingData.operationalParams = opParams;
+    if (equipment?.length) existingData.equipment = equipment;
+    if (touSchedule) existingData.touSchedule = touSchedule;
+    if (savings) existingData.savings = savings;
+    if (operations) existingData.operations = operations;
+    if (labor) existingData.labor = labor;
+    if (energyData?.length) existingData.hasEnergyData = true;
+  }
 
   return (
     <InterviewSession

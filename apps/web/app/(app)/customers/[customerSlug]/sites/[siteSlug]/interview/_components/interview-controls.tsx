@@ -1,15 +1,44 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "../../../../../../../../components/ui/button";
-import { Phone, PhoneOff, Mic } from "lucide-react";
+import { PhoneOff, Mic, MicOff } from "lucide-react";
 
 interface Props {
   status: string;
   agentState: "idle" | "listening" | "thinking" | "speaking";
+  micLevel: number; // 0-100
   onEnd: () => void;
 }
 
-export function InterviewControls({ status, agentState, onEnd }: Props) {
+export function InterviewControls({ status, agentState, micLevel, onEnd }: Props) {
+  const [showMuteWarning, setShowMuteWarning] = useState(false);
+  const [silenceStart, setSilenceStart] = useState<number | null>(null);
+
+  // Detect sustained silence (mic muted or not working)
+  useEffect(() => {
+    if (status !== "active") return;
+
+    if (micLevel < 2) {
+      if (!silenceStart) {
+        setSilenceStart(Date.now());
+      } else if (Date.now() - silenceStart > 5000) {
+        setShowMuteWarning(true);
+      }
+    } else {
+      setSilenceStart(null);
+      setShowMuteWarning(false);
+    }
+  }, [micLevel, status, silenceStart]);
+
+  // Volume bar levels (4 bars)
+  const bars = [
+    micLevel > 5,
+    micLevel > 20,
+    micLevel > 45,
+    micLevel > 70,
+  ];
+
   return (
     <div className="flex items-center gap-3">
       {/* Agent state indicator */}
@@ -36,12 +65,37 @@ export function InterviewControls({ status, agentState, onEnd }: Props) {
         </span>
       </div>
 
-      {/* Mic indicator */}
+      {/* Mic indicator with volume bars */}
       {status === "active" && (
-        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 border border-red-200">
-          <Mic className="h-3 w-3 text-red-500" />
-          <span className="text-xs text-red-600 font-medium">Live</span>
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-50 border border-red-200">
+          {showMuteWarning ? (
+            <MicOff className="h-3 w-3 text-red-500" />
+          ) : (
+            <Mic className="h-3 w-3 text-red-500" />
+          )}
+          {/* 4-bar volume meter */}
+          <div className="flex items-end gap-px h-3">
+            {bars.map((active, i) => (
+              <div
+                key={i}
+                className={`w-1 rounded-sm transition-all duration-75 ${
+                  active ? "bg-red-500" : "bg-red-200"
+                }`}
+                style={{ height: `${40 + i * 20}%` }}
+              />
+            ))}
+          </div>
+          <span className="text-xs text-red-600 font-medium">
+            {showMuteWarning ? "Muted?" : "Live"}
+          </span>
         </div>
+      )}
+
+      {/* Mute warning banner */}
+      {showMuteWarning && (
+        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 animate-pulse">
+          Check your microphone
+        </span>
       )}
 
       {/* End button */}

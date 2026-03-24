@@ -20,25 +20,16 @@ export interface AgentConfigContext {
 export function buildAgentSettings(context: AgentConfigContext) {
   const systemPrompt = buildInterviewPrompt(context);
 
-  // Build think config — BYO Anthropic key or Deepgram-managed
+  // Use Deepgram-managed Anthropic (Standard tier ~$0.08/min all-in)
+  // This handles function calling translation to Anthropic tool format internally
   const thinkConfig: Record<string, unknown> = {
     provider: {
       type: "anthropic",
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-3-5-haiku-latest",
     },
     prompt: systemPrompt,
     functions: INTERVIEW_FUNCTIONS,
   };
-
-  // BYO Anthropic API key — requires anthropic-version header
-  if (context.anthropicApiKey) {
-    thinkConfig.endpoint = {
-      url: "https://api.anthropic.com/v1/messages",
-      headers: {
-        "x-api-key": context.anthropicApiKey,
-      },
-    };
-  }
 
   return {
     type: "Settings",

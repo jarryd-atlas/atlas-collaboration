@@ -20,7 +20,7 @@ export default function LoginPage({
             ATLAS<span className="text-brand-neon"> Collaborate</span>
           </h1>
           <p className="text-gray-300 text-lg mb-8">
-            Your real-time window into energy optimization progress, savings tracking, and project milestones.
+            Collect baseline data, evaluate energy saving opportunities, and build a mutual action plan with your customers — all in one place.
           </p>
 
           <div className="space-y-4">
@@ -29,8 +29,8 @@ export default function LoginPage({
                 <div className="h-2 w-2 rounded-full bg-brand-neon" />
               </div>
               <div>
-                <p className="text-white font-medium">Track project milestones</p>
-                <p className="text-gray-400 text-sm">See exactly where your ATLAS deployment stands</p>
+                <p className="text-white font-medium">Baseline data collection</p>
+                <p className="text-gray-400 text-sm">Capture equipment, energy, and operational data — with AI assistance</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -38,8 +38,8 @@ export default function LoginPage({
                 <div className="h-2 w-2 rounded-full bg-brand-neon" />
               </div>
               <div>
-                <p className="text-white font-medium">Review energy savings</p>
-                <p className="text-gray-400 text-sm">Access reports showing your kWh and demand reductions</p>
+                <p className="text-white font-medium">Evaluate opportunities</p>
+                <p className="text-gray-400 text-sm">Analyze savings potential and build the business case together</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -47,8 +47,8 @@ export default function LoginPage({
                 <div className="h-2 w-2 rounded-full bg-brand-neon" />
               </div>
               <div>
-                <p className="text-white font-medium">Collaborate with your CK team</p>
-                <p className="text-gray-400 text-sm">Share documents, flag issues, and stay aligned</p>
+                <p className="text-white font-medium">Mutual action plans</p>
+                <p className="text-gray-400 text-sm">Align on milestones, tasks, and timelines — everyone on the same page</p>
               </div>
             </div>
           </div>

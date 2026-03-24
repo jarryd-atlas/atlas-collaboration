@@ -18,6 +18,7 @@ interface TaskWithContext {
   status: string;
   priority: string;
   due_date: string | null;
+  created_by?: string | null;
   assigneeName: string | null;
   assigneeAvatar?: string | null;
   milestoneInfo?: { name: string; slug: string } | null;
@@ -33,6 +34,7 @@ interface TasksClientProps {
   inProgressTasks: TaskWithContext[];
   inReviewTasks: TaskWithContext[];
   tenantId: string;
+  currentProfileId: string;
   currentUserName: string;
   currentUserAvatar?: string | null;
   assignableUsers?: AssignableUser[];
@@ -45,6 +47,7 @@ export function TasksClient({
   inProgressTasks,
   inReviewTasks,
   tenantId,
+  currentProfileId,
   currentUserName,
   currentUserAvatar,
   assignableUsers = [],

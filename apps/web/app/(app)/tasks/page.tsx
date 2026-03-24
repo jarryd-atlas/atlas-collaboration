@@ -1,17 +1,17 @@
-import { getAllOpenTasks, getLatestCommentsForTasks, getInternalProfiles } from "../../../lib/data/queries";
+import { getMyRelevantTasks, getLatestCommentsForTasks, getInternalProfiles } from "../../../lib/data/queries";
 import { getCurrentUser } from "../../../lib/data/current-user";
 import { TasksClient } from "./tasks-client";
 import type { AssignableUser, AssignableSite } from "../../../components/tasks/inline-task-input";
 
 export default async function TasksPage() {
-  let allTasks: Awaited<ReturnType<typeof getAllOpenTasks>> = [];
+  let allTasks: Awaited<ReturnType<typeof getMyRelevantTasks>> = [];
   let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
 
   try {
-    [allTasks, currentUser] = await Promise.all([
-      getAllOpenTasks(),
-      getCurrentUser(),
-    ]);
+    currentUser = await getCurrentUser();
+    if (currentUser?.id) {
+      allTasks = await getMyRelevantTasks(currentUser.id);
+    }
   } catch {
     // Show empty state
   }
@@ -78,6 +78,7 @@ export default async function TasksPage() {
       inProgressTasks={inProgressTasks}
       inReviewTasks={inReviewTasks}
       tenantId={tenantId}
+      currentProfileId={currentUser?.id ?? ""}
       currentUserName={currentUserName}
       currentUserAvatar={currentUserAvatar}
       assignableUsers={assignableUsers}

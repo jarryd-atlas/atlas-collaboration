@@ -604,6 +604,34 @@ export async function getAllOpenTasks() {
 }
 
 /**
+ * Get tasks relevant to a specific user — assigned to them OR created by them.
+ * This powers the "My Tasks" view.
+ */
+export async function getMyRelevantTasks(profileId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(`
+      *,
+      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
+      milestone:milestones(
+        id, name, slug,
+        site:sites(
+          id, name, slug,
+          customer:customers(id, name, slug)
+        )
+      ),
+      direct_customer:customers!tasks_customer_id_fkey(id, name, slug)
+    `)
+    .neq("status", "done")
+    .or(`assignee_id.eq.${profileId},created_by.eq.${profileId}`)
+    .order("due_date", { ascending: true, nullsFirst: false });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+/**
  * Get ALL tasks for a customer — rolls up company-level, site-level, milestone-level,
  * and multi-site tasks (via task_sites junction table).
  * Includes site and milestone context for display.

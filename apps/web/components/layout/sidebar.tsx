@@ -21,6 +21,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
+import { useRouter } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -284,7 +286,18 @@ export function Sidebar({
               <p className="text-sm font-medium text-gray-900 truncate">{currentUser.fullName}</p>
               <p className="text-xs text-gray-400 truncate">{currentUser.email}</p>
             </div>
-            <button className="p-1 rounded-md hover:bg-gray-100 text-gray-400">
+            <button
+              className="p-1 rounded-md hover:bg-gray-100 text-gray-400"
+              title="Sign out"
+              onClick={async () => {
+                const supabase = createBrowserClient(
+                  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                await supabase.auth.signOut();
+                window.location.href = "/login";
+              }}
+            >
               <LogOut className="h-4 w-4" />
             </button>
           </div>

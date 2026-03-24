@@ -56,34 +56,35 @@ export default async function InterviewPage({ params }: PageProps) {
   const aid = assessment?.id;
 
   if (aid) {
-    const [
-      { data: contacts },
-      { data: opParams },
-      { data: equipment },
-      { data: touSchedule },
-      { data: savings },
-      { data: operations },
-      { data: labor },
-      { data: energyData },
-    ] = await Promise.all([
-      fromTable(admin, "site_contacts").select("name, title, email, phone, is_primary").eq("assessment_id", aid),
-      fromTable(admin, "site_operational_params").select("*").eq("assessment_id", aid).maybeSingle(),
-      fromTable(admin, "site_equipment").select("category, name, manufacturer, model, specs").eq("assessment_id", aid),
-      fromTable(admin, "site_tou_schedule").select("supply_provider, distribution_provider, rate_name, account_number, demand_response_status").eq("assessment_id", aid).maybeSingle(),
-      fromTable(admin, "site_savings_analysis").select("annual_energy_spend, pre_atlas_kwh, peak_demand_kw, refrigeration_pct, compressor_load_pct").eq("assessment_id", aid).maybeSingle(),
-      fromTable(admin, "site_operations").select("*").eq("assessment_id", aid).maybeSingle(),
-      fromTable(admin, "site_labor_baseline").select("headcount, qualitative_assessment").eq("assessment_id", aid).maybeSingle(),
-      fromTable(admin, "site_energy_data").select("id").eq("assessment_id", aid).limit(1),
-    ]);
+    try {
+      const [
+        { data: contacts },
+        { data: opParams },
+        { data: equipment },
+        { data: touSchedule },
+        { data: savings },
+        { data: labor },
+        { data: energyData },
+      ] = await Promise.all([
+        fromTable(admin, "site_contacts").select("name, title, email, phone, is_primary").eq("assessment_id", aid),
+        fromTable(admin, "site_operational_params").select("*").eq("assessment_id", aid).maybeSingle(),
+        fromTable(admin, "site_equipment").select("category, name, manufacturer, model, specs").eq("assessment_id", aid),
+        fromTable(admin, "site_tou_schedule").select("supply_provider, distribution_provider, rate_name, account_number, demand_response_status").eq("assessment_id", aid).maybeSingle(),
+        fromTable(admin, "site_savings_analysis").select("annual_energy_spend, pre_atlas_kwh, peak_demand_kw, refrigeration_pct, compressor_load_pct").eq("assessment_id", aid).maybeSingle(),
+        fromTable(admin, "site_labor_baseline").select("headcount, qualitative_assessment").eq("assessment_id", aid).maybeSingle(),
+        fromTable(admin, "site_energy_data").select("id").eq("assessment_id", aid).limit(1),
+      ]);
 
-    if (contacts?.length) existingData.contacts = contacts;
-    if (opParams) existingData.operationalParams = opParams;
-    if (equipment?.length) existingData.equipment = equipment;
-    if (touSchedule) existingData.touSchedule = touSchedule;
-    if (savings) existingData.savings = savings;
-    if (operations) existingData.operations = operations;
-    if (labor) existingData.labor = labor;
-    if (energyData?.length) existingData.hasEnergyData = true;
+      if (contacts?.length) existingData.contacts = contacts;
+      if (opParams) existingData.operationalParams = opParams;
+      if (equipment?.length) existingData.equipment = equipment;
+      if (touSchedule) existingData.touSchedule = touSchedule;
+      if (savings) existingData.savings = savings;
+      if (labor) existingData.labor = labor;
+      if (energyData?.length) existingData.hasEnergyData = true;
+    } catch {
+      // Non-critical — agent starts with less context if baseline load fails
+    }
   }
 
   return (

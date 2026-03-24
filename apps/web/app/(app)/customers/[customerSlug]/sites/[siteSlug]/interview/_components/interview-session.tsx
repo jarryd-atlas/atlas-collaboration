@@ -330,7 +330,7 @@ export function InterviewSession({
         // Start keep-alive
         keepAliveRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "AgentKeepAlive" }));
+            ws.send(JSON.stringify({ type: "KeepAlive" }));
           }
         }, 7000);
 

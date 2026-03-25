@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "../../../lib/supabase/browser";
+import { storeGoogleToken } from "../../../lib/actions/google-tokens";
 
 function CallbackHandler() {
   const router = useRouter();
@@ -14,9 +15,26 @@ function CallbackHandler() {
 
       // With implicit flow, Supabase auto-detects tokens in the URL hash.
       // The onAuthStateChange listener fires when a session is established.
+      async function captureGoogleToken(session: any) {
+        // Store Google provider token for Drive API / Picker access
+        if (session?.provider_token) {
+          try {
+            await storeGoogleToken({
+              accessToken: session.provider_token,
+              refreshToken: session.provider_refresh_token ?? undefined,
+              expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(), // ~1 hour
+              scopes: "https://www.googleapis.com/auth/drive.readonly",
+            });
+          } catch (e) {
+            console.error("Failed to store Google token:", e);
+          }
+        }
+      }
+
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (event, session) => {
+        async (event, session) => {
           if (event === "SIGNED_IN" && session) {
+            await captureGoogleToken(session);
             subscription.unsubscribe();
             router.push("/");
           }
@@ -26,6 +44,7 @@ function CallbackHandler() {
       // Also check if session already exists (e.g. magic link click)
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        await captureGoogleToken(session);
         subscription.unsubscribe();
         router.push("/");
         return;

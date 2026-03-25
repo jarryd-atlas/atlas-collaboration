@@ -33,6 +33,8 @@ export interface CollectedField {
   value: string | number | boolean;
 }
 
+export type InputMode = "voice" | "text" | "hybrid";
+
 export interface InterviewState {
   status: "connecting" | "ready" | "active" | "paused" | "ended" | "error";
   agentState: "idle" | "listening" | "thinking" | "speaking";
@@ -41,6 +43,7 @@ export interface InterviewState {
   collectedFields: Record<string, CollectedField[]>;
   progress: number; // 0-100
   durationSec: number;
+  inputMode: InputMode;
   error?: string;
 }
 

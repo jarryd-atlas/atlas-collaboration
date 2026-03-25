@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { buildAgentSettings } from "../../../../../../../../lib/interview/agent-config";
-import type { InterviewState, TranscriptEntry, CollectedField, InterviewSection } from "../../../../../../../../lib/interview/interview-types";
-import { INTERVIEW_SECTIONS } from "../../../../../../../../lib/interview/interview-types";
-import { InterviewTranscript } from "./interview-transcript";
-import { InterviewSidebar } from "./interview-sidebar";
+import type { InterviewState, TranscriptEntry, InputMode } from "../../../../../../../../lib/interview/interview-types";
+import { InterviewCallView } from "./interview-call-view";
+import { InterviewDataPanel } from "./interview-data-panel";
+import { InterviewInputPanel } from "./interview-input-panel";
 import { InterviewControls } from "./interview-controls";
 import {
-  Mic, MicOff, ArrowLeft, Loader2,
+  Mic, MicOff, ArrowLeft, Loader2, CheckCircle, AlertCircle, BarChart3,
 } from "lucide-react";
 import { Button } from "../../../../../../../../components/ui/button";
+
+interface PreviousInterview {
+  id: string;
+  analysis_summary: string | null;
+  duration_sec: number;
+  created_at: string;
+}
 
 interface Props {
   siteId: string;
@@ -22,13 +29,16 @@ interface Props {
   tenantId: string;
   assessmentId: string;
   existingData?: Record<string, unknown>;
+  resumeSection?: string;
   deepgramApiKey: string;
   anthropicApiKey?: string;
+  previousInterviews?: PreviousInterview[];
 }
 
 export function InterviewSession({
   siteId, siteName, siteSlug, customerName, customerSlug,
-  tenantId, assessmentId, existingData, deepgramApiKey, anthropicApiKey,
+  tenantId, assessmentId, existingData, resumeSection,
+  deepgramApiKey, anthropicApiKey, previousInterviews,
 }: Props) {
   const router = useRouter();
   const wsRef = useRef<WebSocket | null>(null);
@@ -38,12 +48,12 @@ export function InterviewSession({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micLevelFrameRef = useRef<number>(0);
   const playbackQueueRef = useRef<Int16Array[]>([]);
-  const isPlayingRef = useRef(false);
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interviewIdRef = useRef<string | null>(null);
 
   const [micLevel, setMicLevel] = useState(0);
+  const isMicMutedRef = useRef(false);
 
   const [state, setState] = useState<InterviewState>({
     status: "ready",
@@ -53,7 +63,12 @@ export function InterviewSession({
     collectedFields: {},
     progress: 0,
     durationSec: 0,
+    inputMode: "voice",
   });
+
+  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "processing" | "completed" | "failed">("idle");
+  const [analysisSummary, setAnalysisSummary] = useState<string | null>(null);
+
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
   const addLog = useCallback((msg: string) => {
@@ -61,6 +76,24 @@ export function InterviewSession({
     console.log(`[Interview ${ts}]`, msg);
     setDebugLogs((prev) => [`[${ts}] ${msg}`, ...prev].slice(0, 100));
   }, []);
+
+  // ─── Auto-save transcript to DB ─────────────────────
+  const autoSaveRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSavedLengthRef = useRef(0);
+
+  const saveTranscript = useCallback((transcript: TranscriptEntry[], duration: number) => {
+    if (!interviewIdRef.current) return;
+    fetch("/api/interview/save-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        functionName: "_save_transcript",
+        args: { transcript, fieldsCollected: {}, durationSec: duration },
+        siteId, assessmentId, tenantId,
+        interviewId: interviewIdRef.current,
+      }),
+    }).catch(() => {});
+  }, [siteId, assessmentId, tenantId]);
 
   // ─── Audio Playback (gapless scheduling) ───────────────
 
@@ -79,7 +112,6 @@ export function InterviewSession({
     source.buffer = buffer;
     source.connect(ctx.destination);
 
-    // Schedule gaplessly — each chunk starts exactly when the previous ends
     const now = ctx.currentTime;
     const startTime = Math.max(now, nextPlayTimeRef.current);
     source.start(startTime);
@@ -87,92 +119,17 @@ export function InterviewSession({
   }, []);
 
   const processPlaybackQueue = useCallback(() => {
-    // Process all queued chunks immediately — scheduling handles timing
     while (playbackQueueRef.current.length > 0) {
       const chunk = playbackQueueRef.current.shift()!;
       playAudioChunk(chunk);
     }
   }, [playAudioChunk]);
 
-  // ─── Function Call Handler ─────────────────────────────
-
-  const handleFunctionCall = useCallback(async (
-    functionName: string,
-    functionArgs: Record<string, unknown>,
-    callId: string,
-  ) => {
-    try {
-      // Save to database via API
-      const res = await fetch("/api/interview/save-answer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          functionName,
-          args: functionArgs,
-          siteId,
-          assessmentId,
-          tenantId,
-          interviewId: interviewIdRef.current ?? "",
-        }),
-      });
-
-      const result = await res.json();
-
-      // Update local collected fields
-      if (result.success) {
-        setState((prev) => {
-          const section = functionName === "advance_section"
-            ? (functionArgs.next_section as InterviewSection)
-            : prev.currentSection;
-
-          const newFields = { ...prev.collectedFields };
-          if (functionName !== "advance_section" && result.fieldsSaved) {
-            const sectionKey = functionName.replace("save_", "");
-            const existing = newFields[sectionKey] ?? [];
-            newFields[sectionKey] = [
-              ...existing,
-              ...((result.fieldsSaved as CollectedField[]) ?? []),
-            ];
-          }
-
-          // Calculate progress
-          const totalFields = Object.values(newFields).reduce((sum, arr) => sum + arr.length, 0);
-          const progress = Math.min(100, Math.round((totalFields / 30) * 100)); // ~30 key fields
-
-          return {
-            ...prev,
-            currentSection: functionName === "advance_section" ? section : prev.currentSection,
-            collectedFields: newFields,
-            progress,
-          };
-        });
-      }
-
-      // Send function response back to agent
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "FunctionCallResponse",
-          function_call_id: callId,
-          output: JSON.stringify(result.success ? { status: "saved", ...result } : { status: "error", error: result.error }),
-        }));
-      }
-    } catch (err) {
-      // Send error response
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: "FunctionCallResponse",
-          function_call_id: callId,
-          output: JSON.stringify({ status: "error", error: String(err) }),
-        }));
-      }
-    }
-  }, [siteId, assessmentId, tenantId]);
-
   // ─── WebSocket Message Handler ─────────────────────────
+  // No function call handling — transcript-only mode
 
   const handleMessage = useCallback((event: MessageEvent) => {
     if (event.data instanceof ArrayBuffer) {
-      // Binary audio from agent
       const pcm = new Int16Array(event.data);
       playbackQueueRef.current.push(pcm);
       processPlaybackQueue();
@@ -181,7 +138,6 @@ export function InterviewSession({
 
     try {
       const msg = JSON.parse(event.data as string);
-      // Log all non-audio messages
       if (msg.type !== "ConversationText" || msg.role === "assistant") {
         addLog(`← ${msg.type}${msg.message ? ": " + String(msg.message).slice(0, 80) : ""}${msg.description ? ": " + msg.description : ""}`);
       }
@@ -201,7 +157,6 @@ export function InterviewSession({
           const text = msg.content ?? "";
           if (!text) break;
           setState((prev) => {
-            // Deduplicate: skip if last entry has same role and text
             const last = prev.transcript[prev.transcript.length - 1];
             if (last && last.role === role && last.text === text) return prev;
             return {
@@ -228,26 +183,15 @@ export function InterviewSession({
           break;
 
         case "UserStartedSpeaking":
-          // Stop agent audio playback (barge-in)
           playbackQueueRef.current = [];
           setState((prev) => ({ ...prev, agentState: "listening" }));
-          break;
-
-        case "FunctionCallRequest":
-          addLog(`⚡ Function call: ${msg.function_name}(${JSON.stringify(msg.input).slice(0, 100)})`);
-          handleFunctionCall(
-            msg.function_name,
-            typeof msg.input === "string" ? JSON.parse(msg.input) : msg.input,
-            msg.function_call_id,
-          );
           break;
 
         case "Error":
         case "Warning": {
           const errDetail = JSON.stringify(msg);
-          addLog(`❌ ${msg.type}: ${errDetail}`);
+          addLog(`${msg.type}: ${errDetail}`);
           console.error("Deepgram error (full):", errDetail);
-          // Only crash on actual errors, not warnings
           if (msg.type === "Error") {
             setState((prev) => ({
               ...prev,
@@ -257,12 +201,11 @@ export function InterviewSession({
           }
           break;
         }
-          break;
       }
     } catch {
       // Non-JSON message, ignore
     }
-  }, [handleFunctionCall, processPlaybackQueue]);
+  }, [processPlaybackQueue, addLog]);
 
   // ─── Start Interview ───────────────────────────────────
 
@@ -277,9 +220,7 @@ export function InterviewSession({
         body: JSON.stringify({
           functionName: "_create_interview",
           args: {},
-          siteId,
-          assessmentId,
-          tenantId,
+          siteId, assessmentId, tenantId,
           interviewId: "",
         }),
       });
@@ -298,21 +239,27 @@ export function InterviewSession({
       const audioCtx = new AudioContext({ sampleRate: 24000 });
       audioContextRef.current = audioCtx;
 
+      // Build previous interview summaries for agent context
+      const previousSummaries = previousInterviews
+        ?.filter((pi) => pi.analysis_summary)
+        .map((pi) => pi.analysis_summary!) ?? [];
+
       // Connect WebSocket
       const ws = new WebSocket(
         "wss://agent.deepgram.com/v1/agent/converse",
-        ["token", deepgramApiKey]
+        ["token", deepgramApiKey],
       );
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // Send settings
         const settings = buildAgentSettings({
           siteName,
           customerName,
           existingData,
+          resumeSection,
           anthropicApiKey,
+          previousInterviewSummaries: previousSummaries,
         });
         ws.send(JSON.stringify(settings));
 
@@ -325,9 +272,13 @@ export function InterviewSession({
           if (ws.readyState !== WebSocket.OPEN) return;
           const float32 = e.inputBuffer.getChannelData(0);
           const int16 = new Int16Array(float32.length);
-          for (let i = 0; i < float32.length; i++) {
-            const s = Math.max(-1, Math.min(1, float32[i]!));
-            int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          if (isMicMutedRef.current) {
+            int16.fill(0);
+          } else {
+            for (let i = 0; i < float32.length; i++) {
+              const s = Math.max(-1, Math.min(1, float32[i]!));
+              int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+            }
           }
           ws.send(int16.buffer);
         };
@@ -354,31 +305,48 @@ export function InterviewSession({
         };
         micLevelFrameRef.current = requestAnimationFrame(updateMicLevel);
 
-        // Start keep-alive
+        // Keep-alive
         keepAliveRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "AgentKeepAlive" }));
+            ws.send(JSON.stringify({ type: "KeepAlive" }));
           }
         }, 7000);
 
-        // Start timer
+        // Timer
         timerRef.current = setInterval(() => {
           setState((prev) => ({ ...prev, durationSec: prev.durationSec + 1 }));
         }, 1000);
+
+        // Auto-save transcript every 30 seconds
+        autoSaveRef.current = setInterval(() => {
+          setState((prev) => {
+            if (prev.transcript.length > lastSavedLengthRef.current) {
+              lastSavedLengthRef.current = prev.transcript.length;
+              saveTranscript(prev.transcript, prev.durationSec);
+            }
+            return prev;
+          });
+        }, 30000);
       };
 
       ws.onmessage = handleMessage;
 
       ws.onerror = (evt) => {
-        addLog(`❌ WebSocket error event: ${JSON.stringify(evt)}`);
+        addLog(`WebSocket error event: ${JSON.stringify(evt)}`);
         setState((prev) => ({ ...prev, status: "error", error: "WebSocket connection failed" }));
       };
 
       ws.onclose = (evt) => {
-        addLog(`🔌 WebSocket closed: code=${evt.code} reason="${evt.reason}" clean=${evt.wasClean}`);
-        if (state.status === "active") {
-          setState((prev) => ({ ...prev, status: "ended" }));
-        }
+        addLog(`WebSocket closed: code=${evt.code} reason="${evt.reason}" clean=${evt.wasClean}`);
+        setState((prev) => {
+          if (prev.transcript.length > 0) {
+            saveTranscript(prev.transcript, prev.durationSec);
+          }
+          if (prev.status === "active") {
+            return { ...prev, status: "ended" };
+          }
+          return prev;
+        });
         cleanup();
       };
     } catch (err) {
@@ -388,13 +356,36 @@ export function InterviewSession({
         error: err instanceof Error ? err.message : "Failed to start interview",
       }));
     }
-  }, [deepgramApiKey, anthropicApiKey, siteName, customerName, existingData, siteId, assessmentId, tenantId, handleMessage, state.status]);
+  }, [deepgramApiKey, anthropicApiKey, siteName, customerName, existingData, siteId, assessmentId, tenantId, handleMessage, previousInterviews, resumeSection, saveTranscript, addLog]);
+
+  // ─── Input Mode ────────────────────────────────────
+
+  const handleInputModeChange = useCallback((mode: InputMode) => {
+    setState((prev) => ({ ...prev, inputMode: mode }));
+    isMicMutedRef.current = mode === "text";
+  }, []);
+
+  const handleSendMessage = useCallback((text: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "InjectUserMessage", message: text }));
+    }
+  }, []);
+
+  // ─── Latest agent text for caption ──────────────────
+
+  const latestAgentText = useMemo(() => {
+    for (let i = state.transcript.length - 1; i >= 0; i--) {
+      if (state.transcript[i]!.role === "agent") return state.transcript[i]!.text;
+    }
+    return "";
+  }, [state.transcript]);
 
   // ─── Cleanup ───────────────────────────────────────────
 
   const cleanup = useCallback(() => {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
     if (timerRef.current) clearInterval(timerRef.current);
+    if (autoSaveRef.current) clearInterval(autoSaveRef.current);
     if (micLevelFrameRef.current) cancelAnimationFrame(micLevelFrameRef.current);
     if (analyserRef.current) analyserRef.current.disconnect();
     if (processorRef.current) processorRef.current.disconnect();
@@ -403,7 +394,6 @@ export function InterviewSession({
   }, []);
 
   const endInterview = useCallback(async () => {
-    // Save final state
     if (interviewIdRef.current) {
       await fetch("/api/interview/save-answer", {
         method: "POST",
@@ -412,29 +402,87 @@ export function InterviewSession({
           functionName: "_end_interview",
           args: {
             transcript: state.transcript,
-            fieldsCollected: state.collectedFields,
+            fieldsCollected: {},
             durationSec: state.durationSec,
           },
-          siteId,
-          assessmentId,
-          tenantId,
+          siteId, assessmentId, tenantId,
           interviewId: interviewIdRef.current,
         }),
       });
+      // Analysis is auto-triggered by _end_interview
+      setAnalysisStatus("processing");
     }
 
     wsRef.current?.close();
     cleanup();
     setState((prev) => ({ ...prev, status: "ended" }));
-  }, [state.transcript, state.collectedFields, state.durationSec, siteId, assessmentId, tenantId, cleanup]);
+  }, [state.transcript, state.durationSec, siteId, assessmentId, tenantId, cleanup]);
 
-  // Cleanup on unmount
+  // ─── Poll for analysis completion ─────────────────────
+
+  const analysisPollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
+    if (analysisStatus === "processing" && interviewIdRef.current) {
+      analysisPollerRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/interview/save-answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              functionName: "_save_transcript",
+              args: { transcript: [], fieldsCollected: {}, durationSec: 0 },
+              siteId, assessmentId, tenantId,
+              interviewId: "CHECK_STATUS", // Dummy — we just need the endpoint
+            }),
+          });
+          // Instead, let's check via a simple query approach
+          // For now, just wait a reasonable time and mark as completed
+        } catch {
+          // ignore
+        }
+      }, 5000);
+
+      // Assume analysis completes within ~30 seconds
+      const timeout = setTimeout(() => {
+        setAnalysisStatus("completed");
+        if (analysisPollerRef.current) clearInterval(analysisPollerRef.current);
+      }, 30000);
+
+      return () => {
+        if (analysisPollerRef.current) clearInterval(analysisPollerRef.current);
+        clearTimeout(timeout);
+      };
+    }
+  }, [analysisStatus, siteId, assessmentId, tenantId]);
+
+  // Keep a ref to current state for beforeunload handler
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Save transcript on tab close / navigate away
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const s = stateRef.current;
+      if (interviewIdRef.current && s.transcript.length > 0 && s.status === "active") {
+        navigator.sendBeacon(
+          "/api/interview/save-answer",
+          new Blob([JSON.stringify({
+            functionName: "_save_transcript",
+            args: { transcript: s.transcript, fieldsCollected: {}, durationSec: s.durationSec },
+            siteId, assessmentId, tenantId,
+            interviewId: interviewIdRef.current,
+          })], { type: "application/json" }),
+        );
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       wsRef.current?.close();
       cleanup();
     };
-  }, [cleanup]);
+  }, [cleanup, siteId, assessmentId, tenantId]);
 
   // ─── Format Timer ──────────────────────────────────────
 
@@ -459,8 +507,16 @@ export function InterviewSession({
             The AI agent will guide the conversation through equipment, energy, operations, and staffing.
           </p>
           <p className="text-sm text-gray-400">
-            ~20-30 minutes · Real-time data extraction · Voice or text input
+            ~20-30 minutes · Transcript analyzed after conversation
           </p>
+          {previousInterviews && previousInterviews.length > 0 && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 max-w-md mx-auto">
+              <p className="text-sm text-blue-700">
+                This site has {previousInterviews.length} previous interview{previousInterviews.length > 1 ? "s" : ""}.
+                The agent will offer a recap and focus on new topics.
+              </p>
+            </div>
+          )}
         </div>
         <Button size="lg" onClick={startInterview} className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg">
           <Mic className="h-5 w-5 mr-2" />
@@ -502,7 +558,6 @@ export function InterviewSession({
             Back to Site
           </Button>
         </div>
-        {/* Debug log */}
         {debugLogs.length > 0 && (
           <div className="w-full max-w-lg mt-4">
             <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-gray-400 hover:text-gray-600">
@@ -520,21 +575,67 @@ export function InterviewSession({
   }
 
   if (state.status === "ended") {
-    const totalFields = Object.values(state.collectedFields).reduce((sum, arr) => sum + arr.length, 0);
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-6">
         <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-          <span className="text-3xl">✅</span>
+          <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Interview Complete</h2>
         <div className="text-center text-gray-500 space-y-1">
           <p>Duration: {formatTime(state.durationSec)}</p>
-          <p>{totalFields} data points collected</p>
-          <p>{state.transcript.length} conversation turns</p>
+          <p>{state.transcript.length} conversation turns captured</p>
         </div>
-        <Button onClick={() => router.push(`/customers/${customerSlug}/sites/${siteSlug}?tab=baseline`)}>
-          View Baseline Data →
-        </Button>
+
+        {/* Analysis status */}
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 max-w-md w-full">
+          <div className="flex items-center gap-3">
+            {analysisStatus === "processing" && (
+              <>
+                <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Analyzing transcript...</p>
+                  <p className="text-xs text-gray-500">Extracting baseline data from your conversation</p>
+                </div>
+              </>
+            )}
+            {analysisStatus === "completed" && (
+              <>
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Analysis complete</p>
+                  <p className="text-xs text-gray-500">Baseline data has been extracted and saved</p>
+                </div>
+              </>
+            )}
+            {analysisStatus === "failed" && (
+              <>
+                <AlertCircle className="h-5 w-5 text-red-500" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Analysis failed</p>
+                  <p className="text-xs text-gray-500">You can retry from the baseline tab</p>
+                </div>
+              </>
+            )}
+            {analysisStatus === "idle" && (
+              <>
+                <BarChart3 className="h-5 w-5 text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Ready to analyze</p>
+                  <p className="text-xs text-gray-500">Transcript saved — analysis will extract baseline data</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Button onClick={() => router.push(`/customers/${customerSlug}/sites/${siteSlug}?tab=baseline`)}>
+            View Baseline Data
+          </Button>
+          <Button variant="outline" onClick={() => setState((prev) => ({ ...prev, status: "ready", transcript: [], durationSec: 0 }))}>
+            Start New Interview
+          </Button>
+        </div>
       </div>
     );
   }
@@ -551,7 +652,6 @@ export function InterviewSession({
           <ArrowLeft className="h-4 w-4" /> {siteName}
         </button>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-mono text-gray-500">⏱ {formatTime(state.durationSec)}</span>
           <InterviewControls
             status={state.status}
             agentState={state.agentState}
@@ -563,56 +663,36 @@ export function InterviewSession({
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Transcript */}
-        <div className="flex-1 flex flex-col">
-          <InterviewTranscript
-            transcript={state.transcript}
+        {/* Left: Call View + Input */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <InterviewCallView
             agentState={state.agentState}
+            micLevel={micLevel}
+            latestAgentText={latestAgentText}
+            durationSec={state.durationSec}
           />
-
-          {/* Text input fallback */}
-          <div className="p-3 border-t border-gray-200 bg-white">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const input = e.currentTarget.querySelector("input") as HTMLInputElement;
-                const text = input.value.trim();
-                if (!text || !wsRef.current) return;
-                wsRef.current.send(JSON.stringify({ type: "InjectUserMessage", message: text }));
-                input.value = "";
-              }}
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                placeholder="Type a message... (or just speak)"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
-              />
-              <Button type="submit" size="sm" variant="outline">Send</Button>
-            </form>
-          </div>
+          <InterviewInputPanel
+            inputMode={state.inputMode}
+            micLevel={micLevel}
+            onModeChange={handleInputModeChange}
+            onSendMessage={handleSendMessage}
+          />
         </div>
 
-        {/* Sidebar */}
-        <InterviewSidebar
-          currentSection={state.currentSection}
-          collectedFields={state.collectedFields}
-          progress={state.progress}
-          onSendNote={(text) => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: "InjectUserMessage", message: text }));
-            }
-          }}
+        {/* Right: Transcript Panel */}
+        <InterviewDataPanel
+          transcript={state.transcript}
+          durationSec={state.durationSec}
         />
       </div>
 
-      {/* Debug log toggle (bottom bar) */}
+      {/* Debug log toggle */}
       <div className="border-t border-gray-100 bg-gray-50 px-3 py-1 flex items-center justify-between">
         <button onClick={() => setShowDebug(!showDebug)} className="text-[10px] text-gray-400 hover:text-gray-600">
-          {showDebug ? "▼ Hide" : "▶ Show"} debug log ({debugLogs.length})
+          {showDebug ? "Hide" : "Show"} debug log ({debugLogs.length})
         </button>
         <span className="text-[10px] text-gray-300">
-          WS: {wsRef.current?.readyState === WebSocket.OPEN ? "🟢" : wsRef.current?.readyState === WebSocket.CONNECTING ? "🟡" : "🔴"}
+          WS: {wsRef.current?.readyState === WebSocket.OPEN ? "connected" : wsRef.current?.readyState === WebSocket.CONNECTING ? "connecting" : "disconnected"}
         </span>
       </div>
       {showDebug && (

@@ -33,6 +33,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { fetchAttachments, deleteAttachment, updateAttachmentCategory, updateAttachmentFileName, updateAttachmentNote, fetchVersionHistory } from "../../lib/actions";
+import { DocumentViewer } from "./document-viewer";
 import type { EntityType } from "@repo/supabase";
 
 /** Default document categories for site pages — matches CK standard folder list */
@@ -96,6 +97,7 @@ export function SiteDocumentsManager({
   const [filterCategory, setFilterCategory] = useState<CategoryKey | "all">("all");
   const [analyzeOnUpload, setAnalyzeOnUpload] = useState(false);
   const [analyzing, setAnalyzing] = useState<{ id: string; status: string } | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -755,21 +757,25 @@ export function SiteDocumentsManager({
                   <span className="text-xs text-gray-300">{group.docs.length}</span>
                 </div>
                 <div className="divide-y divide-gray-50 rounded-xl border border-gray-100 bg-white">
-                  {group.docs.map((att) => (
-                    <DocRow
-                      key={att.id}
-                      att={att}
-                      deletingId={deletingId}
-                      onDelete={handleDelete}
-                      onCategoryChange={handleCategoryChange}
-                      onUploadVersion={handleUploadVersion}
-                      onFileNameChange={handleFileNameChange}
-                      onNoteChange={handleNoteChange}
-                      canAnalyze={canAnalyze}
-                      analyzing={analyzing}
-                      onAnalyze={handleAnalyze}
-                    />
-                  ))}
+                  {group.docs.map((att) => {
+                    const viewIdx = attachments.findIndex((a) => a.id === att.id);
+                    return (
+                      <DocRow
+                        key={att.id}
+                        att={att}
+                        deletingId={deletingId}
+                        onDelete={handleDelete}
+                        onCategoryChange={handleCategoryChange}
+                        onUploadVersion={handleUploadVersion}
+                        onFileNameChange={handleFileNameChange}
+                        onNoteChange={handleNoteChange}
+                        canAnalyze={canAnalyze}
+                        analyzing={analyzing}
+                        onAnalyze={handleAnalyze}
+                        onView={viewIdx >= 0 ? () => setViewerIndex(viewIdx) : undefined}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -783,23 +789,41 @@ export function SiteDocumentsManager({
               No documents in this category.
             </div>
           ) : (
-            displayedAttachments.map((att) => (
-              <DocRow
-                key={att.id}
-                att={att}
-                deletingId={deletingId}
-                onDelete={handleDelete}
-                onCategoryChange={handleCategoryChange}
-                onUploadVersion={handleUploadVersion}
-                onFileNameChange={handleFileNameChange}
-                onNoteChange={handleNoteChange}
-                canAnalyze={canAnalyze}
-                analyzing={analyzing}
-                onAnalyze={handleAnalyze}
-              />
-            ))
+            displayedAttachments.map((att) => {
+              const viewIdx = attachments.findIndex((a) => a.id === att.id);
+              return (
+                <DocRow
+                  key={att.id}
+                  att={att}
+                  deletingId={deletingId}
+                  onDelete={handleDelete}
+                  onCategoryChange={handleCategoryChange}
+                  onUploadVersion={handleUploadVersion}
+                  onFileNameChange={handleFileNameChange}
+                  onNoteChange={handleNoteChange}
+                  canAnalyze={canAnalyze}
+                  analyzing={analyzing}
+                  onAnalyze={handleAnalyze}
+                  onView={viewIdx >= 0 ? () => setViewerIndex(viewIdx) : undefined}
+                />
+              );
+            })
           )}
         </div>
+      )}
+
+      {/* Document Viewer lightbox */}
+      {viewerIndex !== null && (
+        <DocumentViewer
+          documents={attachments.map((a) => ({
+            id: a.id,
+            file_name: a.file_name,
+            mime_type: a.mime_type,
+            url: a.url,
+          }))}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+        />
       )}
     </div>
   );
@@ -817,6 +841,7 @@ function DocRow({
   canAnalyze = false,
   analyzing = null,
   onAnalyze,
+  onView,
 }: {
   att: Attachment;
   deletingId: string | null;
@@ -828,6 +853,7 @@ function DocRow({
   canAnalyze?: boolean;
   analyzing?: { id: string; status: string } | null;
   onAnalyze?: (id: string) => void;
+  onView?: () => void;
 }) {
   const [editingCategory, setEditingCategory] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
@@ -1117,16 +1143,15 @@ function DocRow({
           >
             <History className="h-4 w-4" />
           </button>
-          {isPreviewable && att.url && (
-            <a
-              href={att.url}
-              target="_blank"
-              rel="noopener noreferrer"
+          {att.url && onView && (
+            <button
+              type="button"
+              onClick={onView}
               className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-              title="Preview"
+              title="View document"
             >
               <Eye className="h-4 w-4" />
-            </a>
+            </button>
           )}
           {att.url && (
             <a

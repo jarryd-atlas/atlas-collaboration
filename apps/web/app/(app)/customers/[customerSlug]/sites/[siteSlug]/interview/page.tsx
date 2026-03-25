@@ -51,9 +51,11 @@ export default async function InterviewPage({ params }: PageProps) {
     assessment = newAssessment;
   }
 
-  // Load ALL existing baseline data for context — agent skips what's already known
+  // Load existing baseline data for agent context
   const existingData: Record<string, unknown> = {};
   const aid = assessment?.id;
+  let resumeSection: string | undefined;
+  let previousInterviews: { id: string; analysis_summary: string | null; duration_sec: number; created_at: string }[] = [];
 
   if (aid) {
     try {
@@ -65,14 +67,24 @@ export default async function InterviewPage({ params }: PageProps) {
         { data: savings },
         { data: labor },
         { data: energyData },
+        { data: lastInterview },
+        { data: prevInterviews },
       ] = await Promise.all([
         fromTable(admin, "site_contacts").select("name, title, email, phone, is_primary").eq("assessment_id", aid),
         fromTable(admin, "site_operational_params").select("*").eq("assessment_id", aid).maybeSingle(),
         fromTable(admin, "site_equipment").select("category, name, manufacturer, model, specs").eq("assessment_id", aid),
         fromTable(admin, "site_tou_schedule").select("supply_provider, distribution_provider, rate_name, account_number, demand_response_status").eq("assessment_id", aid).maybeSingle(),
         fromTable(admin, "site_savings_analysis").select("annual_energy_spend, pre_atlas_kwh, peak_demand_kw, refrigeration_pct, compressor_load_pct").eq("assessment_id", aid).maybeSingle(),
-        fromTable(admin, "site_labor_baseline").select("headcount, qualitative_assessment").eq("assessment_id", aid).maybeSingle(),
+        fromTable(admin, "site_labor_baseline").select("headcount, pain_points, manual_processes, time_sinks, automation_opportunities").eq("assessment_id", aid).maybeSingle(),
         fromTable(admin, "site_energy_data").select("id").eq("assessment_id", aid).limit(1),
+        fromTable(admin, "site_interviews").select("section_reached").eq("site_id", site.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        // Load previous completed interviews with analysis summaries
+        fromTable(admin, "site_interviews")
+          .select("id, analysis_summary, duration_sec, created_at")
+          .eq("site_id", site.id)
+          .eq("status", "completed")
+          .order("created_at", { ascending: false })
+          .limit(5),
       ]);
 
       if (contacts?.length) existingData.contacts = contacts;
@@ -82,6 +94,12 @@ export default async function InterviewPage({ params }: PageProps) {
       if (savings) existingData.savings = savings;
       if (labor) existingData.labor = labor;
       if (energyData?.length) existingData.hasEnergyData = true;
+      if (lastInterview?.section_reached && lastInterview.section_reached !== "welcome") {
+        resumeSection = lastInterview.section_reached;
+      }
+      if (prevInterviews?.length) {
+        previousInterviews = prevInterviews;
+      }
     } catch {
       // Non-critical — agent starts with less context if baseline load fails
     }
@@ -97,8 +115,10 @@ export default async function InterviewPage({ params }: PageProps) {
       tenantId={site.tenant_id}
       assessmentId={assessment?.id ?? ""}
       existingData={Object.keys(existingData).length > 0 ? existingData : undefined}
+      resumeSection={resumeSection}
       deepgramApiKey={process.env.DEEPGRAM_API_KEY ?? ""}
       anthropicApiKey={process.env.ANTHROPIC_API_KEY ?? ""}
+      previousInterviews={previousInterviews.length > 0 ? previousInterviews : undefined}
     />
   );
 }

@@ -59,6 +59,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: res.status, body: body.substring(0, 500) });
     }
 
+    if (step === "migrate016") {
+      const admin = createSupabaseAdmin();
+      // Step 1: Delete empty duplicate
+      await (admin as any).from("site_assessments").delete().eq("site_id", "36c0aee2-2c6e-4a70-96da-3bcd2ed3e268");
+      await (admin as any).from("sites").delete().eq("id", "36c0aee2-2c6e-4a70-96da-3bcd2ed3e268");
+      // Steps 2-4 (NOT NULL + unique index) need raw SQL — use rpc
+      const { error: rpcErr } = await admin.rpc("exec_sql" as any, {
+        query: `UPDATE sites SET address = name WHERE address IS NULL; ALTER TABLE sites ALTER COLUMN address SET NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS sites_address_unique ON sites (LOWER(address));`
+      });
+      // If rpc doesn't exist, the delete at least worked
+      return NextResponse.json({ success: true, rpcError: rpcErr?.message ?? null });
+    }
+
     return NextResponse.json({ error: "unknown step" });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack?.split("\n").slice(0,3) : null });

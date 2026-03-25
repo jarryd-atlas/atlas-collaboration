@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { ChevronDown, FileText } from "lucide-react";
+import { useCallback } from "react";
 import { EquipmentTab } from "./equipment-tab";
 import { EnergyTab } from "./energy-tab";
 import { OperationsTab } from "./operations-tab";
 import { SavingsTab } from "./savings-tab";
 import { TouScheduleSection } from "./tou-schedule-section";
 import { SiteContactsSection } from "./site-contacts-section";
+import { CollapsibleSection } from "../ui/collapsible-section";
 
 interface BaselineTabProps {
   assessment: any;
@@ -25,55 +25,6 @@ interface BaselineTabProps {
   isLocked: boolean;
   dataSources: any[];
   siteContacts: any[];
-}
-
-function CollapsibleSection({
-  title,
-  count,
-  defaultOpen = true,
-  children,
-  sourceDocuments,
-}: {
-  title: string;
-  count?: number;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-  sourceDocuments?: Array<{ file_name: string }>;
-}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-6 py-4 bg-gray-50/50 hover:bg-gray-50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          {count !== undefined && (
-            <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">
-              {count}
-            </span>
-          )}
-          {sourceDocuments && sourceDocuments.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-              <FileText className="h-3 w-3" />
-              AI extracted
-            </span>
-          )}
-        </div>
-        <ChevronDown
-          className={`h-5 w-5 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
-      </button>
-      {isOpen && (
-        <div className="px-6 py-6 bg-white">
-          {children}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function BaselineTab({

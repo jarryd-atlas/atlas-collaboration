@@ -4,31 +4,35 @@
  */
 
 import { buildInterviewPrompt } from "./interview-prompts";
-import { INTERVIEW_FUNCTIONS } from "./interview-functions";
 
 export interface AgentConfigContext {
   siteName: string;
   customerName: string;
   existingData?: Record<string, unknown>;
+  resumeSection?: string;
   anthropicApiKey?: string;
+  previousInterviewSummaries?: string[];
 }
 
 /**
  * Build the Deepgram Voice Agent Settings message.
  * This is sent immediately after WebSocket connection is established.
+ *
+ * Transcript-only mode: no function calls — the agent has a natural conversation
+ * and all data extraction happens post-interview.
  */
 export function buildAgentSettings(context: AgentConfigContext) {
   const systemPrompt = buildInterviewPrompt(context);
 
   // BYO Anthropic API key with explicit endpoint
-  // Use claude-3-haiku (confirmed existing model) for lowest latency
+  // Use claude-haiku-4-5 for lowest latency
   const thinkConfig: Record<string, unknown> = {
     provider: {
       type: "anthropic",
-      model: "claude-3-5-haiku-20241022",
+      model: "claude-haiku-4-5-20251001",
     },
     prompt: systemPrompt,
-    functions: INTERVIEW_FUNCTIONS,
+    // No functions — transcript-only mode for faster, more reliable conversations
   };
 
   if (context.anthropicApiKey) {
@@ -80,8 +84,30 @@ export function buildAgentSettings(context: AgentConfigContext) {
   };
 }
 
-/** Build a context-aware greeting based on existing site data */
+const SECTION_LABELS: Record<string, string> = {
+  welcome: "Welcome & Contacts",
+  facility_overview: "Facility Overview",
+  refrigeration_system: "Refrigeration System",
+  controls: "Controls & Automation",
+  energy: "Energy & Utility",
+  operations: "Operations",
+  labor: "Staffing & Labor",
+  wrap_up: "Wrap-up",
+};
+
+/** Build a context-aware greeting based on existing site data and previous interviews */
 function buildGreeting(context: AgentConfigContext): string {
+  // If there are previous interviews, offer a recap
+  if (context.previousInterviewSummaries && context.previousInterviewSummaries.length > 0) {
+    const count = context.previousInterviewSummaries.length;
+    return `Welcome back! I'm the ATLAS interview assistant. We've had ${count} previous conversation${count > 1 ? "s" : ""} about ${context.siteName}. Would you like a quick recap of what we covered last time, or shall we jump right into what's new?`;
+  }
+
+  if (context.resumeSection) {
+    const sectionName = SECTION_LABELS[context.resumeSection] ?? context.resumeSection;
+    return `Welcome back! I'm the ATLAS interview assistant. We have some data on file from our last conversation about ${context.siteName}. Let's pick up where we left off — we were about to cover ${sectionName}. Sound good?`;
+  }
+
   const contacts = context.existingData?.contacts as { name: string; title?: string }[] | undefined;
   const intro = `Hi there! I'm the ATLAS interview assistant from CrossnoKaye. I'm here to learn about the refrigeration system at ${context.siteName} so we can identify energy saving opportunities. This usually takes about 20 to 30 minutes.`;
 

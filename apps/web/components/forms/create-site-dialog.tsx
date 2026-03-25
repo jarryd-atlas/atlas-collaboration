@@ -49,6 +49,11 @@ export function CreateSiteDialog({
     e.preventDefault();
     setError("");
 
+    if (!address.trim()) {
+      setError("Address is required. Use the search to select a location.");
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
     formData.set("customerId", customerId);
     formData.set("customerTenantId", customerTenantId);

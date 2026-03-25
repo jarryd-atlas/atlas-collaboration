@@ -20,6 +20,7 @@ import { CustomerPortalLink } from "../../../../../../components/layout/customer
 import { SiteTabLayout } from "../../../../../../components/assessment/site-tab-layout";
 import { OverviewTab } from "../../../../../../components/assessment/overview-tab";
 import { BaselineTab } from "../../../../../../components/assessment/baseline-tab";
+import { DocumentsTab } from "../../../../../../components/assessment/documents-tab";
 import { LaborTab } from "../../../../../../components/assessment/labor-tab";
 import { MapPin, Mic } from "lucide-react";
 
@@ -179,7 +180,7 @@ export default async function SitePage({ params }: SitePageProps) {
         </div>
       </div>
 
-      {/* Tabbed layout — Overview | Baseline | Labor */}
+      {/* Tabbed layout — Overview | Documents | Baseline | Labor */}
       <SiteTabLayout>
         {{
           overview: (
@@ -193,6 +194,13 @@ export default async function SitePage({ params }: SitePageProps) {
               assignableUsers={assignableUsers}
               currentUserName={currentUserName as string}
               currentUserAvatar={currentUserAvatar as string | undefined}
+              canAnalyze={isInternal}
+              assessmentId={assessment?.id}
+            />
+          ),
+          documents: (
+            <DocumentsTab
+              site={site}
               canAnalyze={isInternal}
               assessmentId={assessment?.id}
             />

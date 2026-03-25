@@ -5,7 +5,7 @@ import { PipelineStageBadge, StatusBadge, PriorityBadge } from "../ui/badge";
 import { ProgressBar } from "../ui/progress-bar";
 import { EmptyState } from "../ui/empty-state";
 import { AddMilestoneButton, ChangeStageButton } from "../forms/site-actions";
-import { SiteDocumentsManager } from "../documents";
+import { DocumentUploadStatus } from "../documents/document-upload-status";
 import { SiteTasksSection } from "../tasks/site-tasks-section";
 import { ArrowRight, Calendar, Target } from "lucide-react";
 import type { SitePipelineStage } from "@repo/shared";
@@ -149,13 +149,11 @@ export function OverviewTab({
         currentUserAvatar={currentUserAvatar}
       />
 
-      {/* Documents */}
-      <SiteDocumentsManager
-        entityType="site"
+      {/* Document upload status summary */}
+      <DocumentUploadStatus
         entityId={site.id}
         tenantId={site.tenant_id}
-        canAnalyze={canAnalyze}
-        siteId={site.id}
+        documentsTabUrl={`/customers/${customerSlug}/sites/${siteSlug}?tab=documents`}
       />
     </div>
   );

@@ -239,12 +239,13 @@ export const ASSESSMENT_STATUSES = ["draft", "in_progress", "complete", "locked"
 export type AssessmentStatus = (typeof ASSESSMENT_STATUSES)[number];
 
 /** Site assessment tab keys */
-export const SITE_ASSESSMENT_TABS = ["overview", "baseline", "labor"] as const;
+export const SITE_ASSESSMENT_TABS = ["overview", "documents", "baseline", "labor"] as const;
 export type SiteAssessmentTab = (typeof SITE_ASSESSMENT_TABS)[number];
 
 /** Tab display labels */
 export const SITE_ASSESSMENT_TAB_LABELS: Record<SiteAssessmentTab, string> = {
   overview: "Overview",
+  documents: "Documents",
   baseline: "Baseline",
   labor: "Labor",
 };

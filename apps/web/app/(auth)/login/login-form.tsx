@@ -28,7 +28,12 @@ export function LoginForm({ searchParams }: LoginFormProps) {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/callback`,
-        queryParams: { hd: "crossnokaye.com" },
+        queryParams: {
+          hd: "crossnokaye.com",
+          access_type: "offline",
+          prompt: "consent",
+        },
+        scopes: "https://www.googleapis.com/auth/drive.readonly",
       },
     });
     if (error) {

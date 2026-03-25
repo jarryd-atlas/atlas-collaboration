@@ -25,7 +25,7 @@ export function buildAgentSettings(context: AgentConfigContext) {
   const thinkConfig: Record<string, unknown> = {
     provider: {
       type: "anthropic",
-      model: "claude-3-haiku-20240307",
+      model: "claude-3-5-haiku-20241022",
     },
     prompt: systemPrompt,
     functions: INTERVIEW_FUNCTIONS,

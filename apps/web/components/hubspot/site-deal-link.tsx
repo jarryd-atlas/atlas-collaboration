@@ -209,7 +209,7 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
                         key={key}
                         fieldKey={key}
                         label={label}
-                        value={val}
+                        value={val ?? null}
                         format={format}
                         editable={isEditable}
                         onSave={(newVal) => handleFieldSave(link.hubspot_deal_id, key, newVal)}

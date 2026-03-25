@@ -54,6 +54,13 @@ export function InterviewSession({
     progress: 0,
     durationSec: 0,
   });
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const addLog = useCallback((msg: string) => {
+    const ts = new Date().toLocaleTimeString();
+    console.log(`[Interview ${ts}]`, msg);
+    setDebugLogs((prev) => [`[${ts}] ${msg}`, ...prev].slice(0, 100));
+  }, []);
 
   // ─── Audio Playback (gapless scheduling) ───────────────
 
@@ -174,13 +181,18 @@ export function InterviewSession({
 
     try {
       const msg = JSON.parse(event.data as string);
+      // Log all non-audio messages
+      if (msg.type !== "ConversationText" || msg.role === "assistant") {
+        addLog(`← ${msg.type}${msg.message ? ": " + String(msg.message).slice(0, 80) : ""}${msg.description ? ": " + msg.description : ""}`);
+      }
 
       switch (msg.type) {
         case "Welcome":
-          // Connection established, send settings
+          addLog("WebSocket connected, sending Settings...");
           break;
 
         case "SettingsApplied":
+          addLog("Settings accepted — agent ready");
           setState((prev) => ({ ...prev, status: "active", agentState: "idle" }));
           break;
 
@@ -222,6 +234,7 @@ export function InterviewSession({
           break;
 
         case "FunctionCallRequest":
+          addLog(`⚡ Function call: ${msg.function_name}(${JSON.stringify(msg.input).slice(0, 100)})`);
           handleFunctionCall(
             msg.function_name,
             typeof msg.input === "string" ? JSON.parse(msg.input) : msg.input,
@@ -230,13 +243,20 @@ export function InterviewSession({
           break;
 
         case "Error":
-        case "Warning":
-          console.error("Deepgram error:", JSON.stringify(msg));
-          setState((prev) => ({
-            ...prev,
-            status: "error",
-            error: msg.message ?? msg.description ?? msg.error ?? JSON.stringify(msg),
-          }));
+        case "Warning": {
+          const errDetail = JSON.stringify(msg);
+          addLog(`❌ ${msg.type}: ${errDetail}`);
+          console.error("Deepgram error (full):", errDetail);
+          // Only crash on actual errors, not warnings
+          if (msg.type === "Error") {
+            setState((prev) => ({
+              ...prev,
+              status: "error",
+              error: msg.message ?? msg.description ?? msg.error ?? errDetail,
+            }));
+          }
+          break;
+        }
           break;
       }
     } catch {
@@ -349,11 +369,13 @@ export function InterviewSession({
 
       ws.onmessage = handleMessage;
 
-      ws.onerror = () => {
+      ws.onerror = (evt) => {
+        addLog(`❌ WebSocket error event: ${JSON.stringify(evt)}`);
         setState((prev) => ({ ...prev, status: "error", error: "WebSocket connection failed" }));
       };
 
-      ws.onclose = () => {
+      ws.onclose = (evt) => {
+        addLog(`🔌 WebSocket closed: code=${evt.code} reason="${evt.reason}" clean=${evt.wasClean}`);
         if (state.status === "active") {
           setState((prev) => ({ ...prev, status: "ended" }));
         }
@@ -471,7 +493,7 @@ export function InterviewSession({
           <MicOff className="h-8 w-8 text-red-500" />
         </div>
         <h2 className="text-xl font-semibold text-gray-900">Connection Error</h2>
-        <p className="text-red-600 text-sm">{state.error}</p>
+        <p className="text-red-600 text-sm max-w-md text-center">{state.error}</p>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setState((prev) => ({ ...prev, status: "ready", error: undefined }))}>
             Try Again
@@ -480,6 +502,19 @@ export function InterviewSession({
             Back to Site
           </Button>
         </div>
+        {/* Debug log */}
+        {debugLogs.length > 0 && (
+          <div className="w-full max-w-lg mt-4">
+            <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-gray-400 hover:text-gray-600">
+              {showDebug ? "Hide" : "Show"} debug log ({debugLogs.length} entries)
+            </button>
+            {showDebug && (
+              <div className="mt-2 bg-gray-900 text-green-400 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs">
+                {debugLogs.map((log, i) => <div key={i}>{log}</div>)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -570,6 +605,21 @@ export function InterviewSession({
           }}
         />
       </div>
+
+      {/* Debug log toggle (bottom bar) */}
+      <div className="border-t border-gray-100 bg-gray-50 px-3 py-1 flex items-center justify-between">
+        <button onClick={() => setShowDebug(!showDebug)} className="text-[10px] text-gray-400 hover:text-gray-600">
+          {showDebug ? "▼ Hide" : "▶ Show"} debug log ({debugLogs.length})
+        </button>
+        <span className="text-[10px] text-gray-300">
+          WS: {wsRef.current?.readyState === WebSocket.OPEN ? "🟢" : wsRef.current?.readyState === WebSocket.CONNECTING ? "🟡" : "🔴"}
+        </span>
+      </div>
+      {showDebug && (
+        <div className="bg-gray-900 text-green-400 px-3 py-2 max-h-40 overflow-y-auto font-mono text-[11px] leading-relaxed">
+          {debugLogs.map((log, i) => <div key={i}>{log}</div>)}
+        </div>
+      )}
     </div>
   );
 }

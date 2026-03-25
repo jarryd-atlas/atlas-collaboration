@@ -14,7 +14,7 @@ import { createOrGetAssessment } from "../../../../../../lib/actions/assessment"
 import { getHandoffReportForSite } from "../../../../../../lib/data/queries";
 import { PipelineStageBadge } from "../../../../../../components/ui/badge";
 import { SiteDealLink } from "../../../../../../components/hubspot/site-deal-link";
-import { getHubSpotConfig, getHubSpotSiteLinks } from "../../../../../../lib/data/hubspot-queries";
+import { getHubSpotConfig, getHubSpotSiteLinks, getHubSpotFieldMappings } from "../../../../../../lib/data/hubspot-queries";
 import { SetPageContext } from "../../../../../../components/layout/page-context";
 import { CustomerPortalLink } from "../../../../../../components/layout/customer-portal-link";
 import { SiteTabLayout } from "../../../../../../components/assessment/site-tab-layout";
@@ -106,18 +106,23 @@ export default async function SitePage({ params }: SitePageProps) {
   // Load HubSpot deal links for this site (non-critical)
   let hubspotLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean }[] = [];
   let hubspotPortalId: string | undefined;
+  let hubspotFieldMappings: { hubspot_property: string; direction: "hubspot_to_app" | "app_to_hubspot" | "bidirectional" }[] = [];
   if (isInternal) {
     try {
       const internalTenantId = currentUser?.sessionClaims?.tenantId ?? site.tenant_id;
-      const [config, links] = await Promise.all([
+      const [config, links, mappings] = await Promise.all([
         getHubSpotConfig(internalTenantId),
         getHubSpotSiteLinks(internalTenantId),
+        getHubSpotFieldMappings(internalTenantId),
       ]);
       if (config?.is_active) {
         hubspotPortalId = config.portal_id;
         hubspotLinks = (links ?? [])
           .filter((l) => l.site_id === site.id)
           .map((l) => ({ id: l.id, hubspot_deal_id: l.hubspot_deal_id, deal_name: l.deal_name, is_primary: false }));
+        hubspotFieldMappings = (mappings ?? [])
+          .filter((m) => m.is_active)
+          .map((m) => ({ hubspot_property: m.hubspot_property, direction: m.direction }));
       }
     } catch {
       // Non-critical — don't block page load
@@ -146,7 +151,7 @@ export default async function SitePage({ params }: SitePageProps) {
             )}
             {isInternal && hubspotPortalId && (
               <div className="mt-2">
-                <SiteDealLink siteId={site.id} existingLinks={hubspotLinks} portalId={hubspotPortalId} />
+                <SiteDealLink siteId={site.id} existingLinks={hubspotLinks} portalId={hubspotPortalId} fieldMappings={hubspotFieldMappings} />
               </div>
             )}
           </div>

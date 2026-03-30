@@ -59,6 +59,7 @@ export interface HubSpotSiteLink {
   site_id: string;
   hubspot_deal_id: string;
   deal_name: string | null;
+  deal_type: string | null;
   linked_by: string | null;
   created_at: string;
   // Joined fields

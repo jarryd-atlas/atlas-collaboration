@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         name: d.properties.dealname,
         stage: d.properties.dealstage,
         amount: d.properties.amount,
+        pipeline: d.properties.pipeline,
       })),
     });
   } catch (err) {

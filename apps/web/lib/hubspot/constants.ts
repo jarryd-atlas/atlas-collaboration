@@ -27,6 +27,47 @@ export const PIPELINE_STAGE_MAP: Record<string, string> = {
   "dddab890-d5f2-4399-9886-f2ad9fb46864": "disqualified", // Lost
 };
 
+/**
+ * Known renewal pipeline stage IDs.
+ * If a deal's stage is in this set, it's a renewal deal.
+ */
+export const RENEWAL_STAGE_IDS = new Set([
+  "e4be6fb9-65ed-4f32-9493-d755e7410ab1", // In Consideration
+  "268042404",                              // Renewal Preparation
+  "264057885",                              // Out for Signature
+  "80a99505-8d78-4864-bee8-c416cb2e7f4f",  // Won
+  "dddab890-d5f2-4399-9886-f2ad9fb46864",  // Lost
+]);
+
+/** Determine deal type from the deal stage ID */
+export function getDealType(dealStageId: string): "renewal" | "new_business" {
+  return RENEWAL_STAGE_IDS.has(dealStageId) ? "renewal" : "new_business";
+}
+
+/** Human-readable labels for HubSpot deal stage IDs */
+export const DEAL_STAGE_LABELS: Record<string, string> = {
+  // New Business pipeline
+  "1188492915": "Intro/Contact",
+  "250564613": "Discovery",
+  "1188492916": "Demonstration",
+  "250564614": "Data Collection",
+  "1240422453": "Qualified",
+  "1188492917": "Energy Value Assessment",
+  "1188492918": "Executive Presentation",
+  "1188492919": "M&V Alignment",
+  "6b3b22f8-8bf4-40af-91e0-61bd1b0bfc63": "In Consideration",
+  "250564615": "Out for Signature",
+  "4c6e00f8-890b-4a2d-8f22-7eb9b7227e00": "Won",
+  "10d2d0d7-556b-4fb9-aa24-12b0fd0159a6": "Stalled",
+  "5b2cab04-4ab5-4249-8487-0b3834d444c5": "Lost",
+  // Renewal pipeline
+  "e4be6fb9-65ed-4f32-9493-d755e7410ab1": "In Consideration",
+  "268042404": "Renewal Preparation",
+  "264057885": "Out for Signature",
+  "80a99505-8d78-4864-bee8-c416cb2e7f4f": "Won",
+  "dddab890-d5f2-4399-9886-f2ad9fb46864": "Lost",
+};
+
 /** Reverse map: app pipeline_stage → best-fit HubSpot deal stage */
 export const REVERSE_PIPELINE_STAGE_MAP: Record<string, string> = {
   prospect: "1188492915",      // 01 - Intro/Contact
@@ -95,4 +136,5 @@ export const DEFAULT_FIELD_MAPPINGS: Omit<FieldMappingInput, "tenant_id">[] = [
   { hubspot_property: "forecasted_total_savings_percent", app_table: "site_savings_analysis", app_column: "flexible_demand_pct", direction: "app_to_hubspot", transform: "percentage" },
   { hubspot_property: "facility_type", app_table: "site_operational_params", app_column: "facility_type", direction: "hubspot_to_app", transform: "text" },
   { hubspot_property: "nrc", app_table: "site_operational_params", app_column: "estimated_upgrade_cost", direction: "bidirectional", transform: "number" },
+  { hubspot_property: "hs_next_step", app_table: "sites", app_column: "next_step", direction: "bidirectional", transform: "text" },
 ];

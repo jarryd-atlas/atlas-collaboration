@@ -39,9 +39,10 @@ export default async function TasksPage() {
   // Build context from the joined data
   const tasksWithContext = allTasks.map((task) => {
     const milestone = task.milestone;
-    const site = milestone?.site;
-    // Customer info: from milestone chain, or direct customer join for company-level tasks
-    const customer = site?.customer ?? task.direct_customer;
+    // Site info: from milestone chain OR direct site join
+    const site = milestone?.site ?? task.direct_site;
+    // Customer info: from milestone chain, direct site, or direct customer join
+    const customer = milestone?.site?.customer ?? task.direct_site?.customer ?? task.direct_customer;
     return {
       ...task,
       milestoneInfo: milestone ? { name: milestone.name, slug: milestone.slug } : null,
@@ -56,7 +57,7 @@ export default async function TasksPage() {
   // Extract unique sites from tasks for the @ mention picker
   const siteMap = new Map<string, AssignableSite>();
   for (const task of allTasks) {
-    const site = task.milestone?.site;
+    const site = task.milestone?.site ?? task.direct_site;
     if (site && !siteMap.has(site.id)) {
       siteMap.set(site.id, { id: site.id, name: site.name, slug: site.slug });
     }

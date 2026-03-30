@@ -5,6 +5,7 @@ import { CreateCustomerDialog } from "../forms/create-customer-dialog";
 import { QuickTaskDialog } from "../forms/quick-task-dialog";
 import { QuickFlagIssueDialog } from "../forms/quick-flag-issue-dialog";
 import { VoiceRecordDialog } from "../forms/voice-record-dialog";
+import { FeedbackDialog } from "../forms/feedback-dialog";
 import { usePageContext } from "./page-context";
 
 interface QuickActionsProps {
@@ -36,8 +37,8 @@ export function QuickActions({ isInternal = false }: QuickActionsProps) {
       if (e.key === "Escape" && isOpen) {
         setIsOpen(false);
       }
-      // Cmd+J (Mac) / Ctrl+J (Win/Linux) to open Quick Task
-      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+      // Cmd+J or Cmd+; (Mac) / Ctrl+J or Ctrl+; (Win/Linux) to open Quick Task
+      if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === ";")) {
         e.preventDefault();
         setIsOpen(false);
         setActiveDialog("create-task");
@@ -102,6 +103,16 @@ export function QuickActions({ isInternal = false }: QuickActionsProps) {
         </svg>
       ),
       onClick: () => openDialog("flag-issue"),
+    },
+    {
+      id: "feedback",
+      label: "Send Feedback",
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      ),
+      onClick: () => openDialog("feedback"),
     },
     {
       id: "create-customer",
@@ -227,6 +238,10 @@ export function QuickActions({ isInternal = false }: QuickActionsProps) {
         onClose={() => setActiveDialog(null)}
         defaultSiteId={pageCtx.siteId ?? undefined}
         defaultMilestoneId={pageCtx.milestoneId ?? undefined}
+      />
+      <FeedbackDialog
+        open={activeDialog === "feedback"}
+        onClose={() => setActiveDialog(null)}
       />
     </>
   );

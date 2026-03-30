@@ -55,6 +55,28 @@ export async function createSite(formData: FormData) {
   }
 }
 
+export async function updateSiteNextStep(siteId: string, nextStep: string) {
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType && claims.tenantType !== "internal") {
+      return { error: "Forbidden" };
+    }
+
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("sites")
+      .update({ next_step: nextStep || null } as any)
+      .eq("id", siteId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
 export async function updateSitePipelineStage(
   siteId: string,
   stage: PipelineStage,

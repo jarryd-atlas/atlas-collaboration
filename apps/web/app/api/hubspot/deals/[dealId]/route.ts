@@ -7,7 +7,7 @@ const DISPLAY_PROPERTIES = [
   "annual_energy_spend__c", "refrigeration_load", "forecasted_savings__",
   "forecasted_refrigeration_savings_percent", "forecasted_total_savings_percent",
   "facility_type", "nrc", "atlas_site_name", "pipeline",
-  "energy_savings_status", "site_equivalent", "roi",
+  "energy_savings_status", "site_equivalent", "roi", "hs_next_step",
   "service_start_date", "service_end_date",
   "hs_lastmodifieddate",
 ];

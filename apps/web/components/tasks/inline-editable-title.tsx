@@ -62,7 +62,7 @@ export function InlineEditableTitle({
   return (
     <div
       className={cn("min-w-0 w-full text-sm font-medium text-gray-900", className)}
-      onClick={(e) => {
+      onDoubleClick={(e) => {
         if (!isEditing) {
           e.stopPropagation();
           startEditing();
@@ -95,7 +95,7 @@ export function InlineEditableTitle({
             "truncate block cursor-text hover:bg-gray-100 rounded px-0.5 -mx-0.5 transition-colors",
             isPending && "opacity-50",
           )}
-          title="Click to edit"
+          title="Double-click to edit"
         >
           {value}
         </span>

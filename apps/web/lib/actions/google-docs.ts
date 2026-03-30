@@ -1,6 +1,6 @@
 "use server";
 
-import { createSupabaseServer } from "../supabase/server";
+import { createSupabaseServer, createSupabaseAdmin } from "../supabase/server";
 import { getCurrentUser } from "../data/current-user";
 
 export interface SiteGoogleDoc {
@@ -31,12 +31,13 @@ export async function linkGoogleDoc(
     icon_url?: string;
   },
 ): Promise<{ id: string } | { error: string }> {
-  const supabase = await createSupabaseServer();
   const user = await getCurrentUser();
   if (!user) return { error: "Not authenticated" };
+  if (user.sessionClaims?.tenantType !== "internal") return { error: "Internal users only" };
 
-  // Cast to any — site_google_docs table not yet in generated types (migration pending)
-  const { data, error } = await (supabase as any)
+  // Use admin client to bypass RLS — this is an internal-only feature
+  const admin = createSupabaseAdmin();
+  const { data, error } = await (admin as any)
     .from("site_google_docs")
     .insert({
       tenant_id: user.sessionClaims?.tenantId,
@@ -47,7 +48,7 @@ export async function linkGoogleDoc(
       google_url: fileData.google_url,
       thumbnail_url: fileData.thumbnail_url ?? null,
       icon_url: fileData.icon_url ?? null,
-      linked_by: user.profileId,
+      linked_by: user.id,
     })
     .select("id")
     .single();
@@ -66,9 +67,11 @@ export async function linkGoogleDoc(
  * Unlink a Google Doc from a site.
  */
 export async function unlinkGoogleDoc(linkId: string): Promise<{ success: true } | { error: string }> {
-  const supabase = await createSupabaseServer();
+  const user = await getCurrentUser();
+  if (!user || user.sessionClaims?.tenantType !== "internal") return { error: "Internal users only" };
 
-  const { error } = await (supabase as any)
+  const admin = createSupabaseAdmin();
+  const { error } = await (admin as any)
     .from("site_google_docs")
     .delete()
     .eq("id", linkId);
@@ -81,9 +84,9 @@ export async function unlinkGoogleDoc(linkId: string): Promise<{ success: true }
  * Fetch all linked Google Docs for a site.
  */
 export async function fetchLinkedGoogleDocs(siteId: string): Promise<SiteGoogleDoc[]> {
-  const supabase = await createSupabaseServer();
+  const admin = createSupabaseAdmin();
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await (admin as any)
     .from("site_google_docs")
     .select("*")
     .eq("site_id", siteId)

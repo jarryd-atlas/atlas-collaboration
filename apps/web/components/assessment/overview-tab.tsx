@@ -7,6 +7,8 @@ import { EmptyState } from "../ui/empty-state";
 import { AddMilestoneButton, ChangeStageButton } from "../forms/site-actions";
 import { DocumentUploadStatus } from "../documents/document-upload-status";
 import { SiteTasksSection } from "../tasks/site-tasks-section";
+import { LinkedGoogleDocs } from "./linked-google-docs";
+import { HubSpotPipelineTracker } from "../hubspot/hubspot-pipeline-tracker";
 import { ArrowRight, Calendar, Target } from "lucide-react";
 import type { SitePipelineStage } from "@repo/shared";
 
@@ -31,6 +33,9 @@ interface OverviewTabProps {
   currentUserAvatar: string | undefined;
   canAnalyze?: boolean;
   assessmentId?: string;
+  isInternal?: boolean;
+  hubspotDealId?: string;
+  hubspotPortalId?: string;
 }
 
 export function OverviewTab({
@@ -45,44 +50,56 @@ export function OverviewTab({
   currentUserAvatar,
   canAnalyze = false,
   assessmentId,
+  isInternal = false,
+  hubspotDealId,
+  hubspotPortalId,
 }: OverviewTabProps) {
+  const hasHubSpotDeal = !!(hubspotDealId && hubspotPortalId);
   return (
     <div className="space-y-8">
-      {/* Pipeline stage tracker */}
-      {site.pipeline_stage !== "disqualified" && site.pipeline_stage !== "paused" && (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-900">Pipeline Stage</h2>
-            <ChangeStageButton siteName={site.name} siteId={site.id} currentStage={site.pipeline_stage} />
+      {/* Pipeline stage tracker — HubSpot-driven when deal is linked */}
+      {hasHubSpotDeal ? (
+        <HubSpotPipelineTracker
+          dealId={hubspotDealId!}
+          siteId={site.id}
+          portalId={hubspotPortalId!}
+        />
+      ) : (
+        site.pipeline_stage !== "disqualified" && site.pipeline_stage !== "paused" && (
+          <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-900">Pipeline Stage</h2>
+              <ChangeStageButton siteName={site.name} siteId={site.id} currentStage={site.pipeline_stage} />
+            </div>
+            <div className="flex items-center gap-1">
+              {PIPELINE_STEPS.map((step, i) => {
+                const currentIdx = PIPELINE_STEPS.indexOf(site.pipeline_stage as SitePipelineStage);
+                const isCompleted = i < currentIdx;
+                const isCurrent = i === currentIdx;
+                return (
+                  <div key={step} className="flex-1">
+                    <div
+                      className={`h-2 rounded-full ${
+                        isCompleted
+                          ? "bg-brand-green"
+                          : isCurrent
+                            ? "bg-brand-green/50"
+                            : "bg-gray-100"
+                      }`}
+                    />
+                    <p
+                      className={`text-xs mt-1.5 ${
+                        isCurrent ? "text-gray-900 font-medium" : "text-gray-400"
+                      }`}
+                    >
+                      {step.charAt(0).toUpperCase() + step.slice(1)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {PIPELINE_STEPS.map((step, i) => {
-              const currentIdx = PIPELINE_STEPS.indexOf(site.pipeline_stage as SitePipelineStage);
-              const isCompleted = i < currentIdx;
-              const isCurrent = i === currentIdx;
-              return (
-                <div key={step} className="flex-1">
-                  <div
-                    className={`h-2 rounded-full ${
-                      isCompleted
-                        ? "bg-brand-green"
-                        : isCurrent
-                          ? "bg-brand-green/50"
-                          : "bg-gray-100"
-                    }`}
-                  />
-                  <p
-                    className={`text-xs mt-1.5 ${
-                      isCurrent ? "text-gray-900 font-medium" : "text-gray-400"
-                    }`}
-                  >
-                    {step.charAt(0).toUpperCase() + step.slice(1)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        )
       )}
 
       {/* Milestones */}
@@ -137,6 +154,9 @@ export function OverviewTab({
           </div>
         )}
       </div>
+
+      {/* Linked Google Docs — internal only */}
+      {isInternal && <LinkedGoogleDocs siteId={site.id} />}
 
       {/* Tasks for this site */}
       <SiteTasksSection

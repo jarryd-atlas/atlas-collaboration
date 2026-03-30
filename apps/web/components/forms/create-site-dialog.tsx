@@ -39,7 +39,12 @@ export function CreateSiteDialog({
     city: string;
     state: string;
   }) {
-    if (!siteName) setSiteName(details.name);
+    if (!siteName) {
+      const parts: string[] = [];
+      if (details.city) parts.push(details.city);
+      if (details.address) parts.push(details.address);
+      setSiteName(parts.join(" - ") || details.name);
+    }
     setAddress(details.address);
     setCity(details.city);
     setState(details.state);

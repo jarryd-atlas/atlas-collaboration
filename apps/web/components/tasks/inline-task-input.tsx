@@ -51,6 +51,8 @@ interface InlineTaskInputProps {
   onSiteChange?: (siteId: string | null) => void;
   /** Show AI expand option */
   showAiExpand?: boolean;
+  /** Auto-focus the input on mount */
+  autoFocus?: boolean;
 }
 
 /**
@@ -73,8 +75,9 @@ export function InlineTaskInput({
   onCustomerChange,
   onSiteChange,
   showAiExpand = true,
+  autoFocus = false,
 }: InlineTaskInputProps) {
-  const [isActive, setIsActive] = useState(false);
+  const [isActive, setIsActive] = useState(autoFocus);
   const [value, setValue] = useState("");
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
@@ -92,8 +95,15 @@ export function InlineTaskInput({
   const mentionRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
+  // Auto-focus on mount when autoFocus is true
+  useEffect(() => {
+    if (autoFocus) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [autoFocus]);
+
   const selectedUser = assignableUsers.find((u) => u.id === assigneeId);
-  const selectedSites = assignableSites.filter((s) => selectedSiteIds.includes(s.id));
+  const selectedSites = assignableSites.filter((s) => selectedSiteIds.includes(s.id) && s.id !== siteId);
   const selectedCustomer = assignableCustomers.find((c) => c.id === selectedCustomerId);
 
   // Has any mentionable items?
@@ -106,13 +116,13 @@ export function InlineTaskInput({
       u.full_name.toLowerCase().includes(q),
     );
     const sites = assignableSites.filter((s) =>
-      s.name.toLowerCase().includes(q) && !selectedSiteIds.includes(s.id),
+      s.name.toLowerCase().includes(q) && !selectedSiteIds.includes(s.id) && s.id !== siteId,
     );
     const companies = assignableCustomers.filter((c) =>
       c.name.toLowerCase().includes(q),
     );
     return { people, sites, companies };
-  }, [mentionQuery, assignableUsers, assignableSites, assignableCustomers, selectedSiteIds]);
+  }, [mentionQuery, assignableUsers, assignableSites, assignableCustomers, selectedSiteIds, siteId]);
 
   const flatResults = useMemo(() => {
     const items: Array<

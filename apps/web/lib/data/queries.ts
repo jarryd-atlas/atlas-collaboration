@@ -609,26 +609,86 @@ export async function getAllOpenTasks() {
  */
 export async function getMyRelevantTasks(profileId: string) {
   const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
+
+  // Fetch tasks assigned to or created by this user
+  const { data: tasks, error } = await supabase
     .from("tasks")
-    .select(`
-      *,
-      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
-      milestone:milestones(
-        id, name, slug,
-        site:sites(
-          id, name, slug,
-          customer:customers(id, name, slug)
-        )
-      ),
-      direct_customer:customers!tasks_customer_id_fkey(id, name, slug)
-    `)
+    .select("*")
     .neq("status", "done")
     .or(`assignee_id.eq.${profileId},created_by.eq.${profileId}`)
     .order("due_date", { ascending: true, nullsFirst: false });
 
-  if (error) throw error;
-  return (data ?? []) as any[];
+  if (error) {
+    console.error("[getMyRelevantTasks] Error:", error);
+    return [];
+  }
+  if (!tasks || tasks.length === 0) return [];
+
+  // Resolve context separately to avoid PostgREST join issues
+  const assigneeIds = [...new Set(tasks.map((t: any) => t.assignee_id).filter(Boolean))];
+  const milestoneIds = [...new Set(tasks.map((t: any) => t.milestone_id).filter(Boolean))];
+  const siteIds = [...new Set(tasks.map((t: any) => t.site_id).filter(Boolean))];
+  const customerIds = [...new Set(tasks.map((t: any) => t.customer_id).filter(Boolean))];
+
+  // Parallel fetches for context
+  const [profilesRes, milestonesRes, sitesRes, customersRes] = await Promise.all([
+    assigneeIds.length > 0
+      ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", assigneeIds)
+      : { data: [] },
+    milestoneIds.length > 0
+      ? supabase.from("milestones").select("id, name, slug, site_id").in("id", milestoneIds)
+      : { data: [] },
+    siteIds.length > 0
+      ? supabase.from("sites").select("id, name, slug, customer_id").in("id", siteIds)
+      : { data: [] },
+    customerIds.length > 0
+      ? supabase.from("customers").select("id, name, slug").in("id", customerIds)
+      : { data: [] },
+  ]);
+
+  const profilesMap = new Map((profilesRes.data ?? []).map((p: any) => [p.id, p]));
+  const milestonesMap = new Map((milestonesRes.data ?? []).map((m: any) => [m.id, m]));
+  const sitesMap = new Map((sitesRes.data ?? []).map((s: any) => [s.id, s]));
+  const customersMap = new Map((customersRes.data ?? []).map((c: any) => [c.id, c]));
+
+  // Also resolve sites from milestones (for milestone → site → customer chain)
+  const milestoneSiteIds = [...new Set(
+    (milestonesRes.data ?? []).map((m: any) => m.site_id).filter(Boolean)
+  )].filter((id) => !sitesMap.has(id));
+
+  if (milestoneSiteIds.length > 0) {
+    const { data: extraSites } = await supabase.from("sites").select("id, name, slug, customer_id").in("id", milestoneSiteIds);
+    for (const s of (extraSites ?? [])) sitesMap.set(s.id, s);
+  }
+
+  // Resolve customers from sites
+  const siteCustomerIds = [...new Set(
+    [...sitesMap.values()].map((s: any) => s.customer_id).filter(Boolean)
+  )].filter((id) => !customersMap.has(id));
+
+  if (siteCustomerIds.length > 0) {
+    const { data: extraCustomers } = await supabase.from("customers").select("id, name, slug").in("id", siteCustomerIds);
+    for (const c of (extraCustomers ?? [])) customersMap.set(c.id, c);
+  }
+
+  // Assemble context onto each task
+  return tasks.map((task: any) => {
+    const assignee = profilesMap.get(task.assignee_id) ?? null;
+    const milestone = milestonesMap.get(task.milestone_id) ?? null;
+    const site = sitesMap.get(milestone?.site_id ?? task.site_id) ?? null;
+    const customer = customersMap.get(site?.customer_id ?? task.customer_id) ?? null;
+
+    return {
+      ...task,
+      assignee,
+      milestone: milestone ? {
+        ...milestone,
+        site: site ? { ...site, customer } : null,
+      } : null,
+      direct_site: task.site_id ? sitesMap.get(task.site_id) ?? null : null,
+      direct_customer: task.customer_id ? customersMap.get(task.customer_id) ?? null : null,
+    };
+  });
 }
 
 /**
@@ -657,17 +717,6 @@ export async function getAllTasksForCustomer(customerId: string) {
     linkedTaskIds = (taskSiteLinks ?? []).map((ts: any) => ts.task_id);
   }
 
-  let query = supabase
-    .from("tasks")
-    .select(`
-      *,
-      assignee:profiles!tasks_assignee_id_fkey(id, full_name, avatar_url),
-      milestone:milestones(id, name, slug),
-      site:sites!tasks_site_id_fkey(id, name, slug)
-    `)
-    .neq("status", "done")
-    .order("created_at", { ascending: false });
-
   // Build OR filter
   const orConditions: string[] = [`customer_id.eq.${customerId}`];
   if (siteIds.length > 0) {
@@ -676,11 +725,44 @@ export async function getAllTasksForCustomer(customerId: string) {
   if (linkedTaskIds.length > 0) {
     orConditions.push(`id.in.(${linkedTaskIds.join(",")})`);
   }
-  query = query.or(orConditions.join(","));
 
-  const { data, error } = await query;
+  const { data: tasks, error } = await supabase
+    .from("tasks")
+    .select("*")
+    .neq("status", "done")
+    .or(orConditions.join(","))
+    .order("created_at", { ascending: false });
+
   if (error) return [];
-  return (data ?? []) as any[];
+  if (!tasks || tasks.length === 0) return [];
+
+  // Resolve assignees, milestones, sites separately
+  const assigneeIds = [...new Set(tasks.map((t: any) => t.assignee_id).filter(Boolean))];
+  const milestoneIds = [...new Set(tasks.map((t: any) => t.milestone_id).filter(Boolean))];
+  const taskSiteIds = [...new Set(tasks.map((t: any) => t.site_id).filter(Boolean))];
+
+  const [profilesRes, milestonesRes, sitesRes] = await Promise.all([
+    assigneeIds.length > 0
+      ? supabase.from("profiles").select("id, full_name, avatar_url").in("id", assigneeIds)
+      : { data: [] },
+    milestoneIds.length > 0
+      ? supabase.from("milestones").select("id, name, slug").in("id", milestoneIds)
+      : { data: [] },
+    taskSiteIds.length > 0
+      ? supabase.from("sites").select("id, name, slug").in("id", taskSiteIds)
+      : { data: [] },
+  ]);
+
+  const profilesMap = new Map((profilesRes.data ?? []).map((p: any) => [p.id, p]));
+  const milestonesMap = new Map((milestonesRes.data ?? []).map((m: any) => [m.id, m]));
+  const sitesMap = new Map((sitesRes.data ?? []).map((s: any) => [s.id, s]));
+
+  return tasks.map((task: any) => ({
+    ...task,
+    assignee: profilesMap.get(task.assignee_id) ?? null,
+    milestone: milestonesMap.get(task.milestone_id) ?? null,
+    site: sitesMap.get(task.site_id) ?? null,
+  }));
 }
 
 /**

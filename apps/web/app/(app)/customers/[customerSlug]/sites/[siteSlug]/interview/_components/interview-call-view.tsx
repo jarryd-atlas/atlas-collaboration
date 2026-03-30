@@ -5,7 +5,7 @@ import { Mic } from "lucide-react";
 
 interface Props {
   agentState: "idle" | "listening" | "thinking" | "speaking";
-  micLevel: number; // 0-1
+  micLevel: number; // 0-100
   latestAgentText: string;
   durationSec: number;
 }
@@ -54,8 +54,9 @@ export function InterviewCallView({ agentState, micLevel, latestAgentText, durat
   const ringPulse =
     agentState === "speaking" || agentState === "thinking" ? "animate-pulse" : "";
 
-  // Mic ring scale based on mic level when listening
-  const micRingScale = agentState === "listening" ? 1 + micLevel * 0.15 : 1;
+  // Mic ring scale based on mic level (0-100) when listening — subtle growth, max 1.05x
+  const normalizedLevel = Math.min(micLevel / 100, 1);
+  const micRingScale = agentState === "listening" ? 1 + normalizedLevel * 0.05 : 1;
 
   const stateLabel =
     agentState === "speaking"

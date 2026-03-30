@@ -11,7 +11,7 @@ import { Button } from "../ui/button";
 import { Calendar, MessageSquare, X } from "lucide-react";
 import { getTaskComments, createComment } from "../../lib/actions";
 
-interface TaskForPanel {
+export interface TaskForPanel {
   id: string;
   title: string;
   status: string;
@@ -28,30 +28,31 @@ interface Comment {
   author?: { id: string; full_name: string; avatar_url?: string | null } | null;
 }
 
-interface TaskDetailPanelProps {
-  task: TaskForPanel | null;
-  open: boolean;
+interface TaskDetailInlineProps {
+  task: TaskForPanel;
   onClose: () => void;
   tenantId: string;
   currentUserName: string;
   currentUserAvatar?: string | null;
 }
 
-export function TaskDetailPanel({
+/**
+ * Inline task detail content — renders as a regular div, no portal/overlay.
+ * Used in the two-column desktop layout.
+ */
+export function TaskDetailInline({
   task,
-  open,
   onClose,
   tenantId,
   currentUserName,
   currentUserAvatar,
-}: TaskDetailPanelProps) {
+}: TaskDetailInlineProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [isPosting, startPosting] = useTransition();
   const router = useRouter();
 
-  // Fetch comments when panel opens
   const fetchComments = useCallback(async () => {
     if (!task) return;
     setIsLoading(true);
@@ -63,14 +64,23 @@ export function TaskDetailPanel({
   }, [task]);
 
   useEffect(() => {
-    if (open && task) {
+    if (task) {
       fetchComments();
     }
-    if (!open) {
+    return () => {
       setComments([]);
       setCommentBody("");
+    };
+  }, [task, fetchComments]);
+
+  // Escape key to close
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
     }
-  }, [open, task, fetchComments]);
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   function handlePostComment(e: React.FormEvent) {
     e.preventDefault();
@@ -92,12 +102,10 @@ export function TaskDetailPanel({
     });
   }
 
-  if (!task) return null;
-
   return (
-    <SlidePanel open={open} onClose={onClose} width="max-w-md">
-      {/* Editable header */}
-      <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-100 shrink-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <InlineEditableTitle
@@ -119,10 +127,11 @@ export function TaskDetailPanel({
         </div>
       </div>
 
-      <SlidePanelBody>
-        {/* Task metadata (assignee, due date) */}
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Task metadata */}
         {(task.assignee?.full_name || task.due_date) && (
-          <div className="px-6 py-4 border-b border-gray-100 space-y-3">
+          <div className="px-5 py-4 border-b border-gray-100 space-y-3">
             {task.assignee?.full_name && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400 w-14">Assignee</span>
@@ -144,8 +153,8 @@ export function TaskDetailPanel({
           </div>
         )}
 
-        {/* Updates / Comments */}
-        <div className="px-6 py-4">
+        {/* Comments */}
+        <div className="px-5 py-4">
           <div className="flex items-center gap-2 mb-4">
             <MessageSquare className="h-4 w-4 text-gray-400" />
             <h3 className="text-sm font-semibold text-gray-700">Updates</h3>
@@ -191,28 +200,63 @@ export function TaskDetailPanel({
             </div>
           )}
         </div>
+      </div>
 
-        {/* Comment input — pinned at bottom */}
-        <div className="px-6 py-4 border-t border-gray-100 mt-auto shrink-0">
-          <form onSubmit={handlePostComment} className="flex items-start gap-3">
-            <Avatar name={currentUserName} src={currentUserAvatar} size="sm" className="mt-1" />
-            <div className="flex-1">
-              <textarea
-                value={commentBody}
-                onChange={(e) => setCommentBody(e.target.value)}
-                placeholder="Add an update..."
-                rows={2}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-brand-green focus:ring-1 focus:ring-brand-green outline-none resize-none"
-              />
-              <div className="flex justify-end mt-2">
-                <Button type="submit" size="sm" disabled={!commentBody.trim() || isPosting}>
-                  {isPosting ? "Posting..." : "Post Update"}
-                </Button>
-              </div>
+      {/* Comment input — pinned at bottom */}
+      <div className="px-5 py-4 border-t border-gray-100 shrink-0">
+        <form onSubmit={handlePostComment} className="flex items-start gap-3">
+          <Avatar name={currentUserName} src={currentUserAvatar} size="sm" className="mt-1" />
+          <div className="flex-1">
+            <textarea
+              value={commentBody}
+              onChange={(e) => setCommentBody(e.target.value)}
+              placeholder="Add an update..."
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-brand-green focus:ring-1 focus:ring-brand-green outline-none resize-none"
+            />
+            <div className="flex justify-end mt-2">
+              <Button type="submit" size="sm" disabled={!commentBody.trim() || isPosting}>
+                {isPosting ? "Posting..." : "Post Update"}
+              </Button>
             </div>
-          </form>
-        </div>
-      </SlidePanelBody>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface TaskDetailPanelProps {
+  task: TaskForPanel | null;
+  open: boolean;
+  onClose: () => void;
+  tenantId: string;
+  currentUserName: string;
+  currentUserAvatar?: string | null;
+}
+
+/**
+ * SlidePanel wrapper for TaskDetailInline — used on mobile.
+ */
+export function TaskDetailPanel({
+  task,
+  open,
+  onClose,
+  tenantId,
+  currentUserName,
+  currentUserAvatar,
+}: TaskDetailPanelProps) {
+  if (!task) return null;
+
+  return (
+    <SlidePanel open={open} onClose={onClose} width="max-w-md">
+      <TaskDetailInline
+        task={task}
+        onClose={onClose}
+        tenantId={tenantId}
+        currentUserName={currentUserName}
+        currentUserAvatar={currentUserAvatar}
+      />
     </SlidePanel>
   );
 }

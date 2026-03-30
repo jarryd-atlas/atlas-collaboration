@@ -196,6 +196,7 @@ export function QuickTaskDialog({ open, onClose }: QuickTaskDialogProps) {
               assignableSites={assignableSites}
               assignableCustomers={allCustomers}
               placeholder="Type a task... Use @ for company, person, or site"
+              autoFocus
               onTaskCreated={handleClose}
               onCustomerChange={handleCustomerChange}
               onSiteChange={handleSiteChange}

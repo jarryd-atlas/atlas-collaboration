@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { PriorityBadge } from "../ui/badge";
+import { useState, useMemo, useEffect } from "react";
+import { PriorityBadge, SeverityBadge } from "../ui/badge";
 import { Avatar } from "../ui/avatar";
 import { InlineTaskInput, type AssignableUser, type AssignableSite } from "./inline-task-input";
 import { TaskStatusDropdown } from "./task-status-dropdown";
 import { InlineEditableTitle } from "./inline-editable-title";
 import { TaskDetailPanel } from "./task-detail-panel";
-import { Calendar, ListTodo, X } from "lucide-react";
+import { Calendar, ListTodo, X, AlertTriangle } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface Task {
@@ -22,6 +22,15 @@ interface Task {
   milestone?: { id: string; name: string; slug: string } | null;
 }
 
+interface FlaggedIssue {
+  id: string;
+  summary: string;
+  severity: string;
+  status: string;
+  site?: { name: string } | null;
+  flagged_by_profile?: { full_name: string } | null;
+}
+
 interface CustomerTasksSectionProps {
   tasks: Task[];
   customerId: string;
@@ -30,6 +39,14 @@ interface CustomerTasksSectionProps {
   assignableSites?: AssignableSite[];
   currentUserName: string;
   currentUserAvatar?: string | null;
+  /** Controlled site filter from parent (e.g., site selection panel) */
+  controlledSiteId?: string | null;
+  /** Callback when a task is selected — if provided, parent handles detail rendering */
+  onTaskSelect?: (task: Task | null) => void;
+  /** Currently selected task ID — for highlighting */
+  selectedTaskId?: string | null;
+  /** Flagged issues to show as an "Issues" filter */
+  issues?: FlaggedIssue[];
 }
 
 type FilterType = "all" | "site" | "status";
@@ -42,13 +59,27 @@ export function CustomerTasksSection({
   assignableSites = [],
   currentUserName,
   currentUserAvatar,
+  controlledSiteId,
+  onTaskSelect,
+  selectedTaskId,
+  issues = [],
 }: CustomerTasksSectionProps) {
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const isControlled = !!onTaskSelect;
+  const [internalSelectedTask, setInternalSelectedTask] = useState<Task | null>(null);
   const [activeSiteFilter, setActiveSiteFilter] = useState<string | null>(null);
   const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
+  const [showIssues, setShowIssues] = useState(false);
+
+  // Sync site filter with controlled prop
+  useEffect(() => {
+    if (controlledSiteId !== undefined) {
+      setActiveSiteFilter(controlledSiteId);
+    }
+  }, [controlledSiteId]);
 
   const openTasks = tasks.filter((t) => t.status !== "done");
   const doneTasks = tasks.filter((t) => t.status === "done");
+  const openIssues = issues.filter((i) => i.status === "open");
 
   // Build unique site list from tasks for filter chips
   const taskSites = useMemo(() => {
@@ -75,6 +106,8 @@ export function CustomerTasksSection({
 
   // Filter tasks
   const filteredTasks = useMemo(() => {
+    if (showIssues) return []; // When showing issues, hide tasks
+
     let result = openTasks;
     if (activeSiteFilter === "__company__") {
       result = result.filter((t) => !t.site);
@@ -85,15 +118,39 @@ export function CustomerTasksSection({
       result = result.filter((t) => t.status === activeStatusFilter);
     }
     return result;
-  }, [openTasks, activeSiteFilter, activeStatusFilter]);
+  }, [openTasks, activeSiteFilter, activeStatusFilter, showIssues]);
 
-  const hasFilters = activeSiteFilter || activeStatusFilter;
+  // Filter issues by site when a site filter is active
+  const filteredIssues = useMemo(() => {
+    if (!showIssues) return [];
+    // Issues don't have site IDs in the same way, show all open issues
+    return openIssues;
+  }, [showIssues, openIssues]);
+
+  const hasFilters = activeSiteFilter || activeStatusFilter || showIssues;
 
   const statusLabels: Record<string, string> = {
     todo: "To Do",
     in_progress: "In Progress",
     in_review: "In Review",
   };
+
+  function handleTaskClick(task: Task) {
+    if (isControlled) {
+      onTaskSelect(selectedTaskId === task.id ? null : task);
+    } else {
+      setInternalSelectedTask(task);
+    }
+  }
+
+  function clearAllFilters() {
+    // Only clear internal site filter if not controlled
+    if (controlledSiteId === undefined) {
+      setActiveSiteFilter(null);
+    }
+    setActiveStatusFilter(null);
+    setShowIssues(false);
+  }
 
   return (
     <div className="space-y-3">
@@ -118,49 +175,55 @@ export function CustomerTasksSection({
       />
 
       {/* Filter chips */}
-      {openTasks.length > 0 && (taskSites.length > 0 || Object.keys(statusCounts).length > 1) && (
+      {(openTasks.length > 0 || openIssues.length > 0) && (
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* "All" chip */}
           <FilterChip
             label="All"
             count={openTasks.length}
             active={!hasFilters}
-            onClick={() => {
-              setActiveSiteFilter(null);
-              setActiveStatusFilter(null);
-            }}
+            onClick={clearAllFilters}
           />
 
-          {/* Divider */}
-          {taskSites.length > 0 && (
-            <div className="w-px h-4 bg-gray-200 mx-0.5" />
-          )}
+          {/* Site filter chips — hidden when controlled by parent */}
+          {controlledSiteId === undefined && taskSites.length > 0 && (
+            <>
+              {/* Divider */}
+              <div className="w-px h-4 bg-gray-200 mx-0.5" />
 
-          {/* Company-level chip */}
-          {companyLevelCount > 0 && (
-            <FilterChip
-              label="Company"
-              count={companyLevelCount}
-              active={activeSiteFilter === "__company__"}
-              onClick={() => setActiveSiteFilter(activeSiteFilter === "__company__" ? null : "__company__")}
-              color="gray"
-            />
-          )}
+              {/* Company-level chip */}
+              {companyLevelCount > 0 && (
+                <FilterChip
+                  label="Company"
+                  count={companyLevelCount}
+                  active={activeSiteFilter === "__company__"}
+                  onClick={() => {
+                    setShowIssues(false);
+                    setActiveSiteFilter(activeSiteFilter === "__company__" ? null : "__company__");
+                  }}
+                  color="gray"
+                />
+              )}
 
-          {/* Site chips */}
-          {taskSites.map((site) => {
-            const count = openTasks.filter((t) => t.site?.id === site.id).length;
-            return (
-              <FilterChip
-                key={site.id}
-                label={site.name}
-                count={count}
-                active={activeSiteFilter === site.id}
-                onClick={() => setActiveSiteFilter(activeSiteFilter === site.id ? null : site.id)}
-                color="emerald"
-              />
-            );
-          })}
+              {/* Site chips */}
+              {taskSites.map((site) => {
+                const count = openTasks.filter((t) => t.site?.id === site.id).length;
+                return (
+                  <FilterChip
+                    key={site.id}
+                    label={site.name}
+                    count={count}
+                    active={activeSiteFilter === site.id}
+                    onClick={() => {
+                      setShowIssues(false);
+                      setActiveSiteFilter(activeSiteFilter === site.id ? null : site.id);
+                    }}
+                    color="emerald"
+                  />
+                );
+              })}
+            </>
+          )}
 
           {/* Status divider */}
           {Object.keys(statusCounts).length > 1 && (
@@ -174,19 +237,38 @@ export function CustomerTasksSection({
               label={statusLabels[status] ?? status}
               count={count}
               active={activeStatusFilter === status}
-              onClick={() => setActiveStatusFilter(activeStatusFilter === status ? null : status)}
+              onClick={() => {
+                setShowIssues(false);
+                setActiveStatusFilter(activeStatusFilter === status ? null : status);
+              }}
               color="blue"
             />
           ))}
+
+          {/* Issues chip */}
+          {openIssues.length > 0 && (
+            <>
+              <div className="w-px h-4 bg-gray-200 mx-0.5" />
+              <FilterChip
+                label="Issues"
+                count={openIssues.length}
+                active={showIssues}
+                onClick={() => {
+                  setShowIssues(!showIssues);
+                  if (!showIssues) {
+                    setActiveStatusFilter(null);
+                  }
+                }}
+                color="red"
+              />
+            </>
+          )}
 
           {/* Clear filters */}
           {hasFilters && (
             <button
               type="button"
-              onClick={() => {
-                setActiveSiteFilter(null);
-                setActiveStatusFilter(null);
-              }}
+              onClick={clearAllFilters}
               className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-0.5 ml-1"
             >
               <X className="h-3 w-3" />
@@ -197,13 +279,16 @@ export function CustomerTasksSection({
       )}
 
       {/* Task list */}
-      {filteredTasks.length > 0 && (
+      {filteredTasks.length > 0 && !showIssues && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-card divide-y divide-gray-50">
           {filteredTasks.map((task) => (
             <div
               key={task.id}
-              className="px-4 sm:px-6 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
-              onClick={() => setSelectedTask(task)}
+              className={cn(
+                "px-4 sm:px-6 py-3 hover:bg-gray-50 transition-colors cursor-pointer",
+                selectedTaskId === task.id && "bg-blue-50 border-l-2 border-l-blue-500",
+              )}
+              onClick={() => handleTaskClick(task)}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -246,16 +331,37 @@ export function CustomerTasksSection({
         </div>
       )}
 
+      {/* Issues list (when Issues filter is active) */}
+      {showIssues && filteredIssues.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-card divide-y divide-gray-50">
+          {filteredIssues.map((issue) => (
+            <div key={issue.id} className="px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-900">{issue.summary}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      {issue.site?.name ?? "Company"} &middot; {issue.flagged_by_profile?.full_name ?? ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <SeverityBadge severity={issue.severity} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Empty filtered state */}
-      {filteredTasks.length === 0 && openTasks.length > 0 && hasFilters && (
+      {filteredTasks.length === 0 && !showIssues && openTasks.length > 0 && hasFilters && (
         <p className="text-xs text-gray-400 pl-1">
           No tasks match the current filter.{" "}
           <button
             type="button"
-            onClick={() => {
-              setActiveSiteFilter(null);
-              setActiveStatusFilter(null);
-            }}
+            onClick={clearAllFilters}
             className="text-gray-500 underline"
           >
             Clear filters
@@ -264,28 +370,30 @@ export function CustomerTasksSection({
       )}
 
       {/* Done tasks (collapsed count) */}
-      {doneTasks.length > 0 && (
+      {doneTasks.length > 0 && !showIssues && (
         <p className="text-xs text-gray-400 pl-1">
           {doneTasks.length} completed task{doneTasks.length !== 1 ? "s" : ""}
         </p>
       )}
 
       {/* Empty state */}
-      {tasks.length === 0 && (
+      {tasks.length === 0 && !showIssues && (
         <p className="text-xs text-gray-400 pl-1">
           No tasks yet. Type above to create one.
         </p>
       )}
 
-      {/* Task detail side panel */}
-      <TaskDetailPanel
-        task={selectedTask}
-        open={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
-        tenantId={tenantId}
-        currentUserName={currentUserName}
-        currentUserAvatar={currentUserAvatar}
-      />
+      {/* Task detail side panel — only rendered in uncontrolled mode (mobile/fallback) */}
+      {!isControlled && (
+        <TaskDetailPanel
+          task={internalSelectedTask}
+          open={!!internalSelectedTask}
+          onClose={() => setInternalSelectedTask(null)}
+          tenantId={tenantId}
+          currentUserName={currentUserName}
+          currentUserAvatar={currentUserAvatar}
+        />
+      )}
     </div>
   );
 }
@@ -301,7 +409,7 @@ function FilterChip({
   count: number;
   active: boolean;
   onClick: () => void;
-  color?: "gray" | "emerald" | "blue";
+  color?: "gray" | "emerald" | "blue" | "red";
 }) {
   const colorClasses = {
     gray: active
@@ -313,6 +421,9 @@ function FilterChip({
     blue: active
       ? "bg-blue-600 text-white"
       : "bg-blue-50 text-blue-700 hover:bg-blue-100",
+    red: active
+      ? "bg-red-600 text-white"
+      : "bg-red-50 text-red-700 hover:bg-red-100",
   };
 
   return (

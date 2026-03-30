@@ -5,6 +5,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Link2, Unlink, Search, ExternalLink, ChevronDown, Pencil, Check, X, Loader2 } from "lucide-react";
 import { linkDealToSite, unlinkDealFromSite } from "../../lib/actions/hubspot";
+import { getDealType } from "../../lib/hubspot/constants";
 
 interface DealSearchResult {
   id: string;
@@ -24,7 +25,7 @@ interface FieldMapping {
 
 interface SiteDealLinkProps {
   siteId: string;
-  existingLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean }[];
+  existingLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean; deal_type?: string | null }[];
   portalId?: string;
   fieldMappings?: FieldMapping[];
 }
@@ -42,6 +43,7 @@ const DEAL_FIELDS: { key: string; label: string; format?: "currency" | "percent"
   { key: "facility_type", label: "Facility Type" },
   { key: "site_equivalent", label: "Site Equivalent" },
   { key: "energy_savings_status", label: "EVA Status" },
+  { key: "hs_next_step", label: "Next Step" },
   { key: "closedate", label: "Close Date", format: "date" },
   { key: "service_start_date", label: "Service Start", format: "date" },
 ];
@@ -122,7 +124,8 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
 
   async function handleLink(deal: DealSearchResult) {
     setLinking(true);
-    await linkDealToSite(siteId, deal.id, deal.name ?? "");
+    const dealType = getDealType(deal.stage);
+    await linkDealToSite(siteId, deal.id, deal.name ?? "", dealType);
     setLinking(false);
     setShowSearch(false);
     setSearchQuery("");
@@ -158,10 +161,21 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
   return (
     <div className="space-y-2">
       {/* Existing linked deals */}
-      {existingLinks.map((link) => (
+      {existingLinks.map((link) => {
+        const isRenewal = link.deal_type === "renewal";
+        const pillColors = isRenewal
+          ? "bg-blue-50 text-blue-700 border-blue-200"
+          : "bg-orange-50 text-orange-700 border-orange-200";
+        const iconColors = isRenewal
+          ? "text-blue-400 hover:text-blue-600"
+          : "text-orange-400 hover:text-orange-600";
+        const unlinkColors = isRenewal
+          ? "text-blue-400 hover:text-red-500"
+          : "text-orange-400 hover:text-red-500";
+        return (
         <div key={link.id}>
           {/* Deal pill */}
-          <div className="inline-flex items-center gap-1.5 bg-orange-50 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full border border-orange-200">
+          <div className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${pillColors}`}>
             <Link2 className="h-3 w-3" />
             <button
               onClick={() => toggleDeal(link.hubspot_deal_id)}
@@ -175,7 +189,7 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
                 href={`https://app.hubspot.com/contacts/${portalId}/deal/${link.hubspot_deal_id}`}
                 target="_blank"
                 rel="noopener"
-                className="text-orange-400 hover:text-orange-600"
+                className={iconColors}
                 title="View in HubSpot"
               >
                 <ExternalLink className="h-2.5 w-2.5" />
@@ -184,7 +198,7 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
             <button
               onClick={() => handleUnlink(link.id)}
               disabled={unlinking === link.id}
-              className="ml-1 text-orange-400 hover:text-red-500"
+              className={`ml-1 ${unlinkColors}`}
               title="Unlink deal"
             >
               <Unlink className="h-3 w-3" />
@@ -223,7 +237,8 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {/* Link new deal */}
       {showSearch ? (
@@ -315,7 +330,7 @@ function DealFieldRow({
   }
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 group hover:bg-gray-50/50">
+    <div className={`flex items-center justify-between px-3 py-2 group ${editable ? "bg-amber-50/60 hover:bg-amber-50" : "hover:bg-gray-50/50"}`}>
       <span className="text-xs text-gray-500 w-36 flex-shrink-0">{label}</span>
       {editing ? (
         <div className="flex items-center gap-1 flex-1 justify-end">

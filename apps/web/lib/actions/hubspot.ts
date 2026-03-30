@@ -72,7 +72,7 @@ export async function disconnectHubSpot() {
 
 // ─── Deal Linking ──────────────────────────────────────────
 
-export async function linkDealToSite(siteId: string, dealId: string, dealName: string) {
+export async function linkDealToSite(siteId: string, dealId: string, dealName: string, dealType?: string) {
   try {
     const { claims } = await requireSession();
     if (claims.appRole !== "super_admin" && claims.appRole !== "admin") {
@@ -85,6 +85,7 @@ export async function linkDealToSite(siteId: string, dealId: string, dealName: s
       site_id: siteId,
       hubspot_deal_id: dealId,
       deal_name: dealName,
+      deal_type: dealType ?? null,
       linked_by: claims.profileId ?? null,
     });
 

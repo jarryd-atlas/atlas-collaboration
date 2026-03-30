@@ -48,6 +48,8 @@ export function InterviewSession({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micLevelFrameRef = useRef<number>(0);
   const playbackQueueRef = useRef<Int16Array[]>([]);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const pendingAgentTextRef = useRef<string[]>([]);
   const keepAliveRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interviewIdRef = useRef<string | null>(null);
@@ -116,6 +118,12 @@ export function InterviewSession({
     const startTime = Math.max(now, nextPlayTimeRef.current);
     source.start(startTime);
     nextPlayTimeRef.current = startTime + buffer.duration;
+
+    // Track active sources for barge-in cancellation
+    activeSourcesRef.current.push(source);
+    source.onended = () => {
+      activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+    };
   }, []);
 
   const processPlaybackQueue = useCallback(() => {
@@ -156,17 +164,23 @@ export function InterviewSession({
           const role = msg.role === "assistant" ? "agent" : "user";
           const text = msg.content ?? "";
           if (!text) break;
-          setState((prev) => {
-            const last = prev.transcript[prev.transcript.length - 1];
-            if (last && last.role === role && last.text === text) return prev;
-            return {
-              ...prev,
-              transcript: [
-                ...prev.transcript,
-                { role, text, timestamp: Date.now() } as TranscriptEntry,
-              ],
-            };
-          });
+
+          if (role === "agent") {
+            // Buffer agent text — only add to transcript when agent finishes speaking
+            pendingAgentTextRef.current.push(text);
+          } else {
+            setState((prev) => {
+              const last = prev.transcript[prev.transcript.length - 1];
+              if (last && last.role === role && last.text === text) return prev;
+              return {
+                ...prev,
+                transcript: [
+                  ...prev.transcript,
+                  { role, text, timestamp: Date.now() } as TranscriptEntry,
+                ],
+              };
+            });
+          }
           break;
         }
 
@@ -178,14 +192,57 @@ export function InterviewSession({
           setState((prev) => ({ ...prev, agentState: "speaking" }));
           break;
 
-        case "AgentAudioDone":
-          setState((prev) => ({ ...prev, agentState: "listening" }));
+        case "AgentAudioDone": {
+          // Flush buffered agent text to transcript as a single entry
+          const agentTexts = pendingAgentTextRef.current;
+          pendingAgentTextRef.current = [];
+          setState((prev) => {
+            if (agentTexts.length === 0) return { ...prev, agentState: "listening" };
+            // Deduplicate and join into one message
+            const seen = new Set<string>();
+            const unique = agentTexts.filter((t) => {
+              if (seen.has(t)) return false;
+              seen.add(t);
+              return true;
+            });
+            return {
+              ...prev,
+              agentState: "listening",
+              transcript: [
+                ...prev.transcript,
+                { role: "agent" as const, text: unique.join(" "), timestamp: Date.now() } as TranscriptEntry,
+              ],
+            };
+          });
           break;
+        }
 
-        case "UserStartedSpeaking":
+        case "UserStartedSpeaking": {
+          // Barge-in: immediately stop all agent audio
           playbackQueueRef.current = [];
-          setState((prev) => ({ ...prev, agentState: "listening" }));
+          activeSourcesRef.current.forEach((s) => {
+            try { s.stop(); } catch { /* already stopped */ }
+          });
+          activeSourcesRef.current = [];
+          nextPlayTimeRef.current = 0;
+          // Flush any buffered agent text before switching to listening
+          const bargeTexts = pendingAgentTextRef.current;
+          pendingAgentTextRef.current = [];
+          setState((prev) => {
+            const newTranscript = [...prev.transcript];
+            if (bargeTexts.length > 0) {
+              const seen = new Set<string>();
+              const unique = bargeTexts.filter((t) => {
+                if (seen.has(t)) return false;
+                seen.add(t);
+                return true;
+              });
+              newTranscript.push({ role: "agent" as const, text: unique.join(" "), timestamp: Date.now() } as TranscriptEntry);
+            }
+            return { ...prev, agentState: "listening", transcript: newTranscript };
+          });
           break;
+        }
 
         case "Error":
         case "Warning": {
@@ -371,14 +428,33 @@ export function InterviewSession({
     }
   }, []);
 
-  // ─── Latest agent text for caption ──────────────────
+  // ─── Latest agent text for live caption ──────────────
+  // Show live buffered text while agent speaks, or last transcript entry when done
+  const [liveCaption, setLiveCaption] = useState("");
 
-  const latestAgentText = useMemo(() => {
-    for (let i = state.transcript.length - 1; i >= 0; i--) {
-      if (state.transcript[i]!.role === "agent") return state.transcript[i]!.text;
+  // Update live caption from pending buffer
+  useEffect(() => {
+    if (state.agentState === "speaking" && pendingAgentTextRef.current.length > 0) {
+      const interval = setInterval(() => {
+        if (pendingAgentTextRef.current.length > 0) {
+          const seen = new Set<string>();
+          const unique = pendingAgentTextRef.current.filter((t) => {
+            if (seen.has(t)) return false;
+            seen.add(t);
+            return true;
+          });
+          setLiveCaption(unique.join(" "));
+        }
+      }, 200);
+      return () => clearInterval(interval);
+    } else if (state.agentState !== "speaking") {
+      // When agent stops, show the last transcript entry briefly
+      const last = state.transcript[state.transcript.length - 1];
+      if (last?.role === "agent") setLiveCaption(last.text);
     }
-    return "";
-  }, [state.transcript]);
+  }, [state.agentState, state.transcript]);
+
+  const latestAgentText = liveCaption;
 
   // ─── Cleanup ───────────────────────────────────────────
 

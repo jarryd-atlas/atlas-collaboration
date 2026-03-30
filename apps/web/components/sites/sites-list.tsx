@@ -1,15 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
+import { useState, useMemo, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { PipelineStageBadge } from "../ui/badge";
 import { ProgressBar } from "../ui/progress-bar";
 import { EmptyState } from "../ui/empty-state";
-import { MapPin, ArrowRight, Search, X } from "lucide-react";
+import { updateSiteNextStep } from "../../lib/actions";
+import { MapPin, ArrowRight, Search, X, ExternalLink } from "lucide-react";
+import { InlineDealLinker } from "../hubspot/inline-deal-linker";
+import { cn } from "../../lib/utils";
 
 interface Site {
+  id?: string;
   slug: string;
   name: string;
+  address: string | null;
   city: string | null;
   state: string | null;
   pipeline_stage: string;
@@ -18,6 +23,7 @@ interface Site {
   completed_task_count?: number | null;
   dq_reason?: string | null;
   dq_reeval_date?: string | null;
+  next_step?: string | null;
 }
 
 interface SitesListProps {
@@ -25,6 +31,18 @@ interface SitesListProps {
   customerSlug: string;
   /** Show search and filter controls */
   showSearch?: boolean;
+  /** Allow editing next step (internal users only) */
+  editable?: boolean;
+  /** HubSpot deal links for all sites */
+  dealLinks?: { site_id: string; id: string; hubspot_deal_id: string; deal_name: string; deal_type: string | null }[];
+  /** Whether HubSpot integration is enabled */
+  hubspotEnabled?: boolean;
+  /** Compact mode — hides stats columns for narrow panels */
+  compact?: boolean;
+  /** Currently selected site ID (for filtering tasks) */
+  selectedSiteId?: string | null;
+  /** Callback when a site is selected (selection mode) */
+  onSiteSelect?: (siteId: string | null) => void;
 }
 
 /** All possible pipeline stages with display labels, in pipeline order */
@@ -42,9 +60,58 @@ const STAGE_LABELS: Record<string, string> = {
 /** Pipeline order for sorting filter chips */
 const STAGE_ORDER = ["prospect", "evaluation", "qualified", "contracted", "deployment", "active", "paused", "disqualified"];
 
-export function SitesList({ sites, customerSlug, showSearch = true }: SitesListProps) {
+function NextStepInput({ siteId, initialValue }: { siteId: string; initialValue: string }) {
+  const [value, setValue] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+  const lastSavedRef = useRef(initialValue);
+
+  const save = useCallback(async () => {
+    const trimmed = value.trim();
+    if (trimmed === lastSavedRef.current) return;
+    setSaving(true);
+    const result = await updateSiteNextStep(siteId, trimmed);
+    if (!("error" in result)) {
+      lastSavedRef.current = trimmed;
+    }
+    setSaving(false);
+  }, [siteId, value]);
+
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        }
+      }}
+      onClick={(e) => e.preventDefault()}
+      placeholder="Add next step..."
+      className={`w-full bg-transparent text-xs text-gray-600 placeholder:text-gray-300 border-0 border-b border-transparent hover:border-gray-200 focus:border-brand-green focus:ring-0 focus:outline-none px-0 py-0.5 transition-colors ${
+        saving ? "opacity-50" : ""
+      }`}
+    />
+  );
+}
+
+export function SitesList({
+  sites,
+  customerSlug,
+  showSearch = true,
+  editable = false,
+  dealLinks,
+  hubspotEnabled,
+  compact = false,
+  selectedSiteId,
+  onSiteSelect,
+}: SitesListProps) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
+
+  const isSelectionMode = !!onSiteSelect;
 
   // Dynamically compute which stages exist in the data, in pipeline order
   const stageFilters = useMemo(() => {
@@ -85,13 +152,33 @@ export function SitesList({ sites, customerSlug, showSearch = true }: SitesListP
     return result;
   }, [sites, search, stageFilter]);
 
+  function handleRowClick(site: Site, e: React.MouseEvent) {
+    // Don't navigate/select if clicking on an input
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
+
+    if (isSelectionMode) {
+      // Toggle selection
+      onSiteSelect(selectedSiteId === site.id ? null : site.id ?? null);
+    } else {
+      router.push(`/customers/${customerSlug}/sites/${site.slug}`);
+    }
+  }
+
+  function handleNavigateClick(site: Site, e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(`/customers/${customerSlug}/sites/${site.slug}`);
+  }
+
   return (
     <div className="space-y-3">
       {/* Search + Filter */}
       {showSearch && sites.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className={cn(
+          "flex items-start gap-3",
+          compact ? "flex-col" : "flex-col sm:flex-row sm:items-center"
+        )}>
           {/* Search input */}
-          <div className="relative flex-1 w-full sm:max-w-xs">
+          <div className={cn("relative w-full", compact ? "" : "flex-1 sm:max-w-xs")}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             <input
               type="text"
@@ -176,34 +263,65 @@ export function SitesList({ sites, customerSlug, showSearch = true }: SitesListP
                 ? Math.round(((site.completed_task_count ?? 0) / (site.task_count ?? 1)) * 100)
                 : 0;
             const isDq = site.pipeline_stage === "disqualified";
+            const isSelected = isSelectionMode && selectedSiteId === site.id;
 
             return (
-              <Link
+              <div
                 key={site.slug}
-                href={`/customers/${customerSlug}/sites/${site.slug}`}
-                className={`group flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors ${
-                  isDq ? "opacity-50" : ""
-                }`}
+                onClick={(e) => handleRowClick(site, e)}
+                className={cn(
+                  "group flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer",
+                  compact ? "px-3 py-2.5" : "px-6 py-4",
+                  isDq && "opacity-50",
+                  isSelected && "bg-green-50 ring-1 ring-inset ring-brand-green/40",
+                )}
               >
                 {/* Site info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-gray-900 group-hover:text-brand-dark truncate">
+                    <h3 className={cn(
+                      "text-sm font-semibold text-gray-900 group-hover:text-brand-dark truncate",
+                      isSelected && "text-brand-dark",
+                    )}>
                       {site.name}
                     </h3>
                     <PipelineStageBadge stage={site.pipeline_stage} />
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                     <MapPin className="h-3 w-3 shrink-0" />
-                    {site.city}, {site.state}
+                    <span className="truncate">
+                      {site.address || [site.city, site.state].filter(Boolean).join(", ")}
+                    </span>
                     {isDq && site.dq_reason && (
                       <span className="ml-2 text-gray-400">&middot; {site.dq_reason}</span>
                     )}
                   </p>
+                  {hubspotEnabled && editable && site.id && !compact && (
+                    <InlineDealLinker
+                      siteId={site.id}
+                      dealLinks={(dealLinks ?? []).filter(dl => dl.site_id === site.id)}
+                    />
+                  )}
                 </div>
 
-                {/* Stats */}
-                {!isDq && (
+                {/* Next Step — editable inline (hidden in compact mode) */}
+                {editable && !isDq && site.id && !compact && (
+                  <div className="hidden sm:block shrink-0 w-48">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Next Step</p>
+                    <NextStepInput siteId={site.id} initialValue={site.next_step ?? ""} />
+                  </div>
+                )}
+
+                {/* Show next step as read-only for non-editable (hidden in compact mode) */}
+                {!editable && !isDq && site.next_step && !compact && (
+                  <div className="hidden sm:block shrink-0 w-48">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Next Step</p>
+                    <p className="text-xs text-gray-600 truncate">{site.next_step}</p>
+                  </div>
+                )}
+
+                {/* Stats — hidden in compact mode */}
+                {!isDq && !compact && (
                   <>
                     <div className="hidden sm:block text-center shrink-0 w-20">
                       <p className="text-sm font-medium text-gray-900">{site.milestone_count ?? 0}</p>
@@ -222,6 +340,15 @@ export function SitesList({ sites, customerSlug, showSearch = true }: SitesListP
                   </>
                 )}
 
+                {/* Compact mode: show task count inline */}
+                {!isDq && compact && (
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-gray-500">
+                      {site.completed_task_count ?? 0}/{site.task_count ?? 0}
+                    </p>
+                  </div>
+                )}
+
                 {/* DQ re-eval */}
                 {isDq && site.dq_reeval_date && (
                   <div className="hidden sm:block text-right shrink-0">
@@ -230,8 +357,19 @@ export function SitesList({ sites, customerSlug, showSearch = true }: SitesListP
                   </div>
                 )}
 
-                <ArrowRight className="h-4 w-4 text-gray-300 shrink-0 group-hover:text-gray-500 transition-colors" />
-              </Link>
+                {/* Navigate icon — in selection mode, separate from row click */}
+                {isSelectionMode ? (
+                  <button
+                    onClick={(e) => handleNavigateClick(site, e)}
+                    className="p-1 rounded hover:bg-gray-200 text-gray-300 hover:text-gray-600 transition-colors shrink-0"
+                    title="Open site detail"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <ArrowRight className="h-4 w-4 text-gray-300 shrink-0 group-hover:text-gray-500 transition-colors" />
+                )}
+              </div>
             );
           })}
         </div>

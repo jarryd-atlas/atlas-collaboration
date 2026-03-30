@@ -271,10 +271,13 @@ export function SiteDocumentsManager({
       let pageImages: string[] | undefined;
       let processedMimeType: string | undefined;
 
+      // Download via server proxy to avoid CORS issues with GCS signed URLs
+      const fileProxyUrl = `/api/files/${attachmentId}`;
+
       if (isXlsx) {
         // Spreadsheets: parse client-side (heavy CPU, but browser has no limits)
         setAnalyzing({ id: attachmentId, status: "Downloading file..." });
-        const fileRes = await fetch(att.url);
+        const fileRes = await fetch(fileProxyUrl);
         if (!fileRes.ok) throw new Error("Failed to download file from storage");
         const fileBuffer = await fileRes.arrayBuffer();
 
@@ -284,7 +287,7 @@ export function SiteDocumentsManager({
       } else if (mime === "application/pdf") {
         // PDFs: render pages as images in browser using pdf.js
         setAnalyzing({ id: attachmentId, status: "Downloading PDF..." });
-        const fileRes = await fetch(att.url);
+        const fileRes = await fetch(fileProxyUrl);
         if (!fileRes.ok) throw new Error("Failed to download file from storage");
         const fileBuffer = await fileRes.arrayBuffer();
 
@@ -296,7 +299,7 @@ export function SiteDocumentsManager({
       } else if (mime.startsWith("image/")) {
         // Single images: download and base64 encode
         setAnalyzing({ id: attachmentId, status: "Downloading image..." });
-        const fileRes = await fetch(att.url);
+        const fileRes = await fetch(fileProxyUrl);
         if (!fileRes.ok) throw new Error("Failed to download file from storage");
         const buf = await fileRes.arrayBuffer();
         const bytes = new Uint8Array(buf);
@@ -307,7 +310,7 @@ export function SiteDocumentsManager({
       } else if (!isBinary) {
         // Text files: read client-side
         setAnalyzing({ id: attachmentId, status: "Downloading file..." });
-        const fileRes = await fetch(att.url);
+        const fileRes = await fetch(fileProxyUrl);
         if (!fileRes.ok) throw new Error("Failed to download file from storage");
         content = await fileRes.text();
         processedMimeType = mime || "text/plain";
@@ -457,9 +460,9 @@ export function SiteDocumentsManager({
   ): Promise<string[]> {
     const pdfjsLib = await import("pdfjs-dist");
 
-    // Set worker source — use CDN to avoid bundling issues
+    // Set worker source — use jsdelivr which tracks all npm versions
     const version = pdfjsLib.version;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
     const totalPages = pdf.numPages;

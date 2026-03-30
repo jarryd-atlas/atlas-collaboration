@@ -7,12 +7,14 @@ import { SITE_ASSESSMENT_TABS, SITE_ASSESSMENT_TAB_LABELS, type SiteAssessmentTa
 interface SiteTabLayoutProps {
   children: Record<SiteAssessmentTab, ReactNode>;
   defaultTab?: SiteAssessmentTab;
+  visibleTabs?: readonly SiteAssessmentTab[];
 }
 
-export function SiteTabLayout({ children, defaultTab = "overview" }: SiteTabLayoutProps) {
+export function SiteTabLayout({ children, defaultTab = "overview", visibleTabs }: SiteTabLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const tabs = visibleTabs ?? SITE_ASSESSMENT_TABS;
   const activeTab = (searchParams.get("tab") as SiteAssessmentTab) || defaultTab;
 
   const setTab = useCallback(
@@ -34,7 +36,7 @@ export function SiteTabLayout({ children, defaultTab = "overview" }: SiteTabLayo
       {/* Tab bar */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex gap-6" aria-label="Site assessment tabs">
-          {SITE_ASSESSMENT_TABS.map((tab) => {
+          {tabs.map((tab) => {
             const isActive = tab === activeTab;
             return (
               <button

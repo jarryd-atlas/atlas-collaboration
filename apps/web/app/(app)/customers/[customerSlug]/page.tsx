@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getCustomerBySlug,
@@ -11,14 +10,8 @@ import {
   getLatestCommentsForTasks,
 } from "../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../lib/data/current-user";
-import { getSession } from "../../../../lib/supabase/server";
-import { SeverityBadge, StatusBadge, CompanyTypeBadge } from "../../../../components/ui/badge";
-import { CustomerActions, AddSiteButton } from "../../../../components/forms/customer-actions";
-import { SetPageContext } from "../../../../components/layout/page-context";
-import { CustomerPortalLink } from "../../../../components/layout/customer-portal-link";
-import { SitesList } from "../../../../components/sites/sites-list";
-import { CustomerTeamManager } from "../../../../components/forms/customer-team-manager";
-import { CustomerTasksSection } from "../../../../components/tasks/customer-tasks-section";
+import { getSession, createSupabaseAdmin } from "../../../../lib/supabase/server";
+import { CustomerDetailLayout } from "../../../../components/customers/customer-detail-layout";
 
 interface CustomerPageProps {
   params: Promise<{ customerSlug: string }>;
@@ -78,6 +71,28 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
     // Show empty state if queries fail
   }
 
+  // Fetch HubSpot deal links for all sites
+  const siteIds = sites.map((s: any) => s.id).filter(Boolean);
+  let dealLinks: any[] = [];
+  let hubspotEnabled = false;
+  if (isCKInternal && siteIds.length > 0) {
+    try {
+      const supabaseAdmin = createSupabaseAdmin();
+      const [linksRes, configRes] = await Promise.all([
+        (supabaseAdmin as any).from("hubspot_site_links")
+          .select("id, site_id, hubspot_deal_id, deal_name, deal_type")
+          .in("site_id", siteIds),
+        (supabaseAdmin as any).from("hubspot_config")
+          .select("id")
+          .limit(1),
+      ]);
+      dealLinks = linksRes.data ?? [];
+      hubspotEnabled = (configRes.data?.length ?? 0) > 0;
+    } catch {
+      // non-critical
+    }
+  }
+
   // Fetch latest comments for tasks
   const taskIds = customerTasks.map((t: any) => t.id);
   let latestComments: Record<string, { body: string; authorName: string; createdAt: string }> = {};
@@ -95,116 +110,27 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
   const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
   const currentUserAvatar = currentUser?.avatarUrl ?? null;
 
-  const activeSites = sites.filter((s) => s.pipeline_stage === "active");
-  const deployingSites = sites.filter((s) => s.pipeline_stage === "deployment");
-  const evaluatingSites = sites.filter(
-    (s) => s.pipeline_stage === "evaluation" || s.pipeline_stage === "qualified" || s.pipeline_stage === "prospect",
-  );
-
   return (
-    <div className="space-y-8">
-      <SetPageContext customerId={customer.id} customerName={customer.name} tenantId={customer.tenant_id} />
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-400 mb-1">
-            <Link href="/customers" className="hover:text-gray-600">Companies</Link>
-          </p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
-            <CompanyTypeBadge type={customer.company_type ?? "customer"} />
-          </div>
-          {customer.domain && (
-            <p className="text-gray-500 mt-1">{customer.domain}</p>
-          )}
-        </div>
-        <CustomerPortalLink
-          currentPath={`/customers/${customerSlug}`}
-          customerSlug={customerSlug}
-        />
-      </div>
-
-      {/* CK Team — directly below header */}
-      {isCKInternal && (
-        <CustomerTeamManager
-          customerId={customer.id}
-          teamMembers={ckTeam}
-          internalProfiles={allInternalProfiles}
-        />
-      )}
-
-      {/* Quick actions */}
-      <CustomerActions customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} sites={sites} />
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <MiniStat label="Active Sites" value={activeSites.length} />
-        <MiniStat label="In Evaluation" value={evaluatingSites.length} />
-        <MiniStat label="Deploying" value={deployingSites.length} />
-        <MiniStat label="Open Tasks" value={customerTasks.filter((t: any) => t.status !== "done").length} />
-        <MiniStat label="Open Issues" value={issues.filter((i) => i.status === "open").length} accent />
-      </div>
-
-      {/* Tasks — below stats, above sites */}
-      <CustomerTasksSection
-        tasks={tasksWithComments}
-        customerId={customer.id}
-        tenantId={customer.tenant_id}
-        assignableUsers={assignableUsers}
-        assignableSites={sites.map((s: any) => ({ id: s.id, name: s.name, slug: s.slug }))}
-        currentUserName={currentUserName as string}
-        currentUserAvatar={currentUserAvatar as string | undefined}
-      />
-
-      {/* Sites */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
-          <AddSiteButton customerName={customer.name} customerId={customer.id} customerTenantId={customer.tenant_id} />
-        </div>
-
-        <SitesList sites={sites} customerSlug={customerSlug} />
-      </div>
-
-      {/* Flagged issues */}
-      {issues.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-card">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">
-              Flagged Issues ({issues.length})
-            </h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {issues.map((issue) => (
-              <div key={issue.id} className="px-6 py-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{issue.summary}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {issue.site?.name ?? ""} &middot; {issue.flagged_by_profile?.full_name ?? ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <SeverityBadge severity={issue.severity} />
-                    <StatusBadge status={issue.status} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MiniStat({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="rounded-lg border border-gray-100 bg-white px-4 py-3">
-      <p className={`text-xl font-bold ${accent && value > 0 ? "text-error" : "text-gray-900"}`}>
-        {value}
-      </p>
-      <p className="text-xs text-gray-500">{label}</p>
-    </div>
+    <CustomerDetailLayout
+      customer={{
+        id: customer.id,
+        name: customer.name,
+        domain: customer.domain,
+        company_type: customer.company_type,
+        tenant_id: customer.tenant_id,
+      }}
+      customerSlug={customerSlug}
+      sites={sites as any}
+      tasks={tasksWithComments}
+      issues={issues as any}
+      isCKInternal={isCKInternal}
+      ckTeam={ckTeam}
+      internalProfiles={allInternalProfiles}
+      assignableUsers={assignableUsers}
+      dealLinks={dealLinks}
+      hubspotEnabled={hubspotEnabled}
+      currentUserName={currentUserName as string}
+      currentUserAvatar={currentUserAvatar as string | undefined}
+    />
   );
 }

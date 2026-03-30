@@ -2,7 +2,7 @@
 
 import { cn } from "../../lib/utils";
 import { Avatar } from "../ui/avatar";
-import { Search, Menu } from "lucide-react";
+import { Search, Menu, Plus } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { SearchDialog } from "../search/search-dialog";
@@ -38,6 +38,9 @@ export function TopBar({ currentUser, onMenuToggle, breadcrumbs }: TopBarProps) 
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Quick Task trigger */}
+        <QuickTaskTrigger />
+
         {/* Cmd+K search trigger */}
         <SearchTrigger />
 
@@ -69,6 +72,25 @@ function SearchTrigger() {
       Search...
       <kbd className="hidden lg:inline-flex h-5 items-center rounded border border-gray-200 bg-gray-50 px-1.5 text-xs text-gray-400">
         ⌘K
+      </kbd>
+    </button>
+  );
+}
+
+function QuickTaskTrigger() {
+  return (
+    <button
+      onClick={() => {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", { key: ";", metaKey: true }),
+        );
+      }}
+      className="hidden sm:flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-400 hover:border-gray-300 transition-colors"
+    >
+      <Plus className="h-4 w-4" />
+      Task
+      <kbd className="hidden lg:inline-flex h-5 items-center rounded border border-gray-200 bg-gray-50 px-1.5 text-xs text-gray-400">
+        ⌘;
       </kbd>
     </button>
   );

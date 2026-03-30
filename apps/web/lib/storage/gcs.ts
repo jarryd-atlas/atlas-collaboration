@@ -200,6 +200,12 @@ export async function getSignedUrl(
   const credentialScope = `${datestamp.slice(0, 8)}//storage/goog4_request`;
   const credential = `${sa.client_email}/${credentialScope}`;
 
+  // URI-encode each path segment (preserving /) for canonical request & final URL
+  const encodedPath = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
   const canonicalHeaders = `host:storage.googleapis.com\n`;
   const signedHeaders = "host";
 
@@ -215,7 +221,7 @@ export async function getSignedUrl(
 
   const canonicalRequest = [
     "GET",
-    `/${bucket}/${path}`,
+    `/${bucket}/${encodedPath}`,
     canonicalQueryString,
     canonicalHeaders,
     signedHeaders,
@@ -240,7 +246,7 @@ export async function getSignedUrl(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  return `https://storage.googleapis.com/${bucket}/${path}?${canonicalQueryString}&X-Goog-Signature=${sigHex}`;
+  return `https://storage.googleapis.com/${bucket}/${encodedPath}?${canonicalQueryString}&X-Goog-Signature=${sigHex}`;
 }
 
 /**

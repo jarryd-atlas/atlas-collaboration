@@ -42,6 +42,27 @@ export async function getDeal(
   );
 }
 
+/** Batch-read multiple deals with specified properties */
+export async function getDeals(
+  token: string,
+  dealIds: string[],
+  properties: string[]
+): Promise<HubSpotDeal[]> {
+  if (dealIds.length === 0) return [];
+  const result = await hubspotFetch<{ results: HubSpotDeal[] }>(
+    token,
+    "/crm/v3/objects/deals/batch/read",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        inputs: dealIds.map((id) => ({ id })),
+        properties,
+      }),
+    }
+  );
+  return result.results ?? [];
+}
+
 /** Search deals by name (for combobox) */
 export async function searchDeals(
   token: string,
@@ -53,7 +74,7 @@ export async function searchDeals(
     body: JSON.stringify({
       query,
       limit,
-      properties: ["dealname", "dealstage", "amount", "hubspot_owner_id", "closedate"],
+      properties: ["dealname", "dealstage", "amount", "hubspot_owner_id", "closedate", "pipeline"],
     }),
   });
 }

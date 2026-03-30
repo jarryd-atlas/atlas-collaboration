@@ -105,7 +105,7 @@ export default async function SitePage({ params }: SitePageProps) {
   const isInternal = currentUser?.sessionClaims?.tenantType === "internal";
 
   // Load HubSpot deal links for this site (non-critical)
-  let hubspotLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean }[] = [];
+  let hubspotLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean; deal_type?: string | null }[] = [];
   let hubspotPortalId: string | undefined;
   let hubspotFieldMappings: { hubspot_property: string; direction: "hubspot_to_app" | "app_to_hubspot" | "bidirectional" }[] = [];
   if (isInternal) {
@@ -120,7 +120,7 @@ export default async function SitePage({ params }: SitePageProps) {
         hubspotPortalId = config.portal_id;
         hubspotLinks = (links ?? [])
           .filter((l) => l.site_id === site.id)
-          .map((l) => ({ id: l.id, hubspot_deal_id: l.hubspot_deal_id, deal_name: l.deal_name, is_primary: false }));
+          .map((l) => ({ id: l.id, hubspot_deal_id: l.hubspot_deal_id, deal_name: l.deal_name, is_primary: false, deal_type: l.deal_type ?? null }));
         hubspotFieldMappings = (mappings ?? [])
           .filter((m) => m.is_active)
           .map((m) => ({ hubspot_property: m.hubspot_property, direction: m.direction }));
@@ -180,7 +180,7 @@ export default async function SitePage({ params }: SitePageProps) {
         </div>
       </div>
 
-      {/* Tabbed layout — Overview | Documents | Baseline | Labor */}
+      {/* Tabbed layout */}
       <SiteTabLayout>
         {{
           overview: (
@@ -196,6 +196,9 @@ export default async function SitePage({ params }: SitePageProps) {
               currentUserAvatar={currentUserAvatar as string | undefined}
               canAnalyze={isInternal}
               assessmentId={assessment?.id}
+              isInternal={isInternal}
+              hubspotDealId={hubspotLinks[0]?.hubspot_deal_id}
+              hubspotPortalId={hubspotPortalId}
             />
           ),
           documents: (

@@ -14,3 +14,4 @@ export { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel } from "./
 export { setSiteAccess } from "./site-access";
 export { submitFeedback, fetchAllFeedback, updateFeedbackStatus } from "./feedback";
 export { createMeetingSeries, createMeeting, addMeetingItem, updateMeetingItem, deleteMeetingItem, completeMeeting, addMeetingParticipant, removeMeetingParticipant } from "./meetings";
+export { upsertAccountPlan, updateAccountStage, createStakeholder, updateStakeholder, deleteStakeholder, updateStakeholderParent, createGoal, updateGoal, toggleGoalAchieved, deleteGoal, createSuccessMilestone, updateSuccessMilestone, deleteSuccessMilestone, upsertEnterpriseDeal } from "./account-plan";

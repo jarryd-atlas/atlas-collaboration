@@ -324,3 +324,94 @@ export const DEMAND_RESPONSE_LABELS: Record<DemandResponseStatus, string> = {
   not_available: "Not Available",
   evaluated_not_enrolled: "Evaluated — Not Enrolled",
 };
+
+// ═══════════════════════════════════════════════════════════════
+// Account Planning Constants
+// ═══════════════════════════════════════════════════════════════
+
+/** Account-level lifecycle stages (Land → Expand → Enterprise) */
+export const ACCOUNT_STAGES = ["pilot", "expanding", "enterprise"] as const;
+export type AccountStage = (typeof ACCOUNT_STAGES)[number];
+
+/** Account stage display labels */
+export const ACCOUNT_STAGE_LABELS: Record<AccountStage, string> = {
+  pilot: "Pilot",
+  expanding: "Expanding",
+  enterprise: "Enterprise",
+};
+
+/** Stakeholder roles for account planning */
+export const STAKEHOLDER_ROLES = [
+  "champion",
+  "decision_maker",
+  "influencer",
+  "blocker",
+  "user",
+  "economic_buyer",
+] as const;
+export type StakeholderRole = (typeof STAKEHOLDER_ROLES)[number];
+
+/** Stakeholder role display labels */
+export const STAKEHOLDER_ROLE_LABELS: Record<StakeholderRole, string> = {
+  champion: "Champion",
+  decision_maker: "Decision Maker",
+  influencer: "Influencer",
+  blocker: "Blocker",
+  user: "User",
+  economic_buyer: "Economic Buyer",
+};
+
+/** Relationship strength levels */
+export const RELATIONSHIP_STRENGTHS = [
+  "strong",
+  "good",
+  "developing",
+  "weak",
+  "unknown",
+] as const;
+export type RelationshipStrength = (typeof RELATIONSHIP_STRENGTHS)[number];
+
+/** Relationship strength display labels */
+export const RELATIONSHIP_STRENGTH_LABELS: Record<RelationshipStrength, string> = {
+  strong: "Strong",
+  good: "Good",
+  developing: "Developing",
+  weak: "Weak",
+  unknown: "Unknown",
+};
+
+/** Success plan milestone statuses */
+export const SUCCESS_MILESTONE_STATUSES = [
+  "planned",
+  "in_progress",
+  "completed",
+  "at_risk",
+] as const;
+export type SuccessMilestoneStatus = (typeof SUCCESS_MILESTONE_STATUSES)[number];
+
+/** Success milestone status labels */
+export const SUCCESS_MILESTONE_STATUS_LABELS: Record<SuccessMilestoneStatus, string> = {
+  planned: "Planned",
+  in_progress: "In Progress",
+  completed: "Completed",
+  at_risk: "At Risk",
+};
+
+/** Enterprise deal stages */
+export const ENTERPRISE_DEAL_STAGES = [
+  "identified",
+  "proposal",
+  "negotiation",
+  "closed_won",
+  "closed_lost",
+] as const;
+export type EnterpriseDealStage = (typeof ENTERPRISE_DEAL_STAGES)[number];
+
+/** Enterprise deal stage labels */
+export const ENTERPRISE_DEAL_STAGE_LABELS: Record<EnterpriseDealStage, string> = {
+  identified: "Identified",
+  proposal: "Proposal",
+  negotiation: "Negotiation",
+  closed_won: "Closed Won",
+  closed_lost: "Closed Lost",
+};

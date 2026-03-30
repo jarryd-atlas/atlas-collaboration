@@ -1,0 +1,71 @@
+"use client";
+
+import { useState } from "react";
+import { cn } from "../../lib/utils";
+import { LayoutDashboard, Users, Target, Building2 } from "lucide-react";
+
+type TabKey = "overview" | "people" | "success-plan" | "sites-tasks";
+
+interface AccountPlanTabsProps {
+  isCKInternal: boolean;
+  activeTab?: TabKey;
+  children: {
+    overview: React.ReactNode;
+    people: React.ReactNode;
+    successPlan: React.ReactNode;
+    sitesTasks: React.ReactNode;
+  };
+}
+
+const TABS: { key: TabKey; label: string; icon: any; internalOnly: boolean }[] = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard, internalOnly: true },
+  { key: "people", label: "People", icon: Users, internalOnly: false },
+  { key: "success-plan", label: "Success Plan", icon: Target, internalOnly: false },
+  { key: "sites-tasks", label: "Sites & Tasks", icon: Building2, internalOnly: false },
+];
+
+export function AccountPlanTabs({ isCKInternal, children }: AccountPlanTabsProps) {
+  const defaultTab: TabKey = isCKInternal ? "overview" : "success-plan";
+  const [activeTab, setActiveTab] = useState<TabKey>(defaultTab);
+
+  const visibleTabs = TABS.filter((tab) => !tab.internalOnly || isCKInternal);
+
+  const contentMap: Record<TabKey, React.ReactNode> = {
+    overview: children.overview,
+    people: children.people,
+    "success-plan": children.successPlan,
+    "sites-tasks": children.sitesTasks,
+  };
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 px-4 border-b border-gray-200 shrink-0 bg-white">
+        {visibleTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
+                isActive
+                  ? "border-gray-900 text-gray-900"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-hidden">
+        {contentMap[activeTab]}
+      </div>
+    </div>
+  );
+}

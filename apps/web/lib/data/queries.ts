@@ -1106,3 +1106,61 @@ export async function searchAll(query: string) {
 
   return results;
 }
+
+// ─── Account Plans ──────────────────────────────────────────
+
+export async function getAccountPlan(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "account_plans")
+    .select("*")
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as any | null;
+}
+
+export async function getAccountStakeholders(accountPlanId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "account_stakeholders")
+    .select("*")
+    .eq("account_plan_id", accountPlanId)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getSuccessPlanGoals(accountPlanId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "success_plan_goals")
+    .select("*")
+    .eq("account_plan_id", accountPlanId)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getSuccessPlanMilestones(accountPlanId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "success_plan_milestones")
+    .select("*")
+    .eq("account_plan_id", accountPlanId)
+    .order("target_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getEnterpriseDeal(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "enterprise_deals")
+    .select("*")
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as any | null;
+}

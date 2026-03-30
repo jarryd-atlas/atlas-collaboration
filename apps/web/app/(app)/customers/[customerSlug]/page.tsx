@@ -8,6 +8,11 @@ import {
   getAssignableUsersForCustomer,
   getAllTasksForCustomer,
   getLatestCommentsForTasks,
+  getAccountPlan,
+  getAccountStakeholders,
+  getSuccessPlanGoals,
+  getSuccessPlanMilestones,
+  getEnterpriseDeal,
 } from "../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../lib/data/current-user";
 import { getSession, createSupabaseAdmin } from "../../../../lib/supabase/server";
@@ -93,6 +98,49 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
     }
   }
 
+  // Fetch account plan data
+  let accountPlan: any = null;
+  let stakeholders: any[] = [];
+  let successGoals: any[] = [];
+  let successMilestones: any[] = [];
+  let enterpriseDeal: any = null;
+
+  try {
+    accountPlan = await getAccountPlan(customer.id);
+
+    // Auto-create account plan if none exists
+    if (!accountPlan) {
+      const supabaseForPlan = createSupabaseAdmin();
+      const { data: newPlan } = await (supabaseForPlan as any)
+        .from("account_plans")
+        .insert({
+          customer_id: customer.id,
+          tenant_id: customer.tenant_id,
+          account_stage: "pilot",
+        })
+        .select("*")
+        .single();
+      accountPlan = newPlan;
+    }
+
+    if (accountPlan) {
+      const [sh, gl, ms] = await Promise.all([
+        getAccountStakeholders(accountPlan.id),
+        getSuccessPlanGoals(accountPlan.id),
+        getSuccessPlanMilestones(accountPlan.id),
+      ]);
+      stakeholders = sh;
+      successGoals = gl;
+      successMilestones = ms;
+    }
+
+    if (isCKInternal) {
+      enterpriseDeal = await getEnterpriseDeal(customer.id);
+    }
+  } catch {
+    // non-critical — show empty account plan
+  }
+
   // Fetch latest comments for tasks
   const taskIds = customerTasks.map((t: any) => t.id);
   let latestComments: Record<string, { body: string; authorName: string; createdAt: string }> = {};
@@ -131,6 +179,12 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       hubspotEnabled={hubspotEnabled}
       currentUserName={currentUserName as string}
       currentUserAvatar={currentUserAvatar as string | undefined}
+      accountPlan={accountPlan}
+      stakeholders={stakeholders}
+      goals={successGoals}
+      milestones={successMilestones}
+      enterpriseDeal={enterpriseDeal}
+      profileId={session?.claims?.profileId}
     />
   );
 }

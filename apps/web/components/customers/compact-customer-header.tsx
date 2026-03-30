@@ -47,6 +47,8 @@ interface CompactCustomerHeaderProps {
   ckTeam: TeamMember[];
   internalProfiles: InternalProfile[];
   sites: Array<{ id: string; name: string; slug: string; tenant_id: string; [key: string]: unknown }>;
+  accountStage?: string;
+  enterpriseDealValue?: number | null;
 }
 
 export function CompactCustomerHeader({
@@ -57,6 +59,8 @@ export function CompactCustomerHeader({
   ckTeam,
   internalProfiles,
   sites,
+  accountStage,
+  enterpriseDealValue,
 }: CompactCustomerHeaderProps) {
   const [showTeamPopover, setShowTeamPopover] = useState(false);
 
@@ -71,6 +75,20 @@ export function CompactCustomerHeader({
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">{customer.name}</h1>
             <CompanyTypeBadge type={customer.company_type ?? "customer"} />
+            {accountStage && (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                accountStage === "enterprise" ? "bg-purple-100 text-purple-700" :
+                accountStage === "expanding" ? "bg-blue-100 text-blue-700" :
+                "bg-gray-100 text-gray-600"
+              }`}>
+                {accountStage.charAt(0).toUpperCase() + accountStage.slice(1)}
+              </span>
+            )}
+            {enterpriseDealValue && enterpriseDealValue > 0 && (
+              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-green-50 text-green-700">
+                ${Number(enterpriseDealValue).toLocaleString()} target
+              </span>
+            )}
           </div>
           {customer.domain && (
             <p className="text-gray-500 text-sm mt-0.5">{customer.domain}</p>

@@ -8,8 +8,20 @@ import { CustomerTasksSection } from "../tasks/customer-tasks-section";
 import { TaskDetailInline, type TaskForPanel } from "../tasks/task-detail-panel";
 import { SiteOverviewInline } from "./site-overview-inline";
 import { AddSiteButton } from "../forms/customer-actions";
+import { AccountPlanTabs } from "../account-plan/account-plan-tabs";
+import { AccountStageTracker } from "../account-plan/account-stage-tracker";
+import { EnterpriseDealCard } from "../account-plan/enterprise-deal-card";
+import { WhitespaceMap } from "../account-plan/whitespace-map";
+import { StrategySection } from "../account-plan/strategy-section";
+import { SiteDealsSummary } from "../account-plan/site-deals-summary";
+import { OrgChartTree } from "../account-plan/org-chart-tree";
+import { OrgChartList } from "../account-plan/org-chart-list";
+import { StakeholderForm } from "../account-plan/stakeholder-form";
+import { GoalList } from "../account-plan/goal-list";
+import { MilestoneTimeline } from "../account-plan/milestone-timeline";
+import type { Stakeholder } from "../account-plan/org-chart-node";
 import { cn } from "../../lib/utils";
-import { PanelLeftClose, PanelLeftOpen, MapPin } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, MapPin, LayoutGrid, List, Plus } from "lucide-react";
 import type { AssignableUser, AssignableSite } from "../tasks/inline-task-input";
 
 interface TeamMember {
@@ -89,6 +101,13 @@ interface CustomerDetailLayoutProps {
   hubspotEnabled: boolean;
   currentUserName: string;
   currentUserAvatar?: string | null;
+  // Account plan props
+  accountPlan?: any | null;
+  stakeholders?: Stakeholder[];
+  goals?: any[];
+  milestones?: any[];
+  enterpriseDeal?: any | null;
+  profileId?: string;
 }
 
 const STORAGE_KEY = "atlas-sites-panel-collapsed";
@@ -107,6 +126,12 @@ export function CustomerDetailLayout({
   hubspotEnabled,
   currentUserName,
   currentUserAvatar,
+  accountPlan,
+  stakeholders = [],
+  goals = [],
+  milestones = [],
+  enterpriseDeal,
+  profileId,
 }: CustomerDetailLayoutProps) {
   const [sitesCollapsed, setSitesCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -118,6 +143,14 @@ export function CustomerDetailLayout({
   });
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Stakeholder form state
+  const [showStakeholderForm, setShowStakeholderForm] = useState(false);
+  const [editingStakeholder, setEditingStakeholder] = useState<Stakeholder | null>(null);
+  const [defaultReportsTo, setDefaultReportsTo] = useState<string | null>(null);
+
+  // Org chart view toggle
+  const [orgChartView, setOrgChartView] = useState<"tree" | "list">("tree");
 
   // Persist collapse state
   useEffect(() => {
@@ -156,15 +189,290 @@ export function CustomerDetailLayout({
 
   const handleSiteSelect = useCallback((siteId: string | null) => {
     setSelectedSiteId(siteId);
-    setSelectedTask(null); // Clear task detail when switching sites
+    setSelectedTask(null);
   }, []);
 
-  // Look up selected site object and its tasks
   const selectedSite = selectedSiteId ? sites.find((s) => (s.id ?? "") === selectedSiteId) : null;
   const tasksForSelectedSite = useMemo(() => {
     if (!selectedSiteId) return [];
     return tasks.filter((t) => t.site?.id === selectedSiteId);
   }, [tasks, selectedSiteId]);
+
+  const handleEditStakeholder = useCallback((s: Stakeholder) => {
+    setEditingStakeholder(s);
+    setDefaultReportsTo(null);
+    setShowStakeholderForm(true);
+  }, []);
+
+  const handleAddReport = useCallback((parentId: string) => {
+    setEditingStakeholder(null);
+    setDefaultReportsTo(parentId);
+    setShowStakeholderForm(true);
+  }, []);
+
+  const handleCloseStakeholderForm = useCallback(() => {
+    setShowStakeholderForm(false);
+    setEditingStakeholder(null);
+    setDefaultReportsTo(null);
+  }, []);
+
+  // ─── Tab content ──────────────────────────────────────────
+
+  const overviewTab = (
+    <div className="overflow-y-auto p-4 h-full space-y-4">
+      <AccountStageTracker
+        customerId={customer.id}
+        currentStage={accountPlan?.account_stage ?? "pilot"}
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <EnterpriseDealCard
+          deal={enterpriseDeal}
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          customerName={customer.name}
+        />
+        <WhitespaceMap
+          totalSites={sites.length}
+          engagedSites={sites.length}
+          activeSites={activeSites.length}
+          deployingSites={deployingSites.length}
+          evaluatingSites={evaluatingSites.length}
+          totalAddressable={accountPlan?.total_addressable_sites ?? null}
+        />
+      </div>
+      <SiteDealsSummary dealLinks={dealLinks} />
+      <StrategySection
+        customerId={customer.id}
+        tenantId={customer.tenant_id}
+        accountPlan={accountPlan}
+      />
+    </div>
+  );
+
+  const peopleTab = (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Organization ({stakeholders.length})
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-gray-100 rounded-md p-0.5">
+            <button
+              onClick={() => setOrgChartView("tree")}
+              className={cn("p-1 rounded", orgChartView === "tree" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
+              title="Tree view"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setOrgChartView("list")}
+              className={cn("p-1 rounded", orgChartView === "list" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
+              title="List view"
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {isCKInternal && (
+            <button
+              onClick={() => { setEditingStakeholder(null); setDefaultReportsTo(null); setShowStakeholderForm(true); }}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+            >
+              <Plus className="h-3 w-3" /> Add
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto">
+        {/* Desktop: show tree by default, list on toggle */}
+        <div className={cn(orgChartView === "tree" ? "hidden lg:block" : "hidden")}>
+          <OrgChartTree
+            stakeholders={stakeholders}
+            isCKInternal={isCKInternal}
+            onEdit={handleEditStakeholder}
+            onAddReport={handleAddReport}
+          />
+        </div>
+        <div className={cn(orgChartView === "list" ? "block" : "lg:hidden")}>
+          <OrgChartList
+            stakeholders={stakeholders}
+            isCKInternal={isCKInternal}
+            onEdit={handleEditStakeholder}
+            onAddReport={handleAddReport}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const successPlanTab = (
+    <div className="overflow-y-auto p-4 h-full space-y-6">
+      <GoalList
+        goals={goals}
+        accountPlanId={accountPlan?.id ?? ""}
+        tenantId={customer.tenant_id}
+        isCKInternal={isCKInternal}
+        profileId={profileId}
+      />
+      <MilestoneTimeline
+        milestones={milestones}
+        accountPlanId={accountPlan?.id ?? ""}
+        tenantId={customer.tenant_id}
+        isCKInternal={isCKInternal}
+        profileId={profileId}
+      />
+    </div>
+  );
+
+  const sitesTasksTab = (
+    <>
+      {/* Two-column layout — desktop */}
+      <div className="hidden lg:flex flex-1 overflow-hidden gap-0 h-full">
+        {/* Left: Sites panel (collapsible) */}
+        <div
+          className={cn(
+            "shrink-0 border-r border-gray-200 transition-all duration-200 flex flex-col",
+            sitesCollapsed ? "w-10" : "w-80",
+          )}
+        >
+          {sitesCollapsed ? (
+            <div className="flex flex-col items-center py-3 h-full">
+              <button
+                onClick={() => setSitesCollapsed(false)}
+                className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                title="Expand sites panel"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+              <div className="mt-4 flex flex-col items-center gap-1">
+                <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-[10px] text-gray-400 font-medium"
+                  style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+                >
+                  Sites ({sites.length})
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 shrink-0">
+                <h2 className="text-sm font-semibold text-gray-900">Sites</h2>
+                <div className="flex items-center gap-1">
+                  <AddSiteButton
+                    customerName={customer.name}
+                    customerId={customer.id}
+                    customerTenantId={customer.tenant_id}
+                  />
+                  <button
+                    onClick={() => setSitesCollapsed(true)}
+                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Collapse sites panel"
+                  >
+                    <PanelLeftClose className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-2 pb-3">
+                <SitesList
+                  sites={sites}
+                  customerSlug={customerSlug}
+                  editable={isCKInternal}
+                  dealLinks={dealLinks}
+                  hubspotEnabled={hubspotEnabled}
+                  compact
+                  selectedSiteId={selectedSiteId}
+                  onSiteSelect={handleSiteSelect}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Site overview OR Tasks + inline detail */}
+        <div className="flex-1 flex overflow-hidden min-w-0">
+          {selectedSite ? (
+            <div className="flex-1 overflow-hidden bg-white">
+              <SiteOverviewInline
+                site={selectedSite}
+                customerSlug={customerSlug}
+                customerId={customer.id}
+                tasks={tasksForSelectedSite}
+                assignableUsers={assignableUsers}
+                currentUserName={currentUserName}
+                currentUserAvatar={currentUserAvatar}
+                onClose={() => setSelectedSiteId(null)}
+              />
+            </div>
+          ) : (
+            <>
+              <div className={cn(
+                "overflow-y-auto p-4 transition-all duration-200",
+                selectedTask ? "w-[55%]" : "w-full",
+              )}>
+                <CustomerTasksSection
+                  tasks={tasks}
+                  customerId={customer.id}
+                  tenantId={customer.tenant_id}
+                  assignableUsers={assignableUsers}
+                  assignableSites={assignableSites}
+                  currentUserName={currentUserName}
+                  currentUserAvatar={currentUserAvatar}
+                  controlledSiteId={selectedSiteId}
+                  onTaskSelect={handleTaskSelect}
+                  selectedTaskId={selectedTask?.id}
+                  issues={issues}
+                />
+              </div>
+              {selectedTask && (
+                <div className="w-[45%] border-l border-gray-200 bg-white overflow-hidden">
+                  <TaskDetailInline
+                    task={selectedTask as TaskForPanel}
+                    onClose={() => setSelectedTask(null)}
+                    tenantId={customer.tenant_id}
+                    currentUserName={currentUserName}
+                    currentUserAvatar={currentUserAvatar}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Single-column layout — mobile */}
+      <div className="lg:hidden flex-1 overflow-y-auto space-y-6 p-4">
+        <CustomerTasksSection
+          tasks={tasks}
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          assignableUsers={assignableUsers}
+          assignableSites={assignableSites}
+          currentUserName={currentUserName}
+          currentUserAvatar={currentUserAvatar}
+          issues={issues}
+        />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
+            <AddSiteButton
+              customerName={customer.name}
+              customerId={customer.id}
+              customerTenantId={customer.tenant_id}
+            />
+          </div>
+          <SitesList
+            sites={sites}
+            customerSlug={customerSlug}
+            editable={isCKInternal}
+            dealLinks={dealLinks}
+            hubspotEnabled={hubspotEnabled}
+          />
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -180,163 +488,33 @@ export function CustomerDetailLayout({
           ckTeam={ckTeam}
           internalProfiles={internalProfiles}
           sites={sites as any}
+          accountStage={accountPlan?.account_stage}
+          enterpriseDealValue={enterpriseDeal?.target_value}
         />
 
-        {/* Two-column layout — desktop */}
-        <div className="hidden lg:flex flex-1 overflow-hidden mt-4 gap-0">
-          {/* Left: Sites panel (collapsible) */}
-          <div
-            className={cn(
-              "shrink-0 border-r border-gray-200 transition-all duration-200 flex flex-col",
-              sitesCollapsed ? "w-10" : "w-80",
-            )}
-          >
-            {sitesCollapsed ? (
-              /* Collapsed strip */
-              <div className="flex flex-col items-center py-3 h-full">
-                <button
-                  onClick={() => setSitesCollapsed(false)}
-                  className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Expand sites panel"
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </button>
-                <div className="mt-4 flex flex-col items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-[10px] text-gray-400 font-medium writing-mode-vertical"
-                    style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-                  >
-                    Sites ({sites.length})
-                  </span>
-                </div>
-              </div>
-            ) : (
-              /* Expanded sites panel */
-              <div className="flex flex-col h-full overflow-hidden">
-                {/* Sites header */}
-                <div className="flex items-center justify-between px-3 py-2 shrink-0">
-                  <h2 className="text-sm font-semibold text-gray-900">Sites</h2>
-                  <div className="flex items-center gap-1">
-                    <AddSiteButton
-                      customerName={customer.name}
-                      customerId={customer.id}
-                      customerTenantId={customer.tenant_id}
-                    />
-                    <button
-                      onClick={() => setSitesCollapsed(true)}
-                      className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                      title="Collapse sites panel"
-                    >
-                      <PanelLeftClose className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                {/* Sites list */}
-                <div className="flex-1 overflow-y-auto px-2 pb-3">
-                  <SitesList
-                    sites={sites}
-                    customerSlug={customerSlug}
-                    editable={isCKInternal}
-                    dealLinks={dealLinks}
-                    hubspotEnabled={hubspotEnabled}
-                    compact
-                    selectedSiteId={selectedSiteId}
-                    onSiteSelect={handleSiteSelect}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Site overview OR Tasks + inline detail */}
-          <div className="flex-1 flex overflow-hidden min-w-0">
-            {selectedSite ? (
-              /* Site overview replaces tasks when a site is selected */
-              <div className="flex-1 overflow-hidden bg-white">
-                <SiteOverviewInline
-                  site={selectedSite}
-                  customerSlug={customerSlug}
-                  customerId={customer.id}
-                  tasks={tasksForSelectedSite}
-                  assignableUsers={assignableUsers}
-                  currentUserName={currentUserName}
-                  currentUserAvatar={currentUserAvatar}
-                  onClose={() => setSelectedSiteId(null)}
-                />
-              </div>
-            ) : (
-              <>
-                {/* Tasks list */}
-                <div className={cn(
-                  "overflow-y-auto p-4 transition-all duration-200",
-                  selectedTask ? "w-[55%]" : "w-full",
-                )}>
-                  <CustomerTasksSection
-                    tasks={tasks}
-                    customerId={customer.id}
-                    tenantId={customer.tenant_id}
-                    assignableUsers={assignableUsers}
-                    assignableSites={assignableSites}
-                    currentUserName={currentUserName}
-                    currentUserAvatar={currentUserAvatar}
-                    controlledSiteId={selectedSiteId}
-                    onTaskSelect={handleTaskSelect}
-                    selectedTaskId={selectedTask?.id}
-                    issues={issues}
-                  />
-                </div>
-
-                {/* Inline task detail */}
-                {selectedTask && (
-                  <div className="w-[45%] border-l border-gray-200 bg-white overflow-hidden">
-                    <TaskDetailInline
-                      task={selectedTask as TaskForPanel}
-                      onClose={() => setSelectedTask(null)}
-                      tenantId={customer.tenant_id}
-                      currentUserName={currentUserName}
-                      currentUserAvatar={currentUserAvatar}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Single-column layout — mobile */}
-        <div className="lg:hidden flex-1 overflow-y-auto mt-4 space-y-6">
-          {/* Tasks first on mobile */}
-          <CustomerTasksSection
-            tasks={tasks}
-            customerId={customer.id}
-            tenantId={customer.tenant_id}
-            assignableUsers={assignableUsers}
-            assignableSites={assignableSites}
-            currentUserName={currentUserName}
-            currentUserAvatar={currentUserAvatar}
-            issues={issues}
-          />
-
-          {/* Sites */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
-              <AddSiteButton
-                customerName={customer.name}
-                customerId={customer.id}
-                customerTenantId={customer.tenant_id}
-              />
-            </div>
-            <SitesList
-              sites={sites}
-              customerSlug={customerSlug}
-              editable={isCKInternal}
-              dealLinks={dealLinks}
-              hubspotEnabled={hubspotEnabled}
-            />
-          </div>
-        </div>
+        {/* Tabbed content */}
+        <AccountPlanTabs isCKInternal={isCKInternal}>
+          {{
+            overview: overviewTab,
+            people: peopleTab,
+            successPlan: successPlanTab,
+            sitesTasks: sitesTasksTab,
+          }}
+        </AccountPlanTabs>
       </div>
+
+      {/* Stakeholder form modal */}
+      {showStakeholderForm && accountPlan && (
+        <StakeholderForm
+          stakeholder={editingStakeholder}
+          accountPlanId={accountPlan.id}
+          tenantId={customer.tenant_id}
+          allStakeholders={stakeholders}
+          isCKInternal={isCKInternal}
+          defaultReportsTo={defaultReportsTo}
+          onClose={handleCloseStakeholderForm}
+        />
+      )}
     </>
   );
 }

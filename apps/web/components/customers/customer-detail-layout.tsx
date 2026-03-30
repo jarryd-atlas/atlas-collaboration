@@ -6,6 +6,7 @@ import { CompactCustomerHeader } from "./compact-customer-header";
 import { SitesList } from "../sites/sites-list";
 import { CustomerTasksSection } from "../tasks/customer-tasks-section";
 import { TaskDetailInline, type TaskForPanel } from "../tasks/task-detail-panel";
+import { SiteOverviewInline } from "./site-overview-inline";
 import { AddSiteButton } from "../forms/customer-actions";
 import { cn } from "../../lib/utils";
 import { PanelLeftClose, PanelLeftOpen, MapPin } from "lucide-react";
@@ -155,7 +156,15 @@ export function CustomerDetailLayout({
 
   const handleSiteSelect = useCallback((siteId: string | null) => {
     setSelectedSiteId(siteId);
+    setSelectedTask(null); // Clear task detail when switching sites
   }, []);
+
+  // Look up selected site object and its tasks
+  const selectedSite = selectedSiteId ? sites.find((s) => (s.id ?? "") === selectedSiteId) : null;
+  const tasksForSelectedSite = useMemo(() => {
+    if (!selectedSiteId) return [];
+    return tasks.filter((t) => t.site?.id === selectedSiteId);
+  }, [tasks, selectedSiteId]);
 
   return (
     <>
@@ -239,39 +248,57 @@ export function CustomerDetailLayout({
             )}
           </div>
 
-          {/* Right: Tasks + inline detail */}
+          {/* Right: Site overview OR Tasks + inline detail */}
           <div className="flex-1 flex overflow-hidden min-w-0">
-            {/* Tasks list */}
-            <div className={cn(
-              "overflow-y-auto p-4 transition-all duration-200",
-              selectedTask ? "w-[55%]" : "w-full",
-            )}>
-              <CustomerTasksSection
-                tasks={tasks}
-                customerId={customer.id}
-                tenantId={customer.tenant_id}
-                assignableUsers={assignableUsers}
-                assignableSites={assignableSites}
-                currentUserName={currentUserName}
-                currentUserAvatar={currentUserAvatar}
-                controlledSiteId={selectedSiteId}
-                onTaskSelect={handleTaskSelect}
-                selectedTaskId={selectedTask?.id}
-                issues={issues}
-              />
-            </div>
-
-            {/* Inline task detail */}
-            {selectedTask && (
-              <div className="w-[45%] border-l border-gray-200 bg-white overflow-hidden">
-                <TaskDetailInline
-                  task={selectedTask as TaskForPanel}
-                  onClose={() => setSelectedTask(null)}
-                  tenantId={customer.tenant_id}
+            {selectedSite ? (
+              /* Site overview replaces tasks when a site is selected */
+              <div className="flex-1 overflow-hidden bg-white">
+                <SiteOverviewInline
+                  site={selectedSite}
+                  customerSlug={customerSlug}
+                  customerId={customer.id}
+                  tasks={tasksForSelectedSite}
+                  assignableUsers={assignableUsers}
                   currentUserName={currentUserName}
                   currentUserAvatar={currentUserAvatar}
+                  onClose={() => setSelectedSiteId(null)}
                 />
               </div>
+            ) : (
+              <>
+                {/* Tasks list */}
+                <div className={cn(
+                  "overflow-y-auto p-4 transition-all duration-200",
+                  selectedTask ? "w-[55%]" : "w-full",
+                )}>
+                  <CustomerTasksSection
+                    tasks={tasks}
+                    customerId={customer.id}
+                    tenantId={customer.tenant_id}
+                    assignableUsers={assignableUsers}
+                    assignableSites={assignableSites}
+                    currentUserName={currentUserName}
+                    currentUserAvatar={currentUserAvatar}
+                    controlledSiteId={selectedSiteId}
+                    onTaskSelect={handleTaskSelect}
+                    selectedTaskId={selectedTask?.id}
+                    issues={issues}
+                  />
+                </div>
+
+                {/* Inline task detail */}
+                {selectedTask && (
+                  <div className="w-[45%] border-l border-gray-200 bg-white overflow-hidden">
+                    <TaskDetailInline
+                      task={selectedTask as TaskForPanel}
+                      onClose={() => setSelectedTask(null)}
+                      tenantId={customer.tenant_id}
+                      currentUserName={currentUserName}
+                      currentUserAvatar={currentUserAvatar}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

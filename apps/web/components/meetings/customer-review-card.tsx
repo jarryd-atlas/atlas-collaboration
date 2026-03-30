@@ -364,11 +364,11 @@ function getQuarterLabel(bucket: QuarterBucket): string {
 }
 
 const BUCKET_HEADER_COLORS: Record<QuarterBucket, string> = {
-  past_due: "text-red-500 bg-red-50/50",
-  this_qtr: "text-gray-700 bg-gray-50",
-  next_qtr: "text-gray-500 bg-gray-50/50",
-  "2_qtrs_out": "text-gray-400 bg-gray-50/30",
-  everything_else: "text-gray-400",
+  past_due: "text-red-700 bg-red-50 border-b border-red-100",
+  this_qtr: "text-gray-900 bg-gray-100 border-b border-gray-200",
+  next_qtr: "text-gray-700 bg-gray-50 border-b border-gray-100",
+  "2_qtrs_out": "text-gray-600 bg-gray-50/70 border-b border-gray-100",
+  everything_else: "text-gray-500 bg-gray-50/50 border-b border-gray-100",
 };
 
 const COL_COUNT = 10;
@@ -427,9 +427,9 @@ function DealBucketSection({ bucket, deals }: { bucket: QuarterBucket; deals: St
   return (
     <>
       <tr>
-        <td colSpan={COL_COUNT} className={`py-1 px-1 text-[10px] font-semibold uppercase tracking-wider ${BUCKET_HEADER_COLORS[bucket]}`}>
+        <td colSpan={COL_COUNT} className={`py-1.5 px-2 text-[11px] font-bold uppercase tracking-wider ${BUCKET_HEADER_COLORS[bucket]}`}>
           {getQuarterLabel(bucket)}
-          <span className="ml-1 font-normal opacity-60">({deals.length})</span>
+          <span className="ml-1.5 font-normal opacity-60">({deals.length})</span>
         </td>
       </tr>
       {deals.map((deal) => (

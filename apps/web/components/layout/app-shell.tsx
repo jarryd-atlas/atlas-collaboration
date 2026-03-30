@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
@@ -37,6 +37,22 @@ export function AppShell({
   customers = [],
 }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("atlas-nav-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("atlas-nav-collapsed", String(navCollapsed));
+    } catch {
+      // ignore
+    }
+  }, [navCollapsed]);
 
   const searchParams = useSearchParams();
   const isCustomerPreview = searchParams.get("preview") === "customer";
@@ -73,8 +89,12 @@ export function AppShell({
       )}
       <div className="flex h-screen overflow-hidden">
         {/* Desktop sidebar */}
-        <div className="hidden lg:block shrink-0">
-          <Sidebar {...sidebarProps} />
+        <div className="hidden lg:block shrink-0 transition-all duration-200">
+          <Sidebar
+            {...sidebarProps}
+            collapsed={navCollapsed}
+            onToggleCollapse={() => setNavCollapsed(!navCollapsed)}
+          />
         </div>
 
         {/* Mobile sidebar */}

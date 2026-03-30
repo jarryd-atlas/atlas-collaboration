@@ -5,7 +5,7 @@
 
 import { createSupabaseAdmin } from "../supabase/server";
 import { getDeals } from "../hubspot/client";
-import { DEAL_STAGE_LABELS, RENEWAL_STAGE_IDS } from "../hubspot/constants";
+import { DEAL_STAGE_LABELS, RENEWAL_STAGE_IDS, CLOSED_STAGE_IDS } from "../hubspot/constants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromTable = (sb: ReturnType<typeof createSupabaseAdmin>, table: string) =>
@@ -364,9 +364,8 @@ export async function getStandupDealData(): Promise<Record<string, StandupDeal[]
 
   const siteMap = new Map((sites ?? []).map((s: any) => [s.id, s]));
 
-  // Filter to new business deals only
-  const newBizLinks = links.filter((l: any) => l.deal_type !== "renewal");
-  const dealIds = [...new Set(newBizLinks.map((l: any) => l.hubspot_deal_id))] as string[];
+  // Fetch all deals (new biz + renewals)
+  const dealIds = [...new Set(links.map((l: any) => l.hubspot_deal_id))] as string[];
 
   if (dealIds.length === 0) return {};
 
@@ -383,17 +382,19 @@ export async function getStandupDealData(): Promise<Record<string, StandupDeal[]
   // Build result grouped by customer
   const result: Record<string, StandupDeal[]> = {};
 
-  for (const link of newBizLinks) {
+  for (const link of links) {
     const site = siteMap.get(link.site_id);
     if (!site) continue;
 
     const props = dealMap.get(link.hubspot_deal_id);
     if (!props) continue;
 
+    // Exclude closed deals (won/lost)
+    const stageId = props.dealstage ?? "";
+    if (CLOSED_STAGE_IDS.has(stageId)) continue;
+
     const customerId = site.customer_id;
     if (!result[customerId]) result[customerId] = [];
-
-    const stageId = props.dealstage ?? "";
 
     result[customerId].push({
       dealId: link.hubspot_deal_id,

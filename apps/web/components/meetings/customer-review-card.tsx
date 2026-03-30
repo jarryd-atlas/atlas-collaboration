@@ -58,6 +58,7 @@ interface StandupDeal {
   siteId: string;
   siteName: string;
   dealName: string;
+  dealType: string;
   stage: string;
   amount: string | null;
   arr: string | null;
@@ -324,8 +325,64 @@ function formatForecast(category: string | null): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type QuarterBucket = "past_due" | "this_qtr" | "next_qtr" | "2_qtrs_out" | "everything_else";
+
+const BUCKET_ORDER: QuarterBucket[] = ["past_due", "this_qtr", "next_qtr", "2_qtrs_out", "everything_else"];
+
+function getQuarterBucket(closeDate: string | null): QuarterBucket {
+  if (!closeDate) return "everything_else";
+  const close = new Date(closeDate);
+  const now = new Date();
+  if (close < now) return "past_due";
+  const closeQ = Math.floor(close.getMonth() / 3);
+  const closeY = close.getFullYear();
+  const nowQ = Math.floor(now.getMonth() / 3);
+  const nowY = now.getFullYear();
+  const qtrDiff = (closeY - nowY) * 4 + (closeQ - nowQ);
+  if (qtrDiff === 0) return "this_qtr";
+  if (qtrDiff === 1) return "next_qtr";
+  if (qtrDiff === 2) return "2_qtrs_out";
+  return "everything_else";
+}
+
+function getQuarterLabel(bucket: QuarterBucket): string {
+  const now = new Date();
+  const nowQ = Math.floor(now.getMonth() / 3);
+  const nowY = now.getFullYear();
+  const fmtQtr = (q: number, y: number) => `Q${q + 1} ${y}`;
+  const addQtrs = (offset: number) => {
+    const totalQ = nowQ + offset;
+    return fmtQtr(((totalQ % 4) + 4) % 4, nowY + Math.floor(totalQ / 4));
+  };
+  switch (bucket) {
+    case "past_due": return "Past Due";
+    case "this_qtr": return `This Qtr (${addQtrs(0)})`;
+    case "next_qtr": return `Next Qtr (${addQtrs(1)})`;
+    case "2_qtrs_out": return `2 Qtrs Out (${addQtrs(2)})`;
+    case "everything_else": return "Everything Else";
+  }
+}
+
+const BUCKET_HEADER_COLORS: Record<QuarterBucket, string> = {
+  past_due: "text-red-500 bg-red-50/50",
+  this_qtr: "text-gray-700 bg-gray-50",
+  next_qtr: "text-gray-500 bg-gray-50/50",
+  "2_qtrs_out": "text-gray-400 bg-gray-50/30",
+  everything_else: "text-gray-400",
+};
+
+const COL_COUNT = 10;
+
 function DealsTable({ deals }: { deals: StandupDeal[] }) {
   const [open, setOpen] = useState(true);
+
+  // Group deals by quarter bucket
+  const grouped = new Map<QuarterBucket, StandupDeal[]>();
+  for (const deal of deals) {
+    const bucket = getQuarterBucket(deal.closeDate);
+    if (!grouped.has(bucket)) grouped.set(bucket, []);
+    grouped.get(bucket)!.push(deal);
+  }
 
   return (
     <div className="px-5 py-2 border-b border-gray-50">
@@ -344,6 +401,7 @@ function DealsTable({ deals }: { deals: StandupDeal[] }) {
             <thead>
               <tr className="text-left text-gray-400 font-medium">
                 <th className="py-1 px-1 font-medium">Site</th>
+                <th className="py-1 px-1 font-medium">Type</th>
                 <th className="py-1 px-1 font-medium">Stage</th>
                 <th className="py-1 px-1 font-medium text-right">Amount</th>
                 <th className="py-1 px-1 font-medium text-right">ARR</th>
@@ -354,19 +412,8 @@ function DealsTable({ deals }: { deals: StandupDeal[] }) {
               </tr>
             </thead>
             <tbody>
-              {deals.map((deal) => (
-                <tr key={deal.dealId} className="border-t border-gray-50 hover:bg-gray-50/50">
-                  <td className="py-1 px-1 text-gray-700 truncate max-w-[120px]">{deal.siteName}</td>
-                  <td className="py-1 px-1 text-gray-500 truncate max-w-[100px]">{deal.stage}</td>
-                  <td className="py-1 px-1 text-right text-gray-700 font-medium tabular-nums">{formatCurrency(deal.amount)}</td>
-                  <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.arr)}</td>
-                  <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.install)}</td>
-                  <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.upgrade)}</td>
-                  <td className={`py-1 px-1 ${FORECAST_COLORS[deal.forecastCategory ?? ""] ?? "text-gray-500"}`}>
-                    {formatForecast(deal.forecastCategory)}
-                  </td>
-                  <td className="py-1 px-1 text-gray-500 tabular-nums">{formatDealDate(deal.closeDate)}</td>
-                </tr>
+              {BUCKET_ORDER.filter((b) => grouped.has(b)).map((bucket) => (
+                <DealBucketSection key={bucket} bucket={bucket} deals={grouped.get(bucket)!} />
               ))}
             </tbody>
           </table>
@@ -374,6 +421,43 @@ function DealsTable({ deals }: { deals: StandupDeal[] }) {
       )}
     </div>
   );
+}
+
+function DealBucketSection({ bucket, deals }: { bucket: QuarterBucket; deals: StandupDeal[] }) {
+  return (
+    <>
+      <tr>
+        <td colSpan={COL_COUNT} className={`py-1 px-1 text-[10px] font-semibold uppercase tracking-wider ${BUCKET_HEADER_COLORS[bucket]}`}>
+          {getQuarterLabel(bucket)}
+          <span className="ml-1 font-normal opacity-60">({deals.length})</span>
+        </td>
+      </tr>
+      {deals.map((deal) => (
+        <tr key={deal.dealId} className="border-t border-gray-50 hover:bg-gray-50/50">
+          <td className="py-1 px-1 text-gray-700 truncate max-w-[120px]">{deal.siteName}</td>
+          <td className="py-1 px-1">
+            <DealTypeBadge type={deal.dealType} />
+          </td>
+          <td className="py-1 px-1 text-gray-500 truncate max-w-[100px]">{deal.stage}</td>
+          <td className="py-1 px-1 text-right text-gray-700 font-medium tabular-nums">{formatCurrency(deal.amount)}</td>
+          <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.arr)}</td>
+          <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.install)}</td>
+          <td className="py-1 px-1 text-right text-gray-600 tabular-nums">{formatCurrency(deal.upgrade)}</td>
+          <td className={`py-1 px-1 ${FORECAST_COLORS[deal.forecastCategory ?? ""] ?? "text-gray-500"}`}>
+            {formatForecast(deal.forecastCategory)}
+          </td>
+          <td className="py-1 px-1 text-gray-500 tabular-nums">{formatDealDate(deal.closeDate)}</td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function DealTypeBadge({ type }: { type: string }) {
+  if (type === "renewal") {
+    return <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-blue-50 text-blue-600">Renew</span>;
+  }
+  return <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-green-50 text-green-600">New</span>;
 }
 
 // ─── Collapsible Tasks Section ─────────────────────────

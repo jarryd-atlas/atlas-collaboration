@@ -39,6 +39,16 @@ export const RENEWAL_STAGE_IDS = new Set([
   "dddab890-d5f2-4399-9886-f2ad9fb46864",  // Lost
 ]);
 
+/**
+ * Closed deal stage IDs (won + lost) — used to exclude from standup views.
+ */
+export const CLOSED_STAGE_IDS = new Set([
+  "4c6e00f8-890b-4a2d-8f22-7eb9b7227e00", // New Biz - Won
+  "5b2cab04-4ab5-4249-8487-0b3834d444c5",  // New Biz - Lost
+  "80a99505-8d78-4864-bee8-c416cb2e7f4f",  // Renewal - Won
+  "dddab890-d5f2-4399-9886-f2ad9fb46864",  // Renewal - Lost
+]);
+
 /** Determine deal type from the deal stage ID */
 export function getDealType(dealStageId: string): "renewal" | "new_business" {
   return RENEWAL_STAGE_IDS.has(dealStageId) ? "renewal" : "new_business";

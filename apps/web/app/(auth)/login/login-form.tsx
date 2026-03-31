@@ -33,7 +33,7 @@ export function LoginForm({ searchParams }: LoginFormProps) {
           access_type: "offline",
           prompt: "consent",
         },
-        scopes: "https://www.googleapis.com/auth/drive.readonly",
+        scopes: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly",
       },
     });
     if (error) {

@@ -16,6 +16,13 @@ interface CreateSiteDialogProps {
   customerName: string;
   customerId: string;
   customerTenantId: string;
+  /** Pre-fill form with data from Google Places search */
+  initialValues?: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+  } | null;
 }
 
 export function CreateSiteDialog({
@@ -24,13 +31,14 @@ export function CreateSiteDialog({
   customerName,
   customerId,
   customerTenantId,
+  initialValues,
 }: CreateSiteDialogProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-  const [siteName, setSiteName] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
+  const [siteName, setSiteName] = useState(initialValues?.name ?? "");
+  const [address, setAddress] = useState(initialValues?.address ?? "");
+  const [city, setCity] = useState(initialValues?.city ?? "");
+  const [state, setState] = useState(initialValues?.state ?? "");
   const router = useRouter();
 
   function handlePlaceSelect(details: {

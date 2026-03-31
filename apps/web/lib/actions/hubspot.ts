@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, requireSession } from "../supabase/server";
 import { syncSiteWithDeal } from "../hubspot/sync";
+import { recalculateSiteStage } from "../hubspot/stage-resolver";
 import { DEFAULT_FIELD_MAPPINGS } from "../hubspot/constants";
 import type { SyncDirection, SyncResult } from "../hubspot/types";
 
@@ -91,12 +92,55 @@ export async function linkDealToSite(siteId: string, dealId: string, dealName: s
 
     if (dbError) {
       if (dbError.code === "23505") {
+        // Look up which site already has this deal linked
+        try {
+          const { data: existing } = await fromTable(admin, "hubspot_site_links")
+            .select("deal_name, site_id, sites(name)")
+            .eq("hubspot_deal_id", dealId)
+            .eq("tenant_id", claims.tenantId!)
+            .maybeSingle();
+          const siteName = (existing as any)?.sites?.name;
+          if (siteName) {
+            return { error: `This deal is already linked to "${siteName}"` };
+          }
+        } catch { /* fall through to generic message */ }
         return { error: "This site or deal is already linked" };
       }
       return { error: dbError.message };
     }
 
+    // Auto-sync deal data (including pipeline stage) to the site
+    try {
+      const { data: config } = await fromTable(admin, "hubspot_config")
+        .select("access_token")
+        .eq("tenant_id", claims.tenantId!)
+        .eq("is_active", true)
+        .single();
+
+      if (config) {
+        const { data: newLink } = await fromTable(admin, "hubspot_site_links")
+          .select("id")
+          .eq("site_id", siteId)
+          .eq("hubspot_deal_id", dealId)
+          .eq("tenant_id", claims.tenantId!)
+          .single();
+
+        if (newLink) {
+          await syncSiteWithDeal({
+            token: (config as { access_token: string }).access_token,
+            siteLinkId: newLink.id as string,
+            siteId,
+            dealId,
+            tenantId: claims.tenantId!,
+            profileId: claims.profileId,
+            triggeredBy: "manual",
+          });
+        }
+      }
+    } catch { /* non-critical — link was created, sync can be retried */ }
+
     revalidatePath("/admin/integrations");
+    revalidatePath("/customers", "layout");
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Unexpected error" };
@@ -111,6 +155,16 @@ export async function unlinkDealFromSite(siteLinkId: string) {
     }
 
     const admin = createSupabaseAdmin();
+
+    // Look up site_id before deleting
+    const { data: link } = await fromTable(admin, "hubspot_site_links")
+      .select("site_id")
+      .eq("id", siteLinkId)
+      .eq("tenant_id", claims.tenantId!)
+      .single();
+
+    const siteId = (link as { site_id: string } | null)?.site_id;
+
     const { error: dbError } = await fromTable(admin, "hubspot_site_links")
       .delete()
       .eq("id", siteLinkId)
@@ -118,7 +172,17 @@ export async function unlinkDealFromSite(siteLinkId: string) {
 
     if (dbError) return { error: dbError.message };
 
+    // Recalculate stage — if no deals remain, site becomes "whitespace"
+    if (siteId) {
+      try {
+        await recalculateSiteStage(siteId, claims.tenantId!);
+      } catch {
+        // Non-critical
+      }
+    }
+
     revalidatePath("/admin/integrations");
+    revalidatePath("/customers", "layout");
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Unexpected error" };

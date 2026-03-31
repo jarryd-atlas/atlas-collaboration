@@ -80,8 +80,8 @@ export function SiteOverviewInline({
       .finally(() => setLoading(false));
   }, [siteId]);
 
-  const isDisqualifiedOrPaused =
-    site.pipeline_stage === "disqualified" || site.pipeline_stage === "paused";
+  const isNonPipeline =
+    site.pipeline_stage === "disqualified" || site.pipeline_stage === "paused" || site.pipeline_stage === "whitespace";
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -119,7 +119,7 @@ export function SiteOverviewInline({
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {/* Pipeline stage tracker */}
-        {!isDisqualifiedOrPaused && (
+        {!isNonPipeline && (
           <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-card">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider">Pipeline</h3>

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PipelineStageBadge } from "../ui/badge";
 import { ProgressBar } from "../ui/progress-bar";
 import { EmptyState } from "../ui/empty-state";
 import { updateSiteNextStep } from "../../lib/actions";
-import { MapPin, ArrowRight, Search, X, ExternalLink } from "lucide-react";
+import { MapPin, ArrowRight, Search, X, ExternalLink, Plus } from "lucide-react";
 import { InlineDealLinker } from "../hubspot/inline-deal-linker";
 import { cn } from "../../lib/utils";
 
@@ -43,10 +43,15 @@ interface SitesListProps {
   selectedSiteId?: string | null;
   /** Callback when a site is selected (selection mode) */
   onSiteSelect?: (siteId: string | null) => void;
+  /** Callback when user selects a Google Places result to add a new site */
+  onAddFromGoogle?: (place: { name: string; address: string; city: string; state: string }) => void;
+  /** Company name — used to scope Google Places search */
+  customerName?: string;
 }
 
 /** All possible pipeline stages with display labels, in pipeline order */
 const STAGE_LABELS: Record<string, string> = {
+  whitespace: "Whitespace",
   prospect: "Prospect",
   evaluation: "Evaluation",
   qualified: "Qualified",
@@ -58,7 +63,7 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 /** Pipeline order for sorting filter chips */
-const STAGE_ORDER = ["prospect", "evaluation", "qualified", "contracted", "deployment", "active", "paused", "disqualified"];
+const STAGE_ORDER = ["whitespace", "prospect", "evaluation", "qualified", "contracted", "deployment", "active", "paused", "disqualified"];
 
 function NextStepInput({ siteId, initialValue }: { siteId: string; initialValue: string }) {
   const [value, setValue] = useState(initialValue);
@@ -106,12 +111,80 @@ export function SitesList({
   compact = false,
   selectedSiteId,
   onSiteSelect,
+  onAddFromGoogle,
+  customerName,
 }: SitesListProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [googleResults, setGoogleResults] = useState<{ place_id: string; description: string }[]>([]);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const isSelectionMode = !!onSiteSelect;
+
+  // Fetch Google Places when search >= 3 chars
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (search.trim().length < 3 || !onAddFromGoogle) {
+      setGoogleResults([]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setLoadingGoogle(true);
+      try {
+        const query = customerName ? `${customerName} ${search.trim()}` : search.trim();
+        const res = await fetch(`/api/places/autocomplete?input=${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setGoogleResults(data.predictions || []);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoadingGoogle(false);
+      }
+    }, 300);
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [search, onAddFromGoogle, customerName]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    if (showDropdown) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showDropdown]);
+
+  async function handleGoogleSelect(placeId: string) {
+    if (!onAddFromGoogle) return;
+    setShowDropdown(false);
+    try {
+      const res = await fetch(`/api/places/details?place_id=${placeId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const d = data.details;
+        if (!d) return;
+        onAddFromGoogle({
+          name: d.name || "",
+          address: d.address || "",
+          city: d.city || "",
+          state: d.state || "",
+        });
+        setSearch("");
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   // Dynamically compute which stages exist in the data, in pipeline order
   const stageFilters = useMemo(() => {
@@ -177,23 +250,90 @@ export function SitesList({
           "flex items-start gap-3",
           compact ? "flex-col" : "flex-col sm:flex-row sm:items-center"
         )}>
-          {/* Search input */}
-          <div className={cn("relative w-full", compact ? "" : "flex-1 sm:max-w-xs")}>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          {/* Unified search input with dropdown */}
+          <div ref={searchContainerRef} className={cn("relative w-full", compact ? "" : "flex-1 sm:max-w-xs")}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search sites..."
+              onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+              onFocus={() => { if (search.trim().length >= 3) setShowDropdown(true); }}
+              placeholder={onAddFromGoogle ? "Search sites or add new..." : "Search sites..."}
               className="w-full rounded-lg border border-gray-200 bg-white pl-9 pr-8 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green/50"
             />
             {search && (
               <button
-                onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100 text-gray-400"
+                onClick={() => { setSearch(""); setShowDropdown(false); setGoogleResults([]); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-gray-100 text-gray-400 z-10"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+            )}
+
+            {/* Dropdown with Google Places results */}
+            {showDropdown && search.trim().length >= 3 && onAddFromGoogle && (googleResults.length > 0 || loadingGoogle) && (
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                {/* Existing sites section */}
+                {filteredSites.length > 0 && (
+                  <>
+                    <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                        Existing Sites ({filteredSites.length})
+                      </span>
+                    </div>
+                    {filteredSites.slice(0, 5).map((site) => (
+                      <button
+                        key={site.slug}
+                        type="button"
+                        onClick={() => {
+                          setShowDropdown(false);
+                          if (isSelectionMode) {
+                            onSiteSelect?.(site.id ?? null);
+                          } else {
+                            router.push(`/customers/${customerSlug}/sites/${site.slug}`);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 transition-colors"
+                      >
+                        <MapPin className="h-3 w-3 text-green-500 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm text-gray-900 truncate block">{site.name}</span>
+                          <span className="text-[11px] text-gray-400 truncate block">
+                            {site.address || [site.city, site.state].filter(Boolean).join(", ")}
+                          </span>
+                        </div>
+                        <PipelineStageBadge stage={site.pipeline_stage} />
+                      </button>
+                    ))}
+                    {filteredSites.length > 5 && (
+                      <div className="px-3 py-1 text-[10px] text-gray-400 border-b border-gray-100">
+                        +{filteredSites.length - 5} more matching sites
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Google Places section */}
+                <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                    {loadingGoogle ? "Searching Google..." : "Add New Site"}
+                  </span>
+                </div>
+                {googleResults.map((p) => (
+                  <button
+                    key={p.place_id}
+                    type="button"
+                    onClick={() => handleGoogleSelect(p.place_id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus className="h-3 w-3 text-blue-500 shrink-0" />
+                    <span className="text-sm text-gray-700 truncate">{p.description}</span>
+                  </button>
+                ))}
+                {loadingGoogle && googleResults.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-gray-400">Searching...</div>
+                )}
+              </div>
             )}
           </div>
 
@@ -263,6 +403,7 @@ export function SitesList({
                 ? Math.round(((site.completed_task_count ?? 0) / (site.task_count ?? 1)) * 100)
                 : 0;
             const isDq = site.pipeline_stage === "disqualified";
+            const isWhitespace = site.pipeline_stage === "whitespace";
             const isSelected = isSelectionMode && selectedSiteId === site.id;
 
             return (
@@ -272,7 +413,7 @@ export function SitesList({
                 className={cn(
                   "group flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer",
                   compact ? "px-3 py-2.5" : "px-6 py-4",
-                  isDq && "opacity-50",
+                  (isDq || isWhitespace) && "opacity-60",
                   isSelected && "bg-green-50 ring-1 ring-inset ring-brand-green/40",
                 )}
               >

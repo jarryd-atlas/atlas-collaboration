@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { createStakeholder, updateStakeholder, deleteStakeholder } from "../../lib/actions/account-plan";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Search, Check } from "lucide-react";
+import { cn } from "../../lib/utils";
 import type { Stakeholder } from "./org-chart-node";
 
 interface StakeholderFormProps {
@@ -109,12 +110,11 @@ export function StakeholderForm({
             </div>
             <div className="col-span-2">
               <label className="text-[10px] font-medium text-gray-500 uppercase">Reports To</label>
-              <select value={form.reports_to} onChange={(e) => setForm({ ...form, reports_to: e.target.value })} className="w-full mt-0.5 px-2.5 py-1.5 text-sm border border-gray-200 rounded-md">
-                <option value="">None (top-level)</option>
-                {reportsToOptions.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}{s.title ? ` — ${s.title}` : ""}</option>
-                ))}
-              </select>
+              <ReportsToSearch
+                value={form.reports_to}
+                onChange={(id) => setForm({ ...form, reports_to: id })}
+                options={reportsToOptions}
+              />
             </div>
           </div>
 
@@ -173,6 +173,134 @@ export function StakeholderForm({
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ─── Searchable Reports To Combobox ──────────────────────────
+
+function ReportsToSearch({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  options: Stakeholder[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((s) => s.id === value);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = query.toLowerCase();
+    return options.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.title && s.title.toLowerCase().includes(q)) ||
+        (s.department && s.department.toLowerCase().includes(q))
+    );
+  }, [options, query]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative mt-0.5">
+      {/* Display / trigger */}
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(!open);
+          setQuery("");
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }}
+        className="w-full flex items-center justify-between px-2.5 py-1.5 text-sm border border-gray-200 rounded-md text-left hover:border-gray-300 transition-colors"
+      >
+        <span className={selected ? "text-gray-900" : "text-gray-400"}>
+          {selected ? `${selected.name}${selected.title ? ` — ${selected.title}` : ""}` : "None (top-level)"}
+        </span>
+        <Search className="h-3 w-3 text-gray-400 shrink-0" />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {/* Search input */}
+          <div className="px-2.5 py-2 border-b border-gray-100">
+            <div className="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded-md">
+              <Search className="h-3 w-3 text-gray-400 shrink-0" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, title, or department..."
+                className="w-full text-sm bg-transparent outline-none placeholder:text-gray-400"
+              />
+            </div>
+          </div>
+
+          {/* Options list */}
+          <div className="max-h-48 overflow-y-auto">
+            {/* None option */}
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false); }}
+              className={cn(
+                "w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors",
+                !value && "bg-gray-50"
+              )}
+            >
+              {!value && <Check className="h-3 w-3 text-gray-900 shrink-0" />}
+              {value && <span className="w-3 shrink-0" />}
+              <span className="text-gray-500 italic">None (top-level)</span>
+            </button>
+
+            {filtered.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => { onChange(s.id); setOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors",
+                  s.id === value && "bg-gray-50"
+                )}
+              >
+                {s.id === value ? (
+                  <Check className="h-3 w-3 text-gray-900 shrink-0" />
+                ) : (
+                  <span className="w-3 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <span className="font-medium text-gray-900">{s.name}</span>
+                  {s.title && <span className="text-gray-400 ml-1">— {s.title}</span>}
+                  {s.department && (
+                    <span className="text-[10px] text-gray-400 ml-1.5">({s.department})</span>
+                  )}
+                </div>
+              </button>
+            ))}
+
+            {filtered.length === 0 && (
+              <div className="px-3 py-3 text-xs text-gray-400 text-center">
+                No matches found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

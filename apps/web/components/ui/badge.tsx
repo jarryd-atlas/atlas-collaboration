@@ -35,6 +35,7 @@ export function Badge({ children, variant = "default", className }: BadgeProps) 
 
 const statusVariants: Record<string, BadgeVariant> = {
   // Pipeline stages
+  whitespace: "outline",
   prospect: "default",
   evaluation: "info",
   qualified: "info",
@@ -110,9 +111,54 @@ export function CompanyTypeBadge({ type, className }: { type: string; className?
   );
 }
 
+/** Account stage badge (Pilot / Expanding / Enterprise) */
+export function AccountStageBadge({ stage, className }: { stage: string; className?: string }) {
+  const stageVariants: Record<string, BadgeVariant> = {
+    pilot: "default",
+    expanding: "info",
+    enterprise: "success",
+  };
+  const stageColors: Record<string, string> = {
+    pilot: "",
+    expanding: "",
+    enterprise: "bg-purple-50 text-purple-700",
+  };
+  return (
+    <Badge
+      variant={stageVariants[stage] ?? "default"}
+      className={cn(stageColors[stage], className)}
+    >
+      {formatLabel(stage)}
+    </Badge>
+  );
+}
+
+/** Deal stage badge */
+export function DealStageBadge({ stage, className }: { stage: string; className?: string }) {
+  const dealColors: Record<string, string> = {
+    identified: "bg-blue-50 text-blue-700",
+    proposal: "bg-amber-50 text-amber-700",
+    negotiation: "bg-purple-50 text-purple-700",
+    closed_won: "bg-green-50 text-green-700",
+    closed_lost: "bg-red-50 text-red-700",
+  };
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        dealColors[stage] ?? "bg-gray-100 text-gray-600",
+        className,
+      )}
+    >
+      {formatLabel(stage)}
+    </span>
+  );
+}
+
 /** Pipeline stage badge with colored dot */
 export function PipelineStageBadge({ stage, className }: { stage: string; className?: string }) {
   const dotColors: Record<string, string> = {
+    whitespace: "bg-stage-whitespace",
     prospect: "bg-stage-prospect",
     evaluation: "bg-stage-evaluation",
     qualified: "bg-stage-qualified",

@@ -85,6 +85,16 @@ interface StandupDeal {
   closeDate: string | null;
 }
 
+interface StakeholderInfo {
+  id: string;
+  name: string;
+  email: string | null;
+  title: string | null;
+  department: string | null;
+  stakeholder_role: string | null;
+  notes: string | null;
+}
+
 interface StandupDashboardProps {
   series: {
     id: string;
@@ -95,6 +105,8 @@ interface StandupDashboardProps {
   meetings: Meeting[];
   customerData: CustomerData[];
   dealData: Record<string, StandupDeal[]>;
+  weeklyMeetings: Record<string, any[]>;
+  stakeholderData: Record<string, StakeholderInfo[]>;
   currentUserId: string;
   teamMembers: TeamMember[];
 }
@@ -133,6 +145,8 @@ export function StandupDashboard({
   meetings: initialMeetings,
   customerData,
   dealData,
+  weeklyMeetings,
+  stakeholderData,
   currentUserId,
   teamMembers,
 }: StandupDashboardProps) {
@@ -252,6 +266,8 @@ export function StandupDashboard({
               customer={customer}
               items={customerItems}
               deals={dealData[customer.id] ?? []}
+              calendarMeetings={weeklyMeetings[customer.id] ?? []}
+              stakeholders={stakeholderData[customer.id] ?? []}
               onAddItem={handleAddItem}
               onUpdateItem={handleUpdateItem}
               onDeleteItem={handleDeleteItem}

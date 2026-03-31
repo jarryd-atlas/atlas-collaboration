@@ -21,6 +21,13 @@ export async function upsertAccountPlan(
     competitive_landscape?: string;
     win_themes?: string;
     total_addressable_sites?: number;
+    company_mission?: string | null;
+    company_vision?: string | null;
+    company_values?: string | null;
+    company_priorities?: string | null;
+    industry_vertical?: string | null;
+    key_initiatives?: string | null;
+    intelligence_fetched_at?: string | null;
   },
   profileId?: string
 ) {
@@ -41,6 +48,37 @@ export async function updateAccountStage(customerId: string, stage: string) {
   const { error } = await fromTable(supabase,"account_plans")
     .update({ account_stage: stage })
     .eq("customer_id", customerId);
+
+  if (error) return { error: error.message };
+  revalidatePath("/customers");
+  return { success: true };
+}
+
+// ─── Company Intelligence ─────────────────────────────────────
+
+export async function updateCompanyIntelligence(
+  customerId: string,
+  tenantId: string,
+  data: {
+    company_mission?: string | null;
+    company_vision?: string | null;
+    company_values?: string | null;
+    company_priorities?: string | null;
+    industry_vertical?: string | null;
+    key_initiatives?: string | null;
+  }
+) {
+  const supabase = createSupabaseAdmin();
+  const { error } = await fromTable(supabase, "account_plans")
+    .upsert(
+      {
+        customer_id: customerId,
+        tenant_id: tenantId,
+        ...data,
+        intelligence_fetched_at: new Date().toISOString(),
+      },
+      { onConflict: "customer_id" }
+    );
 
   if (error) return { error: error.message };
   revalidatePath("/customers");
@@ -248,6 +286,50 @@ export async function deleteSuccessMilestone(milestoneId: string) {
   if (error) return { error: error.message };
   revalidatePath("/customers");
   return { success: true };
+}
+
+// ─── Meeting Briefs ─────────────────────────────────────────
+
+export async function saveMeetingBrief(
+  customerId: string,
+  tenantId: string,
+  data: {
+    title: string;
+    meeting_date?: string | null;
+    raw_attendee_input: string;
+    researched_attendees: any[];
+  },
+  profileId?: string
+) {
+  const supabase = createSupabaseAdmin();
+  const { data: result, error } = await fromTable(supabase, "meeting_briefs")
+    .insert({
+      customer_id: customerId,
+      tenant_id: tenantId,
+      title: data.title,
+      meeting_date: data.meeting_date || null,
+      raw_attendee_input: data.raw_attendee_input,
+      researched_attendees: data.researched_attendees,
+      created_by: profileId,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+  revalidatePath("/customers");
+  return { success: true, id: result.id };
+}
+
+export async function fetchMeetingBriefs(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await fromTable(supabase, "meeting_briefs")
+    .select("id, title, meeting_date, researched_attendees, created_at")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) return { error: error.message };
+  return { briefs: data || [] };
 }
 
 // ─── Enterprise Deals ───────────────────────────────────────

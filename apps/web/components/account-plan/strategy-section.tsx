@@ -2,24 +2,20 @@
 
 import { useState, useCallback } from "react";
 import { upsertAccountPlan } from "../../lib/actions/account-plan";
-import { Crosshair, Swords, Trophy, MapPinned } from "lucide-react";
+import { Crosshair, Swords } from "lucide-react";
 
 interface StrategySectionProps {
   customerId: string;
   tenantId: string;
   accountPlan: {
     strategy_notes: string | null;
-    expansion_targets: string | null;
     competitive_landscape: string | null;
-    win_themes: string | null;
   } | null;
 }
 
 const FIELDS = [
-  { key: "strategy_notes", label: "Strategy Notes", icon: Crosshair, placeholder: "What's the strategic approach for this account?" },
-  { key: "expansion_targets", label: "Expansion Targets", icon: MapPinned, placeholder: "Which sites to target next and why?" },
+  { key: "strategy_notes", label: "Account Strategy", icon: Crosshair, placeholder: "What's the strategic approach for this account?" },
   { key: "competitive_landscape", label: "Competitive Landscape", icon: Swords, placeholder: "Who else is competing for this account?" },
-  { key: "win_themes", label: "Win Themes", icon: Trophy, placeholder: "Key value propositions and differentiators" },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]["key"];
@@ -27,9 +23,7 @@ type FieldKey = (typeof FIELDS)[number]["key"];
 export function StrategySection({ customerId, tenantId, accountPlan }: StrategySectionProps) {
   const [values, setValues] = useState<Record<FieldKey, string>>({
     strategy_notes: accountPlan?.strategy_notes ?? "",
-    expansion_targets: accountPlan?.expansion_targets ?? "",
     competitive_landscape: accountPlan?.competitive_landscape ?? "",
-    win_themes: accountPlan?.win_themes ?? "",
   });
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
 

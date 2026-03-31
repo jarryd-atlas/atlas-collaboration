@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, AlertTriangle, FileText, ListTodo, Milestone as MilestoneIcon, MapPin, ExternalLink, CheckCircle2, DollarSign } from "lucide-react";
+import { ChevronDown, ChevronRight, AlertTriangle, FileText, ListTodo, Milestone as MilestoneIcon, MapPin, ExternalLink, CheckCircle2, DollarSign, CalendarDays, Clock, Users, Briefcase, Building2, Shield } from "lucide-react";
 import { ProgressBar } from "../ui/progress-bar";
 import { MeetingItemRow } from "./meeting-item-row";
 import { AddItemInput } from "./add-item-input";
@@ -68,10 +68,32 @@ interface StandupDeal {
   closeDate: string | null;
 }
 
+interface CalendarMeeting {
+  id: string;
+  title: string;
+  meeting_date: string;
+  meeting_end: string | null;
+  attendees: { email: string; name: string; responseStatus?: string }[];
+  ck_attendees: { email: string; name: string }[];
+  html_link: string | null;
+}
+
+interface StakeholderInfo {
+  id: string;
+  name: string;
+  email: string | null;
+  title: string | null;
+  department: string | null;
+  stakeholder_role: string | null;
+  notes: string | null;
+}
+
 interface CustomerReviewCardProps {
   customer: CustomerData;
   items: MeetingItem[];
   deals?: StandupDeal[];
+  calendarMeetings?: CalendarMeeting[];
+  stakeholders?: StakeholderInfo[];
   onAddItem: (
     type: "note" | "action_item",
     body: string,
@@ -87,6 +109,7 @@ interface CustomerReviewCardProps {
 }
 
 const STAGE_LABELS: Record<string, string> = {
+  whitespace: "Whitespace",
   prospect: "Prospect",
   evaluation: "Evaluation",
   qualified: "Qualified",
@@ -98,6 +121,7 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
+  whitespace: "bg-gray-50 text-gray-400",
   prospect: "bg-gray-100 text-gray-600",
   evaluation: "bg-blue-50 text-blue-600",
   qualified: "bg-purple-50 text-purple-600",
@@ -112,6 +136,8 @@ export function CustomerReviewCard({
   customer,
   items,
   deals = [],
+  calendarMeetings = [],
+  stakeholders = [],
   onAddItem,
   onUpdateItem,
   onDeleteItem,
@@ -222,6 +248,11 @@ export function CustomerReviewCard({
               </div>
             </div>
           </div>
+
+          {/* This week's calendar meetings */}
+          {calendarMeetings.length > 0 && (
+            <WeeklyMeetingsSection meetings={calendarMeetings} stakeholders={stakeholders} />
+          )}
 
           {/* Deals table */}
           {deals.length > 0 && (
@@ -458,6 +489,275 @@ function DealTypeBadge({ type }: { type: string }) {
     return <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-blue-50 text-blue-600">Renew</span>;
   }
   return <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-green-50 text-green-600">New</span>;
+}
+
+// ─── Weekly Calendar Meetings ──────────────────────────
+
+function formatMeetingTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatMeetingDay(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (d.toDateString() === now.toDateString()) return "Today";
+  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+
+  return d.toLocaleDateString("en-US", { weekday: "short" });
+}
+
+function isUpcoming(dateStr: string): boolean {
+  return new Date(dateStr) >= new Date();
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  champion: "Champion",
+  decision_maker: "Decision Maker",
+  influencer: "Influencer",
+  user: "User",
+  economic_buyer: "Economic Buyer",
+};
+
+const ROLE_BADGE_COLORS: Record<string, string> = {
+  champion: "bg-green-50 text-green-700",
+  decision_maker: "bg-purple-50 text-purple-700",
+  influencer: "bg-blue-50 text-blue-700",
+  user: "bg-gray-100 text-gray-600",
+  economic_buyer: "bg-amber-50 text-amber-700",
+};
+
+const ATTENDEE_RESPONSE_COLORS: Record<string, string> = {
+  accepted: "bg-green-100 text-green-700",
+  declined: "bg-red-100 text-red-700",
+  tentative: "bg-amber-100 text-amber-700",
+  needsAction: "bg-gray-100 text-gray-500",
+};
+
+function WeeklyMeetingsSection({ meetings, stakeholders = [] }: { meetings: CalendarMeeting[]; stakeholders?: StakeholderInfo[] }) {
+  const [open, setOpen] = useState(true);
+  const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
+
+  const upcoming = meetings.filter((m) => isUpcoming(m.meeting_date));
+
+  // Build stakeholder lookup by email
+  const stakeholderByEmail = new Map<string, StakeholderInfo>();
+  for (const s of stakeholders) {
+    if (s.email) stakeholderByEmail.set(s.email.toLowerCase(), s);
+  }
+
+  return (
+    <div className="px-5 py-2 border-b border-gray-50">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[10px] font-medium text-gray-400 uppercase tracking-wider hover:text-gray-600 transition-colors w-full mb-1"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        <CalendarDays className="h-3 w-3" />
+        <span>
+          {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} this week
+          {upcoming.length > 0 && (
+            <span className="text-purple-500 normal-case ml-1">({upcoming.length} upcoming)</span>
+          )}
+        </span>
+      </button>
+
+      {open && (
+        <div className="space-y-1 mt-1">
+          {meetings.map((m) => {
+            const totalAttendees = m.attendees.length + m.ck_attendees.length;
+            const isMeetingUpcoming = isUpcoming(m.meeting_date);
+            const isExpanded = expandedMeetingId === m.id;
+
+            // Enrichment stats
+            const enrichedCount = m.attendees.filter(
+              (a) => {
+                const s = stakeholderByEmail.get(a.email.toLowerCase());
+                return s?.title && s.title !== "Unknown";
+              }
+            ).length;
+
+            return (
+              <div key={m.id} className="rounded-lg overflow-hidden">
+                {/* Meeting header row */}
+                <button
+                  onClick={() => setExpandedMeetingId(isExpanded ? null : m.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-1.5 text-[11px] text-left transition-colors ${
+                    isMeetingUpcoming
+                      ? "bg-purple-50/60 border border-purple-100/50 hover:bg-purple-50"
+                      : "bg-gray-50/50 hover:bg-gray-100/50"
+                  } ${isExpanded ? "rounded-t-lg" : "rounded-lg"}`}
+                >
+                  {/* Day + time */}
+                  <div className={`shrink-0 w-16 ${isMeetingUpcoming ? "text-purple-600" : "text-gray-400"}`}>
+                    <span className="font-semibold">{formatMeetingDay(m.meeting_date)}</span>
+                    <span className="ml-1">{formatMeetingTime(m.meeting_date)}</span>
+                  </div>
+
+                  {/* Title */}
+                  <div className="flex-1 min-w-0 truncate">
+                    <span className={`font-medium ${isMeetingUpcoming ? "text-gray-900" : "text-gray-500"}`}>
+                      {m.title}
+                    </span>
+                  </div>
+
+                  {/* Enrichment indicator */}
+                  {enrichedCount > 0 && (
+                    <span className="flex items-center gap-1 shrink-0 text-green-600">
+                      <CheckCircle2 className="h-3 w-3" />
+                      <span className="text-[10px]">
+                        {enrichedCount === m.attendees.length ? "All prepped" : `${enrichedCount}/${m.attendees.length}`}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Attendee count */}
+                  <div className="flex items-center gap-1 shrink-0 text-gray-400">
+                    <Users className="h-3 w-3" />
+                    <span>{totalAttendees}</span>
+                  </div>
+
+                  {/* CK team avatars */}
+                  <div className="flex -space-x-1 shrink-0">
+                    {m.ck_attendees.slice(0, 3).map((a, i) => (
+                      <div
+                        key={i}
+                        className="w-4 h-4 rounded-full bg-gray-200 border border-white flex items-center justify-center"
+                        title={a.name}
+                      >
+                        <span className="text-[7px] font-bold text-gray-500">
+                          {a.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    ))}
+                    {m.ck_attendees.length > 3 && (
+                      <div className="w-4 h-4 rounded-full bg-gray-100 border border-white flex items-center justify-center">
+                        <span className="text-[7px] text-gray-400">+{m.ck_attendees.length - 3}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Link to calendar */}
+                  {m.html_link && (
+                    <a
+                      href={m.html_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-gray-300 hover:text-gray-500 transition-colors shrink-0"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+
+                  {/* Expand chevron */}
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3 text-gray-300 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-gray-300 shrink-0" />
+                  )}
+                </button>
+
+                {/* Expanded attendee details */}
+                {isExpanded && (
+                  <div className={`px-4 py-2 border-x border-b rounded-b-lg ${
+                    isMeetingUpcoming ? "border-purple-100/50 bg-white" : "border-gray-100 bg-white"
+                  }`}>
+                    {/* CK Team */}
+                    {m.ck_attendees.length > 0 && (
+                      <div className="mb-2">
+                        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          CK Team ({m.ck_attendees.length})
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {m.ck_attendees.map((a, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 text-[11px] font-medium text-gray-600 bg-gray-100 rounded-full"
+                            >
+                              {a.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* External Attendees with enrichment */}
+                    {m.attendees.length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                          External ({m.attendees.length})
+                        </div>
+                        <div className="space-y-1.5">
+                          {m.attendees.map((a, i) => {
+                            const stakeholder = stakeholderByEmail.get(a.email.toLowerCase());
+                            const hasEnrichment = stakeholder?.title && stakeholder.title !== "Unknown";
+
+                            return (
+                              <div key={i} className={
+                                hasEnrichment ? "bg-gray-50/80 rounded-md px-2.5 py-1.5" : ""
+                              }>
+                                {/* Name row */}
+                                <div className="flex items-center gap-2 text-[11px]">
+                                  <span className="font-medium text-gray-700">{a.name}</span>
+                                  {hasEnrichment && stakeholder?.title && (
+                                    <span className="flex items-center gap-1 text-gray-500">
+                                      <Briefcase className="h-2.5 w-2.5" />
+                                      {stakeholder.title}
+                                    </span>
+                                  )}
+                                  {stakeholder?.stakeholder_role && (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                      ROLE_BADGE_COLORS[stakeholder.stakeholder_role] || "bg-gray-100 text-gray-600"
+                                    }`}>
+                                      {ROLE_LABELS[stakeholder.stakeholder_role] || stakeholder.stakeholder_role}
+                                    </span>
+                                  )}
+                                  {a.responseStatus && (
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                                      ATTENDEE_RESPONSE_COLORS[a.responseStatus] || ATTENDEE_RESPONSE_COLORS.needsAction
+                                    }`}>
+                                      {a.responseStatus === "needsAction" ? "pending" : a.responseStatus}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Detail row */}
+                                <div className="flex items-center gap-3 mt-0.5 text-[10px] text-gray-400">
+                                  <span>{a.email}</span>
+                                  {stakeholder?.department && (
+                                    <span className="flex items-center gap-1">
+                                      <Building2 className="h-2.5 w-2.5" />
+                                      {stakeholder.department}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Likely concerns */}
+                                {stakeholder?.notes && (
+                                  <div className="mt-1 text-[10px] text-gray-500 italic leading-relaxed">
+                                    <Shield className="h-2.5 w-2.5 inline mr-1 text-gray-400" />
+                                    {stakeholder.notes}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Collapsible Tasks Section ─────────────────────────

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { cn } from "../../lib/utils";
-import { LayoutDashboard, Users, Target, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, Target, Building2, CalendarDays, Mail } from "lucide-react";
 
-type TabKey = "overview" | "people" | "success-plan" | "sites-tasks";
+type TabKey = "overview" | "people" | "meetings" | "emails" | "success-plan" | "sites-tasks";
 
 interface AccountPlanTabsProps {
   isCKInternal: boolean;
@@ -12,27 +12,39 @@ interface AccountPlanTabsProps {
   children: {
     overview: React.ReactNode;
     people: React.ReactNode;
+    meetings: React.ReactNode;
+    emails: React.ReactNode;
     successPlan: React.ReactNode;
     sitesTasks: React.ReactNode;
   };
+  onTabChange?: (tab: string) => void;
 }
 
 const TABS: { key: TabKey; label: string; icon: any; internalOnly: boolean }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, internalOnly: true },
   { key: "people", label: "People", icon: Users, internalOnly: false },
+  { key: "meetings", label: "Meetings", icon: CalendarDays, internalOnly: true },
+  { key: "emails", label: "Emails", icon: Mail, internalOnly: true },
   { key: "success-plan", label: "Success Plan", icon: Target, internalOnly: false },
   { key: "sites-tasks", label: "Sites & Tasks", icon: Building2, internalOnly: false },
 ];
 
-export function AccountPlanTabs({ isCKInternal, children }: AccountPlanTabsProps) {
+export function AccountPlanTabs({ isCKInternal, children, onTabChange }: AccountPlanTabsProps) {
   const defaultTab: TabKey = isCKInternal ? "overview" : "success-plan";
   const [activeTab, setActiveTab] = useState<TabKey>(defaultTab);
+
+  const handleTabChange = useCallback((tab: TabKey) => {
+    setActiveTab(tab);
+    onTabChange?.(tab);
+  }, [onTabChange]);
 
   const visibleTabs = TABS.filter((tab) => !tab.internalOnly || isCKInternal);
 
   const contentMap: Record<TabKey, React.ReactNode> = {
     overview: children.overview,
     people: children.people,
+    meetings: children.meetings,
+    emails: children.emails,
     "success-plan": children.successPlan,
     "sites-tasks": children.sitesTasks,
   };
@@ -47,7 +59,7 @@ export function AccountPlanTabs({ isCKInternal, children }: AccountPlanTabsProps
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabChange(tab.key)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px",
                 isActive

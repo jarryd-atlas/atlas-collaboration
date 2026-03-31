@@ -23,7 +23,7 @@ function CallbackHandler() {
               accessToken: session.provider_token,
               refreshToken: session.provider_refresh_token ?? undefined,
               expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(), // ~1 hour
-              scopes: "https://www.googleapis.com/auth/drive.readonly",
+              scopes: "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly",
             });
           } catch (e) {
             console.error("Failed to store Google token:", e);

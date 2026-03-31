@@ -1159,6 +1159,7 @@ export type Database = {
         | "approval_needed"
         | "issue_flagged"
       pipeline_stage:
+        | "whitespace"
         | "prospect"
         | "evaluation"
         | "qualified"
@@ -1323,6 +1324,7 @@ export const Constants = {
         "issue_flagged",
       ],
       pipeline_stage: [
+        "whitespace",
         "prospect",
         "evaluation",
         "qualified",

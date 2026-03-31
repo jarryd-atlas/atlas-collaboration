@@ -1107,6 +1107,155 @@ export async function searchAll(query: string) {
   return results;
 }
 
+// ─── Companies with Account Data (Portfolio View) ──────────
+
+export interface CustomerListItem {
+  id: string;
+  name: string;
+  slug: string;
+  domain: string | null;
+  company_type: string | null;
+  account_stage: string | null;
+  total_addressable_sites: number | null;
+  deal_name: string | null;
+  target_value: number | null;
+  deal_stage: string | null;
+  target_close_date: string | null;
+  stakeholder_count: number;
+  goals_total: number;
+  goals_achieved: number;
+  milestones_total: number;
+  milestones_completed: number;
+  open_tasks: number;
+  open_issues: number;
+  total_sites: number;
+  active_sites: number;
+  deploying_sites: number;
+  eval_sites: number;
+}
+
+export async function getCustomersWithAccountData(): Promise<CustomerListItem[]> {
+  const supabase = createSupabaseAdmin();
+
+  const [
+    customersRes,
+    plansRes,
+    dealsRes,
+    sitesRes,
+    stakeholdersRes,
+    goalsRes,
+    milestonesRes,
+    tasksRes,
+    issuesRes,
+  ] = await Promise.all([
+    supabase.from("customers").select("*").order("name"),
+    fromTable(supabase, "account_plans").select("customer_id, id, account_stage, total_addressable_sites"),
+    fromTable(supabase, "enterprise_deals").select("customer_id, deal_name, target_value, deal_stage, target_close_date"),
+    supabase.from("sites").select("id, customer_id, pipeline_stage"),
+    fromTable(supabase, "account_stakeholders").select("account_plan_id"),
+    fromTable(supabase, "success_plan_goals").select("account_plan_id, is_achieved"),
+    fromTable(supabase, "success_plan_milestones").select("account_plan_id, status"),
+    supabase.from("tasks").select("id, status, customer_id, site_id"),
+    supabase.from("flagged_issues").select("id, status, site_id"),
+  ]);
+
+  const customers = (customersRes.data ?? []) as any[];
+  const plans = (plansRes.data ?? []) as any[];
+  const deals = (dealsRes.data ?? []) as any[];
+  const sites = (sitesRes.data ?? []) as any[];
+  const stakeholders = (stakeholdersRes.data ?? []) as any[];
+  const goals = (goalsRes.data ?? []) as any[];
+  const milestones = (milestonesRes.data ?? []) as any[];
+  const tasks = (tasksRes.data ?? []) as any[];
+  const issues = (issuesRes.data ?? []) as any[];
+
+  // Build lookup maps
+  const planByCustomer = new Map(plans.map((p: any) => [p.customer_id, p]));
+  const dealByCustomer = new Map(deals.map((d: any) => [d.customer_id, d]));
+
+  // Sites grouped by customer
+  const sitesByCustomer = new Map<string, any[]>();
+  const siteToCustomer = new Map<string, string>();
+  for (const s of sites) {
+    if (!sitesByCustomer.has(s.customer_id)) sitesByCustomer.set(s.customer_id, []);
+    sitesByCustomer.get(s.customer_id)!.push(s);
+    siteToCustomer.set(s.id, s.customer_id);
+  }
+
+  // Stakeholders counted per plan → per customer
+  const stakeholderCountByPlan = new Map<string, number>();
+  for (const s of stakeholders) {
+    stakeholderCountByPlan.set(s.account_plan_id, (stakeholderCountByPlan.get(s.account_plan_id) ?? 0) + 1);
+  }
+
+  // Goals per plan
+  const goalsByPlan = new Map<string, { total: number; achieved: number }>();
+  for (const g of goals) {
+    const entry = goalsByPlan.get(g.account_plan_id) ?? { total: 0, achieved: 0 };
+    entry.total++;
+    if (g.is_achieved) entry.achieved++;
+    goalsByPlan.set(g.account_plan_id, entry);
+  }
+
+  // Milestones per plan
+  const milestonesByPlan = new Map<string, { total: number; completed: number }>();
+  for (const m of milestones) {
+    const entry = milestonesByPlan.get(m.account_plan_id) ?? { total: 0, completed: 0 };
+    entry.total++;
+    if (m.status === "completed") entry.completed++;
+    milestonesByPlan.set(m.account_plan_id, entry);
+  }
+
+  // Open tasks per customer (via customer_id or site_id)
+  const openTasksByCustomer = new Map<string, number>();
+  for (const t of tasks) {
+    if (t.status === "done") continue;
+    const custId = t.customer_id || siteToCustomer.get(t.site_id);
+    if (custId) openTasksByCustomer.set(custId, (openTasksByCustomer.get(custId) ?? 0) + 1);
+  }
+
+  // Open issues per customer (via site_id)
+  const openIssuesByCustomer = new Map<string, number>();
+  for (const i of issues) {
+    if (i.status !== "open") continue;
+    const custId = siteToCustomer.get(i.site_id);
+    if (custId) openIssuesByCustomer.set(custId, (openIssuesByCustomer.get(custId) ?? 0) + 1);
+  }
+
+  return customers.map((c: any) => {
+    const plan = planByCustomer.get(c.id);
+    const deal = dealByCustomer.get(c.id);
+    const custSites = sitesByCustomer.get(c.id) ?? [];
+    const goalData = plan ? goalsByPlan.get(plan.id) : null;
+    const msData = plan ? milestonesByPlan.get(plan.id) : null;
+
+    return {
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      domain: c.domain ?? null,
+      company_type: c.company_type ?? null,
+      account_stage: plan?.account_stage ?? null,
+      total_addressable_sites: plan?.total_addressable_sites ?? null,
+      deal_name: deal?.deal_name ?? null,
+      target_value: deal?.target_value ? Number(deal.target_value) : null,
+      deal_stage: deal?.deal_stage ?? null,
+      target_close_date: deal?.target_close_date ?? null,
+      stakeholder_count: plan ? (stakeholderCountByPlan.get(plan.id) ?? 0) : 0,
+      goals_total: goalData?.total ?? 0,
+      goals_achieved: goalData?.achieved ?? 0,
+      milestones_total: msData?.total ?? 0,
+      milestones_completed: msData?.completed ?? 0,
+      open_tasks: openTasksByCustomer.get(c.id) ?? 0,
+      open_issues: openIssuesByCustomer.get(c.id) ?? 0,
+      total_sites: custSites.length,
+      active_sites: custSites.filter((s: any) => s.pipeline_stage === "active").length,
+      deploying_sites: custSites.filter((s: any) => s.pipeline_stage === "deployment").length,
+      eval_sites: custSites.filter((s: any) => ["evaluation", "qualified", "prospect"].includes(s.pipeline_stage)).length,
+    };
+  });
+}
+
 // ─── Account Plans ──────────────────────────────────────────
 
 export async function getAccountPlan(customerId: string) {

@@ -5,6 +5,7 @@
 import { createSupabaseAdmin } from "../supabase/server";
 import { getDeal, updateDeal } from "./client";
 import { transformToApp, transformToHubSpot } from "./transforms";
+import { recalculateSiteStage } from "./stage-resolver";
 import type {
   HubSpotFieldMapping,
   SyncFieldChange,
@@ -139,6 +140,12 @@ export async function syncSiteWithDeal(opts: {
       const appUpdates: Record<string, unknown> = {};
 
       for (const mapping of tableMappings) {
+        // Skip pipeline_stage — it's recalculated from ALL linked deals after sync
+        if (mapping.app_column === "pipeline_stage" && mapping.app_table === "sites") {
+          fieldsSkipped.push({ field: `${table}.${mapping.app_column}`, reason: "resolved_from_all_deals" });
+          continue;
+        }
+
         const hubspotRaw = deal.properties[mapping.hubspot_property] ?? null;
         const appRaw = appRow ? (appRow as Record<string, unknown>)[mapping.app_column] : null;
 
@@ -242,7 +249,14 @@ export async function syncSiteWithDeal(opts: {
       .update({ deal_name: newDealName })
       .eq("id", siteLinkId);
 
-    // 9. Update last_synced_at on config
+    // 9. Recalculate pipeline_stage from ALL linked deals (multi-deal resolution)
+    try {
+      await recalculateSiteStage(siteId, tenantId, token);
+    } catch {
+      // Non-critical — field sync already completed
+    }
+
+    // 10. Update last_synced_at on config
     await fromTable(admin, "hubspot_config")
       .update({ last_synced_at: new Date().toISOString() })
       .eq("tenant_id", tenantId);

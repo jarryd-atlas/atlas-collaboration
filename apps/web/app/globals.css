@@ -33,6 +33,7 @@
   --color-info: #3B82F6;
 
   /* ─── Pipeline Stage Colors ─── */
+  --color-stage-whitespace: #D1D5DB;
   --color-stage-prospect: #94A3B8;
   --color-stage-evaluation: #8B5CF6;
   --color-stage-qualified: #3B82F6;

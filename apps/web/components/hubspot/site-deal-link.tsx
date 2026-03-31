@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Link2, Unlink, Search, ExternalLink, ChevronDown, Pencil, Check, X, Loader2 } from "lucide-react";
@@ -70,12 +71,14 @@ function rawValue(value: string | null): string {
 }
 
 export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = [] }: SiteDealLinkProps) {
+  const router = useRouter();
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DealSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [expandedDeal, setExpandedDeal] = useState<string | null>(existingLinks.length > 0 ? existingLinks[0]?.hubspot_deal_id ?? null : null);
   const [dealProps, setDealProps] = useState<Record<string, DealProperties>>({});
   const [loadingDeal, setLoadingDeal] = useState<string | null>(null);
@@ -124,17 +127,37 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
 
   async function handleLink(deal: DealSearchResult) {
     setLinking(true);
-    const dealType = getDealType(deal.stage);
-    await linkDealToSite(siteId, deal.id, deal.name ?? "", dealType);
+    setError(null);
+    try {
+      const dealType = getDealType(deal.stage);
+      const result = await linkDealToSite(siteId, deal.id, deal.name ?? "", dealType);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setShowSearch(false);
+        setSearchQuery("");
+        setSearchResults([]);
+        router.refresh();
+      }
+    } catch {
+      setError("Failed to link deal");
+    }
     setLinking(false);
-    setShowSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
   }
 
   async function handleUnlink(linkId: string) {
     setUnlinking(linkId);
-    await unlinkDealFromSite(linkId);
+    setError(null);
+    try {
+      const result = await unlinkDealFromSite(linkId);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setError("Failed to unlink deal");
+    }
     setUnlinking(null);
   }
 
@@ -160,6 +183,11 @@ export function SiteDealLink({ siteId, existingLinks, portalId, fieldMappings = 
 
   return (
     <div className="space-y-2">
+      {error && (
+        <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2.5 py-1.5">
+          {error}
+        </div>
+      )}
       {/* Existing linked deals */}
       {existingLinks.map((link) => {
         const isRenewal = link.deal_type === "renewal";

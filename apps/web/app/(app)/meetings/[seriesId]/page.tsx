@@ -1,7 +1,8 @@
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUser } from "../../../../lib/data/current-user";
-import { getMeetingSeriesDetail, getMeetingsWithItems, getStandupCustomerData, getStandupDealData } from "../../../../lib/data/meeting-queries";
+import { getMeetingSeriesDetail, getMeetingsWithItems, getStandupCustomerData, getStandupDealData, getStandupStakeholderData } from "../../../../lib/data/meeting-queries";
 import { getInternalProfiles } from "../../../../lib/data/queries";
+import { createSupabaseAdmin } from "../../../../lib/supabase/server";
 import { StandupDashboard } from "./standup-dashboard";
 
 interface Props {
@@ -14,13 +15,41 @@ export default async function MeetingDetailPage({ params }: Props) {
   if (!currentUser) redirect("/login");
   if (currentUser.sessionClaims?.tenantType !== "internal") redirect("/");
 
-  const [seriesDetail, meetings, customerData, internalProfiles, dealData] = await Promise.all([
+  const [seriesDetail, meetings, customerData, internalProfiles, dealData, stakeholderData] = await Promise.all([
     getMeetingSeriesDetail(seriesId),
     getMeetingsWithItems(seriesId),
     getStandupCustomerData(),
     getInternalProfiles(),
     getStandupDealData(),
+    getStandupStakeholderData(),
   ]);
+
+  // Fetch this week's customer meetings from Google Calendar sync
+  let weeklyMeetings: Record<string, any[]> = {};
+  try {
+    const supabase = createSupabaseAdmin();
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const { data: calMeetings } = await (supabase as any)
+      .from("customer_meetings")
+      .select("id, customer_id, title, meeting_date, meeting_end, attendees, ck_attendees, html_link")
+      .gte("meeting_date", startOfWeek.toISOString())
+      .lte("meeting_date", endOfWeek.toISOString())
+      .order("meeting_date", { ascending: true });
+
+    for (const m of calMeetings || []) {
+      if (!weeklyMeetings[m.customer_id]) weeklyMeetings[m.customer_id] = [];
+      weeklyMeetings[m.customer_id]!.push(m);
+    }
+  } catch {
+    // non-critical
+  }
 
   if (!seriesDetail) notFound();
 
@@ -41,6 +70,8 @@ export default async function MeetingDetailPage({ params }: Props) {
       meetings={meetings}
       customerData={customerData}
       dealData={dealData}
+      weeklyMeetings={weeklyMeetings}
+      stakeholderData={stakeholderData}
       currentUserId={currentUser.id}
       teamMembers={teamMembers}
     />

@@ -8,6 +8,7 @@ import { CustomerTasksSection } from "../tasks/customer-tasks-section";
 import { TaskDetailInline, type TaskForPanel } from "../tasks/task-detail-panel";
 import { SiteOverviewInline } from "./site-overview-inline";
 import { AddSiteButton } from "../forms/customer-actions";
+import { CreateSiteDialog } from "../forms/create-site-dialog";
 import { AccountPlanTabs } from "../account-plan/account-plan-tabs";
 import { AccountStageTracker } from "../account-plan/account-stage-tracker";
 import { EnterpriseDealCard } from "../account-plan/enterprise-deal-card";
@@ -19,6 +20,20 @@ import { OrgChartList } from "../account-plan/org-chart-list";
 import { StakeholderForm } from "../account-plan/stakeholder-form";
 import { GoalList } from "../account-plan/goal-list";
 import { MilestoneTimeline } from "../account-plan/milestone-timeline";
+import { AILeadershipLookup } from "../account-plan/ai-leadership-lookup";
+import { CompanyIntelligence } from "../account-plan/company-intelligence";
+import { AccountHealthScorecard } from "../account-plan/account-health-scorecard";
+import { ExpansionPipeline } from "../account-plan/expansion-pipeline";
+import { WinEvidence } from "../account-plan/win-evidence";
+import { AISuccessPlan } from "../account-plan/ai-success-plan";
+import { FacilityLookup } from "../account-plan/facility-lookup";
+import { MeetingPrepDialog } from "../account-plan/meeting-prep-dialog";
+import { CustomerMeetingsList, type CustomerMeeting } from "../account-plan/customer-meetings-list";
+import { MeetingsOverviewCard } from "../account-plan/meetings-overview-card";
+import { CustomerEmailsList } from "../account-plan/customer-emails-list";
+import { EmailDigestCard } from "../account-plan/email-digest-card";
+import { EmailSyncButton } from "../account-plan/email-sync-button";
+import { ImportSitesDialog } from "../forms/import-sites-dialog";
 import type { Stakeholder } from "../account-plan/org-chart-node";
 import { cn } from "../../lib/utils";
 import { PanelLeftClose, PanelLeftOpen, MapPin, LayoutGrid, List, Plus } from "lucide-react";
@@ -108,6 +123,10 @@ interface CustomerDetailLayoutProps {
   milestones?: any[];
   enterpriseDeal?: any | null;
   profileId?: string;
+  customerMeetings?: any[];
+  customerEmails?: any[];
+  emailDigest?: any | null;
+  currentUserId?: string;
 }
 
 const STORAGE_KEY = "atlas-sites-panel-collapsed";
@@ -132,6 +151,10 @@ export function CustomerDetailLayout({
   milestones = [],
   enterpriseDeal,
   profileId,
+  customerMeetings = [],
+  customerEmails = [],
+  emailDigest = null,
+  currentUserId,
 }: CustomerDetailLayoutProps) {
   const [sitesCollapsed, setSitesCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -152,6 +175,27 @@ export function CustomerDetailLayout({
   // Org chart view toggle
   const [orgChartView, setOrgChartView] = useState<"tree" | "list">("tree");
 
+  // Add site from Google Places
+  const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
+  const [addSiteInitial, setAddSiteInitial] = useState<{ name: string; address: string; city: string; state: string } | null>(null);
+  const [prepMeeting, setPrepMeeting] = useState<CustomerMeeting | null>(null);
+
+  // Enriched emails: stakeholders that have a title set (not just auto-added name+email)
+  const enrichedEmails = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of stakeholders) {
+      if (s.email && s.title) {
+        set.add(s.email.toLowerCase());
+      }
+    }
+    return set;
+  }, [stakeholders]);
+
+  const handleAddFromGoogle = useCallback((place: { name: string; address: string; city: string; state: string }) => {
+    setAddSiteInitial(place);
+    setShowAddSiteDialog(true);
+  }, []);
+
   // Persist collapse state
   useEffect(() => {
     try {
@@ -165,8 +209,9 @@ export function CustomerDetailLayout({
   const activeSites = sites.filter((s) => s.pipeline_stage === "active");
   const deployingSites = sites.filter((s) => s.pipeline_stage === "deployment");
   const evaluatingSites = sites.filter(
-    (s) => s.pipeline_stage === "evaluation" || s.pipeline_stage === "qualified" || s.pipeline_stage === "prospect",
+    (s) => s.pipeline_stage === "evaluation" || s.pipeline_stage === "qualified" || s.pipeline_stage === "contracted",
   );
+  const prospectSites = sites.filter((s) => s.pipeline_stage === "prospect");
   const openIssues = issues.filter((i) => i.status === "open");
 
   const stats = {
@@ -233,19 +278,68 @@ export function CustomerDetailLayout({
         />
         <WhitespaceMap
           totalSites={sites.length}
-          engagedSites={sites.length}
           activeSites={activeSites.length}
           deployingSites={deployingSites.length}
           evaluatingSites={evaluatingSites.length}
+          prospectSites={prospectSites.length}
           totalAddressable={accountPlan?.total_addressable_sites ?? null}
         />
       </div>
-      <SiteDealsSummary dealLinks={dealLinks} />
+      {isCKInternal && customerMeetings.length > 0 && (
+        <MeetingsOverviewCard
+          meetings={customerMeetings}
+          customerName={customer.name}
+        />
+      )}
+      {isCKInternal && (
+        <div className="flex items-center gap-2">
+          <FacilityLookup
+            customerName={customer.name}
+            customerDomain={customer.domain}
+            customerId={customer.id}
+            customerTenantId={customer.tenant_id}
+            existingSites={sites}
+          />
+          <ImportSitesDialog
+            customerName={customer.name}
+            customerId={customer.id}
+            customerTenantId={customer.tenant_id}
+            existingSites={sites}
+          />
+        </div>
+      )}
+      <CompanyIntelligence
+        customerId={customer.id}
+        tenantId={customer.tenant_id}
+        customerName={customer.name}
+        customerDomain={customer.domain}
+        accountPlan={accountPlan}
+        isCKInternal={isCKInternal}
+      />
+      <AccountHealthScorecard
+        sites={sites}
+        goals={goals}
+        milestones={milestones}
+        stakeholders={stakeholders}
+        issues={issues}
+        totalAddressable={accountPlan?.total_addressable_sites ?? null}
+      />
+      <ExpansionPipeline
+        sites={sites}
+        dealLinks={dealLinks}
+        totalAddressable={accountPlan?.total_addressable_sites ?? null}
+      />
+      <WinEvidence
+        sites={sites}
+        milestones={milestones}
+        dealLinks={dealLinks}
+      />
       <StrategySection
         customerId={customer.id}
         tenantId={customer.tenant_id}
         accountPlan={accountPlan}
       />
+      <SiteDealsSummary dealLinks={dealLinks} />
     </div>
   );
 
@@ -276,12 +370,29 @@ export function CustomerDetailLayout({
             </button>
           </div>
           {isCKInternal && (
-            <button
-              onClick={() => { setEditingStakeholder(null); setDefaultReportsTo(null); setShowStakeholderForm(true); }}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-            >
-              <Plus className="h-3 w-3" /> Add
-            </button>
+            <>
+              <MeetingPrepDialog
+                customerName={customer.name}
+                customerDomain={customer.domain}
+                customerId={customer.id}
+                tenantId={customer.tenant_id}
+                accountPlanId={accountPlan?.id ?? ""}
+                existingStakeholders={stakeholders}
+              />
+              <AILeadershipLookup
+                customerName={customer.name}
+                customerDomain={customer.domain}
+                accountPlanId={accountPlan?.id ?? ""}
+                tenantId={customer.tenant_id}
+                existingStakeholders={stakeholders}
+              />
+              <button
+                onClick={() => { setEditingStakeholder(null); setDefaultReportsTo(null); setShowStakeholderForm(true); }}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                <Plus className="h-3 w-3" /> Add
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -309,6 +420,20 @@ export function CustomerDetailLayout({
 
   const successPlanTab = (
     <div className="overflow-y-auto p-4 h-full space-y-6">
+      <AISuccessPlan
+        customerName={customer.name}
+        accountStage={accountPlan?.account_stage ?? "pilot"}
+        accountPlanId={accountPlan?.id ?? ""}
+        tenantId={customer.tenant_id}
+        profileId={profileId}
+        siteCount={sites.length}
+        industryVertical={accountPlan?.industry_vertical}
+        companyPriorities={accountPlan?.company_priorities}
+        keyInitiatives={accountPlan?.key_initiatives}
+        existingGoalCount={goals.length}
+        existingMilestoneCount={milestones.length}
+        isCKInternal={isCKInternal}
+      />
       <GoalList
         goals={goals}
         accountPlanId={accountPlan?.id ?? ""}
@@ -322,6 +447,92 @@ export function CustomerDetailLayout({
         tenantId={customer.tenant_id}
         isCKInternal={isCKInternal}
         profileId={profileId}
+      />
+    </div>
+  );
+
+  const meetingsTab = (
+    <div className="h-full flex flex-col">
+      {isCKInternal && (
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-gray-100 shrink-0">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Meetings
+          </h3>
+          <MeetingPrepDialog
+            customerName={customer.name}
+            customerDomain={customer.domain}
+            customerId={customer.id}
+            tenantId={customer.tenant_id}
+            accountPlanId={accountPlan?.id ?? ""}
+            existingStakeholders={stakeholders}
+          />
+        </div>
+      )}
+      <div className="flex-1 overflow-hidden">
+        <CustomerMeetingsList
+          meetings={customerMeetings}
+          customerName={customer.name}
+          customerDomain={customer.domain}
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          accountPlanId={accountPlan?.id ?? ""}
+          existingStakeholders={stakeholders.map((s) => ({
+            id: s.id,
+            name: s.name,
+            email: s.email ?? null,
+            title: s.title ?? null,
+            department: s.department ?? null,
+            stakeholder_role: s.stakeholder_role ?? null,
+            notes: s.notes ?? null,
+          }))}
+          onPrepMeeting={(meeting) => setPrepMeeting(meeting)}
+          enrichedEmails={enrichedEmails}
+        />
+      </div>
+      {/* Meeting-triggered prep dialog (controlled externally) */}
+      {isCKInternal && (
+        <MeetingPrepDialog
+          customerName={customer.name}
+          customerDomain={customer.domain}
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          accountPlanId={accountPlan?.id ?? ""}
+          existingStakeholders={stakeholders}
+          externalOpen={!!prepMeeting}
+          onExternalClose={() => setPrepMeeting(null)}
+          meetingContext={prepMeeting ? {
+            meetingId: prepMeeting.id,
+            title: prepMeeting.title,
+            meetingDate: prepMeeting.meeting_date,
+            attendees: prepMeeting.attendees.map((a) => ({ name: a.name, email: a.email })),
+          } : null}
+        />
+      )}
+    </div>
+  );
+
+  const emailsTab = (
+    <div className="overflow-y-auto h-full p-4 space-y-4">
+      {/* Header toolbar */}
+      {isCKInternal && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Email Communication
+          </h3>
+          {currentUserId && <EmailSyncButton userId={currentUserId} />}
+        </div>
+      )}
+      {/* AI Communication Pulse */}
+      <EmailDigestCard
+        digest={emailDigest}
+        customerId={customer.id}
+        customerName={customer.name}
+        emailCount={customerEmails.length}
+      />
+      {/* Email timeline */}
+      <CustomerEmailsList
+        emails={customerEmails}
+        customerName={customer.name}
       />
     </div>
   );
@@ -360,6 +571,23 @@ export function CustomerDetailLayout({
               <div className="flex items-center justify-between px-3 py-2 shrink-0">
                 <h2 className="text-sm font-semibold text-gray-900">Sites</h2>
                 <div className="flex items-center gap-1">
+                  {isCKInternal && (
+                    <>
+                      <FacilityLookup
+                        customerName={customer.name}
+                        customerDomain={customer.domain}
+                        customerId={customer.id}
+                        customerTenantId={customer.tenant_id}
+                        existingSites={sites}
+                      />
+                      <ImportSitesDialog
+                        customerName={customer.name}
+                        customerId={customer.id}
+                        customerTenantId={customer.tenant_id}
+                        existingSites={sites}
+                      />
+                    </>
+                  )}
                   <AddSiteButton
                     customerName={customer.name}
                     customerId={customer.id}
@@ -384,6 +612,8 @@ export function CustomerDetailLayout({
                   compact
                   selectedSiteId={selectedSiteId}
                   onSiteSelect={handleSiteSelect}
+                  onAddFromGoogle={isCKInternal ? handleAddFromGoogle : undefined}
+                  customerName={customer.name}
                 />
               </div>
             </div>
@@ -456,11 +686,30 @@ export function CustomerDetailLayout({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
-            <AddSiteButton
-              customerName={customer.name}
-              customerId={customer.id}
-              customerTenantId={customer.tenant_id}
-            />
+            <div className="flex items-center gap-2">
+              {isCKInternal && (
+                <>
+                  <FacilityLookup
+                    customerName={customer.name}
+                    customerDomain={customer.domain}
+                    customerId={customer.id}
+                    customerTenantId={customer.tenant_id}
+                    existingSites={sites}
+                  />
+                  <ImportSitesDialog
+                    customerName={customer.name}
+                    customerId={customer.id}
+                    customerTenantId={customer.tenant_id}
+                    existingSites={sites}
+                  />
+                </>
+              )}
+              <AddSiteButton
+                customerName={customer.name}
+                customerId={customer.id}
+                customerTenantId={customer.tenant_id}
+              />
+            </div>
           </div>
           <SitesList
             sites={sites}
@@ -468,6 +717,8 @@ export function CustomerDetailLayout({
             editable={isCKInternal}
             dealLinks={dealLinks}
             hubspotEnabled={hubspotEnabled}
+            onAddFromGoogle={isCKInternal ? handleAddFromGoogle : undefined}
+            customerName={customer.name}
           />
         </div>
       </div>
@@ -497,6 +748,8 @@ export function CustomerDetailLayout({
           {{
             overview: overviewTab,
             people: peopleTab,
+            meetings: meetingsTab,
+            emails: emailsTab,
             successPlan: successPlanTab,
             sitesTasks: sitesTasksTab,
           }}
@@ -513,6 +766,18 @@ export function CustomerDetailLayout({
           isCKInternal={isCKInternal}
           defaultReportsTo={defaultReportsTo}
           onClose={handleCloseStakeholderForm}
+        />
+      )}
+
+      {/* Add site dialog — triggered from unified search */}
+      {showAddSiteDialog && (
+        <CreateSiteDialog
+          open={showAddSiteDialog}
+          onClose={() => { setShowAddSiteDialog(false); setAddSiteInitial(null); }}
+          customerName={customer.name}
+          customerId={customer.id}
+          customerTenantId={customer.tenant_id}
+          initialValues={addSiteInitial}
         />
       )}
     </>

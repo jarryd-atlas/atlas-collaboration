@@ -1,6 +1,6 @@
 export { signInWithGoogle, signInWithMagicLink, signOut, markNotificationRead } from "./auth";
 export { createCustomer, updateCustomer } from "./customers";
-export { createSite, updateSitePipelineStage, updateSiteNextStep } from "./sites";
+export { createSite, createSitesBatch, updateSitePipelineStage, updateSiteNextStep } from "./sites";
 export { createMilestone, updateMilestoneStatus, updateMilestoneProgress, createMilestoneTemplate, deleteMilestoneTemplate } from "./milestones";
 export { createTask, createTaskInline, createTasksBatch, updateTaskStatus, updateTaskTitle, updateTaskAssignee, deleteTask, getTaskComments } from "./tasks";
 export { createComment, deleteComment } from "./comments";
@@ -14,4 +14,5 @@ export { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel } from "./
 export { setSiteAccess } from "./site-access";
 export { submitFeedback, fetchAllFeedback, updateFeedbackStatus } from "./feedback";
 export { createMeetingSeries, createMeeting, addMeetingItem, updateMeetingItem, deleteMeetingItem, completeMeeting, addMeetingParticipant, removeMeetingParticipant } from "./meetings";
-export { upsertAccountPlan, updateAccountStage, createStakeholder, updateStakeholder, deleteStakeholder, updateStakeholderParent, createGoal, updateGoal, toggleGoalAchieved, deleteGoal, createSuccessMilestone, updateSuccessMilestone, deleteSuccessMilestone, upsertEnterpriseDeal } from "./account-plan";
+export { upsertAccountPlan, updateAccountStage, updateCompanyIntelligence, createStakeholder, updateStakeholder, deleteStakeholder, updateStakeholderParent, createGoal, updateGoal, toggleGoalAchieved, deleteGoal, createSuccessMilestone, updateSuccessMilestone, deleteSuccessMilestone, upsertEnterpriseDeal, saveMeetingBrief, fetchMeetingBriefs } from "./account-plan";
+export { fetchCustomerMeetings, linkMeetingBrief } from "./customer-meetings";

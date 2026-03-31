@@ -59,8 +59,13 @@ export function ChangeStageDialog({ open, onClose, siteName, siteId, currentStag
           <p className="text-sm text-gray-500">
             Move <span className="font-medium text-gray-900">{siteName}</span> to a new pipeline stage.
           </p>
+          {currentStage === "whitespace" && (
+            <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-500">
+              This site has no linked HubSpot deal. Link a deal to set its pipeline stage, or select a stage below to manually set it.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
-            {SITE_PIPELINE_STAGES.map((stage) => (
+            {SITE_PIPELINE_STAGES.filter((s) => s !== "whitespace").map((stage) => (
               <button
                 key={stage}
                 type="button"

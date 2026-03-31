@@ -154,6 +154,48 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
     latestComment: latestComments[t.id] ?? null,
   }));
 
+  // Fetch customer meetings (from Google Calendar sync)
+  let customerMeetings: any[] = [];
+  if (isCKInternal) {
+    try {
+      const supabaseForMeetings = createSupabaseAdmin();
+      const { data: meetingsData } = await (supabaseForMeetings as any)
+        .from("customer_meetings")
+        .select("id, google_event_id, title, description, meeting_date, meeting_end, location, html_link, organizer_email, attendees, ck_attendees, meeting_brief_id, synced_at")
+        .eq("customer_id", customer.id)
+        .order("meeting_date", { ascending: false })
+        .limit(100);
+      customerMeetings = meetingsData ?? [];
+    } catch {
+      // non-critical — table may not exist yet
+    }
+  }
+
+  // Fetch customer emails (from Gmail sync)
+  let customerEmails: any[] = [];
+  let emailDigest: any = null;
+  if (isCKInternal) {
+    try {
+      const supabaseForEmails = createSupabaseAdmin();
+      const { data: emailsData } = await (supabaseForEmails as any)
+        .from("customer_emails")
+        .select("id, gmail_message_id, gmail_thread_id, subject, snippet, body_plain, from_email, from_name, to_emails, cc_emails, date, direction, ck_user_id, ck_user_email, synced_at")
+        .eq("customer_id", customer.id)
+        .order("date", { ascending: false })
+        .limit(200);
+      customerEmails = emailsData ?? [];
+
+      const { data: digestData } = await (supabaseForEmails as any)
+        .from("customer_email_digests")
+        .select("*")
+        .eq("customer_id", customer.id)
+        .maybeSingle();
+      emailDigest = digestData ?? null;
+    } catch {
+      // non-critical — tables may not exist yet
+    }
+  }
+
   // Current user info for comment input
   const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
   const currentUserAvatar = currentUser?.avatarUrl ?? null;
@@ -185,6 +227,10 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       milestones={successMilestones}
       enterpriseDeal={enterpriseDeal}
       profileId={session?.claims?.profileId}
+      customerMeetings={customerMeetings}
+      customerEmails={customerEmails}
+      emailDigest={emailDigest}
+      currentUserId={session?.user?.id}
     />
   );
 }

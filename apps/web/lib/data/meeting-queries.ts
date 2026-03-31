@@ -5,7 +5,7 @@
 
 import { createSupabaseAdmin } from "../supabase/server";
 import { getDeals } from "../hubspot/client";
-import { DEAL_STAGE_LABELS, RENEWAL_STAGE_IDS, CLOSED_STAGE_IDS } from "../hubspot/constants";
+import { DEAL_STAGE_LABELS, CLOSED_STAGE_IDS, getDealType } from "../hubspot/constants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromTable = (sb: ReturnType<typeof createSupabaseAdmin>, table: string) =>
@@ -401,7 +401,7 @@ export async function getStandupDealData(): Promise<Record<string, StandupDeal[]
       siteId: link.site_id,
       siteName: site.name,
       dealName: props.dealname ?? link.deal_name ?? "",
-      dealType: RENEWAL_STAGE_IDS.has(stageId) ? "renewal" : "new_business",
+      dealType: getDealType(stageId, props.pipeline),
       stage: DEAL_STAGE_LABELS[stageId] ?? stageId,
       amount: props.amount ?? null,
       arr: props.arc ?? null,
@@ -409,6 +409,124 @@ export async function getStandupDealData(): Promise<Record<string, StandupDeal[]
       upgrade: props.upgrade_revenue ?? null,
       forecastCategory: props.hs_manual_forecast_category ?? null,
       closeDate: props.closedate ?? null,
+    });
+  }
+
+  return result;
+}
+
+// ─── Cross-Customer Meeting Query ──────────────────────
+
+export interface DashboardMeeting {
+  id: string;
+  title: string;
+  meeting_date: string;
+  meeting_end: string | null;
+  html_link: string | null;
+  attendees: { email: string; name: string; responseStatus?: string }[];
+  ck_attendees: { email: string; name: string }[];
+  customer_id: string;
+  customer_name: string;
+  customer_slug: string;
+}
+
+/**
+ * Fetches upcoming meetings across all customers for the next 2 weeks.
+ */
+export async function getUpcomingMeetingsAllCustomers(limit = 20): Promise<DashboardMeeting[]> {
+  const supabase = createSupabaseAdmin();
+
+  const now = new Date();
+  // End of next week (Saturday 23:59)
+  const endOfNextWeek = new Date(now);
+  const dayOfWeek = endOfNextWeek.getDay();
+  endOfNextWeek.setDate(endOfNextWeek.getDate() + (13 - dayOfWeek));
+  endOfNextWeek.setHours(23, 59, 59, 999);
+
+  const { data } = await fromTable(supabase, "customer_meetings")
+    .select("id, title, meeting_date, meeting_end, html_link, attendees, ck_attendees, customer_id")
+    .gte("meeting_date", now.toISOString())
+    .lte("meeting_date", endOfNextWeek.toISOString())
+    .order("meeting_date", { ascending: true })
+    .limit(limit);
+
+  if (!data || data.length === 0) return [];
+
+  // Get customer names
+  const customerIds = [...new Set((data as any[]).map((m) => m.customer_id))];
+  const { data: customers } = await supabase
+    .from("customers")
+    .select("id, name, slug")
+    .in("id", customerIds);
+
+  const customerMap = new Map((customers ?? []).map((c: any) => [c.id, c]));
+
+  return (data as any[]).map((m) => ({
+    id: m.id,
+    title: m.title,
+    meeting_date: m.meeting_date,
+    meeting_end: m.meeting_end,
+    html_link: m.html_link,
+    attendees: m.attendees ?? [],
+    ck_attendees: m.ck_attendees ?? [],
+    customer_id: m.customer_id,
+    customer_name: customerMap.get(m.customer_id)?.name ?? "Unknown",
+    customer_slug: customerMap.get(m.customer_id)?.slug ?? "",
+  }));
+}
+
+// ─── Stakeholder Enrichment for Standup ───────────────────────
+
+/**
+ * Fetch enriched stakeholder data grouped by customer_id.
+ * Used in the standup view to display enriched meeting attendee info.
+ */
+export async function getStandupStakeholderData(): Promise<
+  Record<string, Array<{
+    id: string;
+    name: string;
+    email: string | null;
+    title: string | null;
+    department: string | null;
+    stakeholder_role: string | null;
+    notes: string | null;
+  }>>
+> {
+  const supabase = createSupabaseAdmin();
+
+  // Get all account plans with their customer_id
+  const { data: plans } = await fromTable(supabase, "account_plans")
+    .select("id, customer_id");
+
+  if (!plans || plans.length === 0) return {};
+
+  const planIds = plans.map((p: any) => p.id);
+  const planToCustomer = new Map<string, string>();
+  for (const p of plans as any[]) {
+    planToCustomer.set(p.id, p.customer_id);
+  }
+
+  // Fetch all stakeholders with enrichment fields
+  const { data: stakeholders } = await fromTable(supabase, "account_stakeholders")
+    .select("id, account_plan_id, name, email, title, department, stakeholder_role, notes")
+    .in("account_plan_id", planIds);
+
+  if (!stakeholders || stakeholders.length === 0) return {};
+
+  // Group by customer_id
+  const result: Record<string, any[]> = {};
+  for (const s of stakeholders as any[]) {
+    const customerId = planToCustomer.get(s.account_plan_id);
+    if (!customerId) continue;
+    if (!result[customerId]) result[customerId] = [];
+    result[customerId].push({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      title: s.title,
+      department: s.department,
+      stakeholder_role: s.stakeholder_role,
+      notes: s.notes,
     });
   }
 

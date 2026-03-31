@@ -1,5 +1,6 @@
 /** Site pipeline lifecycle stages in order */
 export const SITE_PIPELINE_STAGES = [
+  "whitespace",
   "prospect",
   "evaluation",
   "qualified",

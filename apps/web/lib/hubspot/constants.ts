@@ -49,8 +49,15 @@ export const CLOSED_STAGE_IDS = new Set([
   "dddab890-d5f2-4399-9886-f2ad9fb46864",  // Renewal - Lost
 ]);
 
-/** Determine deal type from the deal stage ID */
-export function getDealType(dealStageId: string): "renewal" | "new_business" {
+/** HubSpot pipeline IDs */
+export const RENEWAL_PIPELINE_ID = "7c3189ce-7431-4b27-a546-6e095c0f366a";
+export const NEW_BUSINESS_PIPELINE_ID = "f95a95c9-99c3-4b7f-a250-1303e9288649";
+
+/** Determine deal type — prefer pipeline ID, fall back to stage ID */
+export function getDealType(dealStageId: string, pipelineId?: string): "renewal" | "new_business" {
+  if (pipelineId) {
+    return pipelineId === RENEWAL_PIPELINE_ID ? "renewal" : "new_business";
+  }
   return RENEWAL_STAGE_IDS.has(dealStageId) ? "renewal" : "new_business";
 }
 
@@ -80,6 +87,7 @@ export const DEAL_STAGE_LABELS: Record<string, string> = {
 
 /** Reverse map: app pipeline_stage → best-fit HubSpot deal stage */
 export const REVERSE_PIPELINE_STAGE_MAP: Record<string, string> = {
+  whitespace: "",              // No HubSpot equivalent
   prospect: "1188492915",      // 01 - Intro/Contact
   evaluation: "1188492917",    // 06 - Energy Value Assessment
   qualified: "1240422453",     // 05 - Qualified
@@ -139,7 +147,7 @@ export const MAPPABLE_APP_FIELDS: MappableAppField[] = [
  */
 export const DEFAULT_FIELD_MAPPINGS: Omit<FieldMappingInput, "tenant_id">[] = [
   { hubspot_property: "atlas_site_name", app_table: "sites", app_column: "name", direction: "hubspot_to_app", transform: "text" },
-  { hubspot_property: "dealstage", app_table: "sites", app_column: "pipeline_stage", direction: "hubspot_to_app", transform: "pipeline_stage_map" },
+  { hubspot_property: "dealstage", app_table: "sites", app_column: "pipeline_stage", direction: "bidirectional", transform: "pipeline_stage_map" },
   { hubspot_property: "annual_energy_spend__c", app_table: "site_savings_analysis", app_column: "annual_energy_spend", direction: "bidirectional", transform: "number" },
   { hubspot_property: "refrigeration_load", app_table: "site_savings_analysis", app_column: "refrigeration_pct", direction: "bidirectional", transform: "percentage" },
   { hubspot_property: "forecasted_refrigeration_savings_percent", app_table: "site_savings_analysis", app_column: "compressor_savings_pct", direction: "app_to_hubspot", transform: "percentage" },

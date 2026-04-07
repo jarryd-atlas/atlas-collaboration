@@ -402,14 +402,24 @@ const BUCKET_HEADER_COLORS: Record<QuarterBucket, string> = {
   everything_else: "text-gray-500 bg-gray-50/50 border-b border-gray-100",
 };
 
-const COL_COUNT = 10;
 
 function DealsTable({ deals }: { deals: StandupDeal[] }) {
   const [open, setOpen] = useState(true);
 
+  // Sort deals by forecast category (commit → best case → pipeline) then close date ascending
+  const FORECAST_ORDER: Record<string, number> = { commit: 0, best_case: 1, most_likely: 2, pipeline: 3, omit: 4 };
+  const sorted = [...deals].sort((a, b) => {
+    const fa = FORECAST_ORDER[a.forecastCategory ?? ""] ?? 99;
+    const fb = FORECAST_ORDER[b.forecastCategory ?? ""] ?? 99;
+    if (fa !== fb) return fa - fb;
+    const da = a.closeDate ? new Date(a.closeDate).getTime() : Infinity;
+    const db = b.closeDate ? new Date(b.closeDate).getTime() : Infinity;
+    return da - db;
+  });
+
   // Group deals by quarter bucket
   const grouped = new Map<QuarterBucket, StandupDeal[]>();
-  for (const deal of deals) {
+  for (const deal of sorted) {
     const bucket = getQuarterBucket(deal.closeDate);
     if (!grouped.has(bucket)) grouped.set(bucket, []);
     grouped.get(bucket)!.push(deal);
@@ -454,14 +464,37 @@ function DealsTable({ deals }: { deals: StandupDeal[] }) {
   );
 }
 
+function sumDealField(deals: StandupDeal[], field: "amount" | "arr" | "install" | "upgrade"): string | null {
+  let total = 0;
+  let hasValue = false;
+  for (const deal of deals) {
+    const val = deal[field];
+    if (val) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) { total += num; hasValue = true; }
+    }
+  }
+  return hasValue ? total.toString() : null;
+}
+
 function DealBucketSection({ bucket, deals }: { bucket: QuarterBucket; deals: StandupDeal[] }) {
+  const totalAmount = sumDealField(deals, "amount");
+  const totalArr = sumDealField(deals, "arr");
+  const totalInstall = sumDealField(deals, "install");
+  const totalUpgrade = sumDealField(deals, "upgrade");
+
   return (
     <>
       <tr>
-        <td colSpan={COL_COUNT} className={`py-1.5 px-2 text-[11px] font-bold uppercase tracking-wider ${BUCKET_HEADER_COLORS[bucket]}`}>
+        <td colSpan={3} className={`py-1.5 px-2 text-[11px] font-bold uppercase tracking-wider ${BUCKET_HEADER_COLORS[bucket]}`}>
           {getQuarterLabel(bucket)}
           <span className="ml-1.5 font-normal opacity-60">({deals.length})</span>
         </td>
+        <td className={`py-1.5 px-1 text-[11px] font-bold text-right tabular-nums ${BUCKET_HEADER_COLORS[bucket]}`}>{formatCurrency(totalAmount)}</td>
+        <td className={`py-1.5 px-1 text-[11px] font-bold text-right tabular-nums ${BUCKET_HEADER_COLORS[bucket]}`}>{formatCurrency(totalArr)}</td>
+        <td className={`py-1.5 px-1 text-[11px] font-bold text-right tabular-nums ${BUCKET_HEADER_COLORS[bucket]}`}>{formatCurrency(totalInstall)}</td>
+        <td className={`py-1.5 px-1 text-[11px] font-bold text-right tabular-nums ${BUCKET_HEADER_COLORS[bucket]}`}>{formatCurrency(totalUpgrade)}</td>
+        <td colSpan={2} className={`py-1.5 px-1 ${BUCKET_HEADER_COLORS[bucket]}`} />
       </tr>
       {deals.map((deal) => (
         <tr key={deal.dealId} className="border-t border-gray-50 hover:bg-gray-50/50">

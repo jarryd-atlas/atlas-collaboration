@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { Sparkles, RefreshCw, ChevronDown, ChevronRight, Mail } from "lucide-react";
 import type { EmailDigest } from "../../lib/actions/customer-emails";
 
 interface EmailDigestCardProps {
@@ -11,25 +11,23 @@ interface EmailDigestCardProps {
   emailCount: number;
 }
 
-const SENTIMENT_CONFIG: Record<string, { label: string; color: string; icon: typeof TrendingUp }> = {
-  positive: { label: "Positive", color: "text-green-600 bg-green-50", icon: TrendingUp },
-  neutral: { label: "Neutral", color: "text-gray-600 bg-gray-50", icon: Minus },
-  cautious: { label: "Cautious", color: "text-amber-600 bg-amber-50", icon: AlertTriangle },
-  at_risk: { label: "At Risk", color: "text-red-600 bg-red-50", icon: AlertTriangle },
-};
-
-const MOMENTUM_CONFIG: Record<string, { label: string; color: string }> = {
-  accelerating: { label: "Accelerating", color: "text-green-600" },
-  steady: { label: "Steady", color: "text-blue-600" },
-  slowing: { label: "Slowing", color: "text-amber-600" },
-  stalled: { label: "Stalled", color: "text-red-600" },
-};
-
 export function EmailDigestCard({ digest, customerId, customerName, emailCount }: EmailDigestCardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localDigest, setLocalDigest] = useState<EmailDigest | null>(digest);
-  const [showActions, setShowActions] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  function toggleSection(team: string) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(team)) {
+        next.delete(team);
+      } else {
+        next.add(team);
+      }
+      return next;
+    });
+  }
 
   async function generateDigest() {
     setLoading(true);
@@ -50,12 +48,7 @@ export function EmailDigestCard({ digest, customerId, customerName, emailCount }
           period_start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
           period_end: new Date().toISOString(),
           email_count: emailCount,
-          narrative: data.digest.narrative,
-          key_topics: data.digest.key_topics || [],
-          key_contacts: data.digest.key_contacts || [],
-          action_items: data.digest.action_items || [],
-          sentiment: data.digest.sentiment,
-          momentum: data.digest.momentum,
+          team_sections: data.digest.team_sections || [],
           generated_at: new Date().toISOString(),
         });
       }
@@ -99,17 +92,13 @@ export function EmailDigestCard({ digest, customerId, customerName, emailCount }
           <p className="text-xs text-red-500 mt-2">{error}</p>
         )}
         <p className="text-xs text-gray-400 mt-2">
-          AI will analyze {emailCount} emails to generate a communication narrative
+          AI will analyze {emailCount} emails to generate a communication summary
         </p>
       </div>
     );
   }
 
-  // Show digest
-  const sentimentCfg = SENTIMENT_CONFIG[localDigest.sentiment ?? "neutral"] ?? SENTIMENT_CONFIG.neutral!;
-  const momentumCfg = MOMENTUM_CONFIG[localDigest.momentum ?? "steady"] ?? MOMENTUM_CONFIG.steady!;
-  const SentimentIcon = sentimentCfg!.icon;
-
+  // Show digest with team sections
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-card space-y-3">
       {/* Header */}
@@ -118,75 +107,105 @@ export function EmailDigestCard({ digest, customerId, customerName, emailCount }
           <Sparkles className="h-4 w-4 text-purple-500" />
           <h3 className="text-sm font-semibold text-gray-900">Communication Pulse</h3>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Sentiment badge */}
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${sentimentCfg.color}`}>
-            <SentimentIcon className="h-3 w-3" />
-            {sentimentCfg.label}
-          </span>
-          {/* Momentum badge */}
-          <span className={`text-[10px] font-medium ${momentumCfg.color}`}>
-            {momentumCfg.label}
-          </span>
-          {/* Refresh */}
-          <button
-            onClick={generateDigest}
-            disabled={loading}
-            className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-            title="Regenerate pulse"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
+        <button
+          onClick={generateDigest}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors disabled:opacity-50"
+          title="Refresh pulse"
+        >
+          {loading ? (
+            <>
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              Refreshing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </>
+          )}
+        </button>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {/* Narrative */}
-      <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-        {localDigest.narrative}
+      {/* Team Sections */}
+      <div className="space-y-2">
+        {localDigest.team_sections.map((section) => {
+          const isCollapsed = collapsedSections.has(section.team);
+          return (
+            <div key={section.team} className="border border-gray-100 rounded-lg overflow-hidden">
+              {/* Section Header */}
+              <button
+                onClick={() => toggleSection(section.team)}
+                className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {isCollapsed ? (
+                    <ChevronRight className="h-3.5 w-3.5 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                  )}
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-700">
+                    {section.team_label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <Mail className="h-3 w-3" />
+                    {section.total_emails} emails
+                  </span>
+                  <span>{section.total_threads} threads</span>
+                </div>
+              </button>
+
+              {/* Section Body */}
+              {!isCollapsed && (
+                <div className="px-3 py-2 space-y-2">
+                  {/* AI Summary */}
+                  <p className="text-xs text-gray-500 italic leading-relaxed">
+                    {section.summary}
+                  </p>
+
+                  {/* Members */}
+                  <div className="space-y-1.5">
+                    {section.members.map((member) => (
+                      <div
+                        key={member.email}
+                        className="flex items-start justify-between gap-2 py-1 border-t border-gray-50 first:border-t-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-800 truncate">
+                              {member.name}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {member.email_count} emails · {member.thread_count} threads
+                            </span>
+                          </div>
+                          {member.recent_subjects.length > 0 && (
+                            <p className="text-[10px] text-gray-400 truncate mt-0.5">
+                              {member.recent_subjects.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-300 whitespace-nowrap flex-shrink-0">
+                          {new Date(member.last_email_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Topics */}
-      {localDigest.key_topics.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {localDigest.key_topics.map((topic, i) => (
-            <span
-              key={i}
-              className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-[10px] font-medium"
-            >
-              {topic}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Action Items (collapsible) */}
-      {localDigest.action_items.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowActions(!showActions)}
-            className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            {showActions ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {localDigest.action_items.length} action item{localDigest.action_items.length !== 1 ? "s" : ""} identified
-          </button>
-          {showActions && (
-            <ul className="mt-1.5 space-y-1 pl-4">
-              {localDigest.action_items.map((item, i) => (
-                <li key={i} className="text-xs text-gray-600 flex items-start gap-1.5">
-                  <span className="text-gray-400 mt-0.5">•</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {/* Footer meta */}
+      {/* Footer */}
       <p className="text-[10px] text-gray-300">
-        Based on {localDigest.email_count} emails · Generated {new Date(localDigest.generated_at).toLocaleDateString()}
+        Based on {localDigest.email_count} emails · Generated{" "}
+        {new Date(localDigest.generated_at).toLocaleDateString()}
       </p>
     </div>
   );

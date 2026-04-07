@@ -196,6 +196,33 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
     }
   }
 
+  // Fetch customer tickets (from HubSpot sync) and portal ID for HubSpot links
+  let customerTickets: any[] = [];
+  let hubspotPortalId: string | null = null;
+  if (isCKInternal) {
+    try {
+      const supabaseForTickets = createSupabaseAdmin();
+      const [ticketsRes, portalRes] = await Promise.all([
+        (supabaseForTickets as any)
+          .from("customer_tickets")
+          .select("id, hubspot_ticket_id, subject, description, status, priority, pipeline, pipeline_stage, created_date, modified_date, closed_date, associated_contacts, source, owner_name, owner_email")
+          .eq("customer_id", customer.id)
+          .order("created_date", { ascending: false })
+          .limit(200),
+        (supabaseForTickets as any)
+          .from("hubspot_config")
+          .select("portal_id")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      customerTickets = ticketsRes.data ?? [];
+      hubspotPortalId = portalRes.data?.portal_id ?? null;
+    } catch {
+      // non-critical — table may not exist yet
+    }
+  }
+
   // Current user info for comment input
   const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
   const currentUserAvatar = currentUser?.avatarUrl ?? null;
@@ -230,6 +257,8 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       customerMeetings={customerMeetings}
       customerEmails={customerEmails}
       emailDigest={emailDigest}
+      customerTickets={customerTickets}
+      hubspotPortalId={hubspotPortalId}
       currentUserId={session?.user?.id}
     />
   );

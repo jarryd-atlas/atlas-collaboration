@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from "react";
 import { cn } from "../../lib/utils";
-import { LayoutDashboard, Users, Target, Building2, CalendarDays, Mail } from "lucide-react";
+import { LayoutDashboard, Users, Target, Building2, CalendarDays, Mail, Tag } from "lucide-react";
 
-type TabKey = "overview" | "people" | "meetings" | "emails" | "success-plan" | "sites-tasks";
+type TabKey = "overview" | "people" | "meetings" | "emails" | "tickets" | "success-plan" | "sites-tasks";
 
 interface AccountPlanTabsProps {
   isCKInternal: boolean;
@@ -14,6 +14,7 @@ interface AccountPlanTabsProps {
     people: React.ReactNode;
     meetings: React.ReactNode;
     emails: React.ReactNode;
+    tickets: React.ReactNode;
     successPlan: React.ReactNode;
     sitesTasks: React.ReactNode;
   };
@@ -25,6 +26,7 @@ const TABS: { key: TabKey; label: string; icon: any; internalOnly: boolean }[] =
   { key: "people", label: "People", icon: Users, internalOnly: false },
   { key: "meetings", label: "Meetings", icon: CalendarDays, internalOnly: true },
   { key: "emails", label: "Emails", icon: Mail, internalOnly: true },
+  { key: "tickets", label: "Tickets", icon: Tag, internalOnly: true },
   { key: "success-plan", label: "Success Plan", icon: Target, internalOnly: false },
   { key: "sites-tasks", label: "Sites & Tasks", icon: Building2, internalOnly: false },
 ];
@@ -45,6 +47,7 @@ export function AccountPlanTabs({ isCKInternal, children, onTabChange }: Account
     people: children.people,
     meetings: children.meetings,
     emails: children.emails,
+    tickets: children.tickets,
     "success-plan": children.successPlan,
     "sites-tasks": children.sitesTasks,
   };

@@ -24,18 +24,31 @@ export interface CustomerEmail {
   synced_at: string;
 }
 
+export interface TeamMemberSummary {
+  name: string;
+  email: string;
+  email_count: number;
+  thread_count: number;
+  last_email_date: string;
+  recent_subjects: string[];
+}
+
+export interface TeamSection {
+  team: string;           // department name slug
+  team_label: string;     // department display label
+  summary: string;        // one-sentence AI factual summary
+  members: TeamMemberSummary[];
+  total_emails: number;
+  total_threads: number;
+}
+
 export interface EmailDigest {
   id: string;
   customer_id: string;
   period_start: string;
   period_end: string;
   email_count: number;
-  narrative: string;
-  key_topics: string[];
-  key_contacts: Array<{ name: string; email: string; direction: string; count: number; lastDate: string }>;
-  action_items: string[];
-  sentiment: string | null;
-  momentum: string | null;
+  team_sections: TeamSection[];
   generated_at: string;
 }
 

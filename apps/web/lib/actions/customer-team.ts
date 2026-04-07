@@ -11,6 +11,7 @@ export async function addCKTeamMember(
   customerId: string,
   profileId: string,
   roleLabel?: string,
+  departmentId?: string,
 ) {
   try {
     const { claims } = await requireSession();
@@ -37,6 +38,7 @@ export async function addCKTeamMember(
         customer_id: customerId,
         profile_id: profileId,
         role_label: roleLabel || null,
+        department_id: departmentId || null,
       } as any);
 
     if (insertError) {
@@ -106,5 +108,53 @@ export async function updateCKTeamMemberLabel(
     return { success: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Update the department of a CK team member on a customer account.
+ */
+export async function updateCKTeamMemberDepartment(
+  customerId: string,
+  profileId: string,
+  departmentId: string | null,
+) {
+  try {
+    const { claims } = await requireSession();
+    if (claims.tenantType !== "internal") {
+      return { error: "Only CK team members can manage customer teams" };
+    }
+
+    const admin = createSupabaseAdmin();
+    const { error: updateError } = await admin
+      .from("customer_team_members" as any)
+      .update({ department_id: departmentId } as any)
+      .eq("customer_id", customerId)
+      .eq("profile_id", profileId);
+
+    if (updateError) return { error: updateError.message };
+
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Fetch all departments.
+ */
+export async function getDepartments() {
+  try {
+    const admin = createSupabaseAdmin();
+    const { data, error } = await admin
+      .from("departments" as any)
+      .select("id, name, label, sort_order")
+      .order("sort_order");
+
+    if (error) return { departments: [], error: error.message };
+    return { departments: data as unknown as Array<{ id: string; name: string; label: string; sort_order: number }> };
+  } catch (err) {
+    return { departments: [], error: err instanceof Error ? err.message : "Unknown error" };
   }
 }

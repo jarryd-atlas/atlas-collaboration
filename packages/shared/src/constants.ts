@@ -326,6 +326,13 @@ export const DEMAND_RESPONSE_LABELS: Record<DemandResponseStatus, string> = {
   evaluated_not_enrolled: "Evaluated — Not Enrolled",
 };
 
+/** Baseline form sections (external-facing interactive form) */
+export const BASELINE_FORM_SECTIONS = [
+  "contact", "facility", "system", "equipment", "documents",
+  "energy", "operations", "efficiency", "review",
+] as const;
+export type BaselineFormSection = (typeof BASELINE_FORM_SECTIONS)[number];
+
 // ═══════════════════════════════════════════════════════════════
 // Account Planning Constants
 // ═══════════════════════════════════════════════════════════════

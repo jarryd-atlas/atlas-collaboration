@@ -33,6 +33,9 @@ import { MeetingsOverviewCard } from "../account-plan/meetings-overview-card";
 import { CustomerEmailsList } from "../account-plan/customer-emails-list";
 import { EmailDigestCard } from "../account-plan/email-digest-card";
 import { EmailSyncButton } from "../account-plan/email-sync-button";
+import { MeetingSyncButton } from "../account-plan/meeting-sync-button";
+import { CustomerTicketsList } from "../account-plan/customer-tickets-list";
+import { TicketSyncButton } from "../account-plan/ticket-sync-button";
 import { ImportSitesDialog } from "../forms/import-sites-dialog";
 import type { Stakeholder } from "../account-plan/org-chart-node";
 import { cn } from "../../lib/utils";
@@ -42,6 +45,8 @@ import type { AssignableUser, AssignableSite } from "../tasks/inline-task-input"
 interface TeamMember {
   id: string;
   role_label: string | null;
+  department_id: string | null;
+  department: { id: string; name: string; label: string; sort_order: number } | null;
   profile: {
     id: string;
     full_name: string;
@@ -126,6 +131,8 @@ interface CustomerDetailLayoutProps {
   customerMeetings?: any[];
   customerEmails?: any[];
   emailDigest?: any | null;
+  customerTickets?: any[];
+  hubspotPortalId?: string | null;
   currentUserId?: string;
 }
 
@@ -154,6 +161,8 @@ export function CustomerDetailLayout({
   customerMeetings = [],
   customerEmails = [],
   emailDigest = null,
+  customerTickets = [],
+  hubspotPortalId,
   currentUserId,
 }: CustomerDetailLayoutProps) {
   const [sitesCollapsed, setSitesCollapsed] = useState(() => {
@@ -458,14 +467,17 @@ export function CustomerDetailLayout({
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
             Meetings
           </h3>
-          <MeetingPrepDialog
-            customerName={customer.name}
-            customerDomain={customer.domain}
-            customerId={customer.id}
-            tenantId={customer.tenant_id}
-            accountPlanId={accountPlan?.id ?? ""}
-            existingStakeholders={stakeholders}
-          />
+          <div className="flex items-center gap-2">
+            {currentUserId && <MeetingSyncButton userId={currentUserId} />}
+            <MeetingPrepDialog
+              customerName={customer.name}
+              customerDomain={customer.domain}
+              customerId={customer.id}
+              tenantId={customer.tenant_id}
+              accountPlanId={accountPlan?.id ?? ""}
+              existingStakeholders={stakeholders}
+            />
+          </div>
         </div>
       )}
       <div className="flex-1 overflow-hidden">
@@ -533,6 +545,26 @@ export function CustomerDetailLayout({
       <CustomerEmailsList
         emails={customerEmails}
         customerName={customer.name}
+      />
+    </div>
+  );
+
+  const ticketsTab = (
+    <div className="overflow-y-auto h-full p-4 space-y-4">
+      {/* Header toolbar */}
+      {isCKInternal && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Support Tickets
+          </h3>
+          <TicketSyncButton customerId={customer.id} />
+        </div>
+      )}
+      {/* Ticket list */}
+      <CustomerTicketsList
+        tickets={customerTickets}
+        customerName={customer.name}
+        hubspotPortalId={hubspotPortalId ?? undefined}
       />
     </div>
   );
@@ -750,6 +782,7 @@ export function CustomerDetailLayout({
             people: peopleTab,
             meetings: meetingsTab,
             emails: emailsTab,
+            tickets: ticketsTab,
             successPlan: successPlanTab,
             sitesTasks: sitesTasksTab,
           }}

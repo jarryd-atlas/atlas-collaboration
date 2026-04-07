@@ -343,7 +343,7 @@ export async function getCKTeamForCustomer(customerId: string) {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("customer_team_members" as any)
-    .select("id, role_label, created_at, profile:profiles!inner(id, full_name, avatar_url, email)")
+    .select("id, role_label, department_id, created_at, profile:profiles!inner(id, full_name, avatar_url, email), department:departments(id, name, label, sort_order)")
     .eq("customer_id", customerId)
     .order("created_at");
 

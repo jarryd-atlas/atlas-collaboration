@@ -42,6 +42,40 @@ export interface HubSpotPropertiesResponse {
   results: HubSpotProperty[];
 }
 
+// ─── HubSpot Ticket Types ─────────────────────────────────
+
+export interface HubSpotTicket {
+  id: string;
+  properties: Record<string, string | null>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HubSpotTicketSearchResult {
+  total: number;
+  results: HubSpotTicket[];
+  paging?: { next?: { after: string } };
+}
+
+export interface HubSpotAssociation {
+  toObjectId: string;
+  associationTypes: Array<{
+    category: string;
+    typeId: number;
+    label: string | null;
+  }>;
+}
+
+export interface HubSpotAssociationsResponse {
+  results: HubSpotAssociation[];
+  paging?: { next?: { after: string } };
+}
+
+export interface HubSpotContact {
+  id: string;
+  properties: Record<string, string | null>;
+}
+
 // ─── App-side Types ────────────────────────────────────────
 
 export interface HubSpotConfig {

@@ -22,6 +22,7 @@ import { OverviewTab } from "../../../../../../components/assessment/overview-ta
 import { BaselineTab } from "../../../../../../components/assessment/baseline-tab";
 import { DocumentsTab } from "../../../../../../components/assessment/documents-tab";
 import { LaborTab } from "../../../../../../components/assessment/labor-tab";
+import { BaselineFormLinkButton } from "../../../../../../components/assessment/baseline-form-link-button";
 import { MapPin, Mic } from "lucide-react";
 
 interface SitePageProps {
@@ -157,6 +158,13 @@ export default async function SitePage({ params }: SitePageProps) {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {isInternal && assessment?.id && (
+              <BaselineFormLinkButton
+                siteId={site.id}
+                tenantId={site.tenant_id}
+                assessmentId={assessment.id}
+              />
+            )}
             {isInternal && (
               <Link
                 href={`/customers/${customerSlug}/sites/${siteSlug}/interview`}

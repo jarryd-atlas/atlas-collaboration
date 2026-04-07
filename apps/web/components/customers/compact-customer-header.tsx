@@ -12,6 +12,8 @@ import { Users, Plus, ChevronDown } from "lucide-react";
 interface TeamMember {
   id: string;
   role_label: string | null;
+  department_id: string | null;
+  department: { id: string; name: string; label: string; sort_order: number } | null;
   profile: {
     id: string;
     full_name: string;

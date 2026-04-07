@@ -3,7 +3,15 @@
  * Raw fetch wrapper — no SDK dependency.
  */
 
-import type { HubSpotDeal, HubSpotSearchResult, HubSpotProperty, HubSpotPropertiesResponse } from "./types";
+import type {
+  HubSpotDeal,
+  HubSpotSearchResult,
+  HubSpotProperty,
+  HubSpotPropertiesResponse,
+  HubSpotTicketSearchResult,
+  HubSpotAssociationsResponse,
+  HubSpotContact,
+} from "./types";
 
 const BASE_URL = "https://api.hubapi.com";
 
@@ -89,6 +97,29 @@ export async function updateDeal(
     method: "PATCH",
     body: JSON.stringify({ properties }),
   });
+}
+
+// ─── Contact Operations ───────────────────────────────────
+
+/** Batch-read contacts with specified properties */
+export async function batchReadContacts(
+  token: string,
+  contactIds: string[],
+  properties: string[]
+): Promise<HubSpotContact[]> {
+  if (contactIds.length === 0) return [];
+  const result = await hubspotFetch<{ results: HubSpotContact[] }>(
+    token,
+    "/crm/v3/objects/contacts/batch/read",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        inputs: contactIds.map((id) => ({ id })),
+        properties,
+      }),
+    }
+  );
+  return result.results ?? [];
 }
 
 // ─── Property Definitions ──────────────────────────────────

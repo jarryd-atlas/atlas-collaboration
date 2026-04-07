@@ -10,7 +10,7 @@ export { uploadVoiceNote } from "./voice";
 export { createReport, updateReportSection, publishReport } from "./reports";
 export { fetchSitesWithMilestones, fetchSitesList, fetchAssignableUsers, fetchCustomers } from "./data";
 export { uploadAttachment, deleteAttachment, fetchAttachments, fetchCustomerAttachments, updateAttachmentCategory, updateAttachmentFileName, updateAttachmentNote, uploadNewVersion, fetchVersionHistory } from "./attachments";
-export { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel } from "./customer-team";
+export { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel, updateCKTeamMemberDepartment, getDepartments } from "./customer-team";
 export { setSiteAccess } from "./site-access";
 export { submitFeedback, fetchAllFeedback, updateFeedbackStatus } from "./feedback";
 export { createMeetingSeries, createMeeting, addMeetingItem, updateMeetingItem, deleteMeetingItem, completeMeeting, addMeetingParticipant, removeMeetingParticipant } from "./meetings";

@@ -1,15 +1,24 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, X, Users } from "lucide-react";
 import { Combobox, type ComboboxOption } from "../ui/combobox";
 import { Button } from "../ui/button";
-import { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel } from "../../lib/actions";
+import { addCKTeamMember, removeCKTeamMember, updateCKTeamMemberLabel, updateCKTeamMemberDepartment, getDepartments } from "../../lib/actions";
+
+interface Department {
+  id: string;
+  name: string;
+  label: string;
+  sort_order: number;
+}
 
 interface TeamMember {
   id: string;
   role_label: string | null;
+  department_id: string | null;
+  department: Department | null;
   profile: {
     id: string;
     full_name: string;
@@ -47,9 +56,18 @@ export function CustomerTeamManager({
   const [showAdd, setShowAdd] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [selectedRoleLabel, setSelectedRoleLabel] = useState("");
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState("");
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const router = useRouter();
+
+  // Fetch departments on mount
+  useEffect(() => {
+    getDepartments().then((result) => {
+      if (result.departments) setDepartments(result.departments);
+    });
+  }, []);
 
   // Filter out already-added profiles
   const existingIds = new Set(teamMembers.map((m) => m.profile.id));
@@ -66,24 +84,28 @@ export function CustomerTeamManager({
     setError("");
 
     startTransition(async () => {
-      const result = await addCKTeamMember(customerId, selectedProfileId, selectedRoleLabel || undefined);
+      const result = await addCKTeamMember(customerId, selectedProfileId, selectedRoleLabel || undefined, selectedDepartmentId || undefined);
       if ("error" in result && result.error) {
         setError(result.error);
       } else {
         // Add to local state
         const profile = internalProfiles.find((p) => p.id === selectedProfileId);
+        const dept = departments.find((d) => d.id === selectedDepartmentId) || null;
         if (profile) {
           setTeamMembers((prev) => [
             ...prev,
             {
               id: `temp-${Date.now()}`,
               role_label: selectedRoleLabel || null,
+              department_id: selectedDepartmentId || null,
+              department: dept,
               profile,
             },
           ]);
         }
         setSelectedProfileId("");
         setSelectedRoleLabel("");
+        setSelectedDepartmentId("");
         setShowAdd(false);
         router.refresh();
       }
@@ -109,6 +131,20 @@ export function CustomerTeamManager({
       setTeamMembers((prev) =>
         prev.map((m) =>
           m.profile.id === profileId ? { ...m, role_label: newLabel || null } : m
+        ),
+      );
+    });
+  }
+
+  function handleDepartmentChange(profileId: string, departmentId: string) {
+    const dept = departments.find((d) => d.id === departmentId) || null;
+    startTransition(async () => {
+      await updateCKTeamMemberDepartment(customerId, profileId, departmentId || null);
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.profile.id === profileId
+            ? { ...m, department_id: departmentId || null, department: dept }
+            : m
         ),
       );
     });
@@ -149,12 +185,24 @@ export function CustomerTeamManager({
           />
           {selectedProfileId && (
             <>
+              {departments.length > 0 && (
+                <select
+                  value={selectedDepartmentId}
+                  onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                >
+                  <option value="">Select department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
+                </select>
+              )}
               <select
                 value={selectedRoleLabel}
                 onChange={(e) => setSelectedRoleLabel(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
               >
-                <option value="">No role label</option>
+                <option value="">Select role...</option>
                 {ROLE_LABELS.map((r) => (
                   <option key={r} value={r}>{r}</option>
                 ))}
@@ -168,6 +216,7 @@ export function CustomerTeamManager({
                     setShowAdd(false);
                     setSelectedProfileId("");
                     setSelectedRoleLabel("");
+                    setSelectedDepartmentId("");
                   }}
                 >
                   Cancel
@@ -214,20 +263,30 @@ export function CustomerTeamManager({
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {member.profile.full_name}
                 </p>
-                <div className="flex items-center gap-1.5">
-                  {member.role_label ? (
-                    <select
-                      value={member.role_label}
-                      onChange={(e) => handleRoleLabelChange(member.profile.id, e.target.value)}
-                      className="text-[10px] text-gray-500 bg-transparent border-none p-0 cursor-pointer hover:text-gray-700 focus:outline-none"
-                    >
-                      {ROLE_LABELS.map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-[10px] text-gray-400">{member.profile.email}</span>
-                  )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Department selector */}
+                  <select
+                    value={member.department_id || ""}
+                    onChange={(e) => handleDepartmentChange(member.profile.id, e.target.value)}
+                    className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-1.5 py-0.5 cursor-pointer hover:bg-gray-100 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-brand-green/30 max-w-[120px]"
+                  >
+                    <option value="">No dept</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
+                  </select>
+                  <span className="text-xs text-gray-300">·</span>
+                  {/* Role selector */}
+                  <select
+                    value={member.role_label || ""}
+                    onChange={(e) => handleRoleLabelChange(member.profile.id, e.target.value)}
+                    className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-1.5 py-0.5 cursor-pointer hover:bg-gray-100 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-brand-green/30 max-w-[130px]"
+                  >
+                    <option value="">No role</option>
+                    {ROLE_LABELS.map((r) => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <button

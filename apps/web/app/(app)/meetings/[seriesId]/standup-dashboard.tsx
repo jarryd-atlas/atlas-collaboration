@@ -2,11 +2,12 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, MessageSquare } from "lucide-react";
+import { ChevronLeft, MessageSquare, UserPlus } from "lucide-react";
 import { CustomerReviewCard } from "../../../../components/meetings/customer-review-card";
 import { MeetingItemRow } from "../../../../components/meetings/meeting-item-row";
 import { AddItemInput } from "../../../../components/meetings/add-item-input";
 import { PresenceBar } from "../../../../components/meetings/presence-bar";
+import { ManageParticipantsDialog } from "../../../../components/meetings/manage-participants-dialog";
 import { addMeetingItem, updateMeetingItem, deleteMeetingItem } from "../../../../lib/actions/meetings";
 import { useMeetingRealtime } from "../../../../lib/hooks/use-meeting-realtime";
 
@@ -151,6 +152,7 @@ export function StandupDashboard({
   teamMembers,
 }: StandupDashboardProps) {
   const router = useRouter();
+  const [showParticipants, setShowParticipants] = useState(false);
 
   // Use the first (most recent) meeting as the active workspace
   const activeMeeting = initialMeetings[0];
@@ -246,13 +248,30 @@ export function StandupDashboard({
           </div>
         </div>
 
-        {/* Presence bar */}
-        <div className="mt-3">
+        {/* Presence bar + manage participants */}
+        <div className="mt-3 flex items-center gap-3">
           <PresenceBar
             participants={series.participants}
             onlineUserIds={onlineUserIds}
           />
+          <button
+            onClick={() => setShowParticipants(true)}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors px-2 py-1 rounded-md hover:bg-gray-100"
+            title="Manage participants"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            <span>Manage</span>
+          </button>
         </div>
+
+        <ManageParticipantsDialog
+          open={showParticipants}
+          onClose={() => setShowParticipants(false)}
+          seriesId={series.id}
+          participants={series.participants}
+          teamMembers={teamMembers}
+          currentUserId={currentUserId}
+        />
       </div>
 
       {/* Always-on workspace */}

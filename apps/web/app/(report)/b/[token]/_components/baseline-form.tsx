@@ -1251,6 +1251,40 @@ function CompressorSpecsFields({
           <span className="text-xs text-gray-700">VFD</span>
         </label>
       </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">
+          Suction (PSIG)
+        </label>
+        <input
+          type="number"
+          value={(specs.suction_setpoint_psig as number) ?? ""}
+          onChange={(e) =>
+            onChange({
+              ...specs,
+              suction_setpoint_psig: e.target.value ? Number(e.target.value) : null,
+            })
+          }
+          placeholder="e.g. 25"
+          className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#91E100] focus:ring-1 focus:ring-[#91E100]/20 outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-500 mb-1">
+          Discharge (PSIG)
+        </label>
+        <input
+          type="number"
+          value={(specs.discharge_setpoint_psig as number) ?? ""}
+          onChange={(e) =>
+            onChange({
+              ...specs,
+              discharge_setpoint_psig: e.target.value ? Number(e.target.value) : null,
+            })
+          }
+          placeholder="e.g. 165"
+          className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#91E100] focus:ring-1 focus:ring-[#91E100]/20 outline-none"
+        />
+      </div>
     </div>
   );
 }

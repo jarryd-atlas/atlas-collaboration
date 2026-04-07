@@ -157,7 +157,10 @@ function formReducer(
     case "DUPLICATE_EQUIPMENT": {
       const source = state.equipment[action.index];
       if (!source) return state;
-      const newEquip = duplicateEquipment(source, state.equipment.length);
+      const categoryCount = state.equipment.filter(
+        (e) => e.category === source.category
+      ).length;
+      const newEquip = duplicateEquipment(source, categoryCount);
       return {
         ...state,
         equipment: [...state.equipment, newEquip],
@@ -849,64 +852,86 @@ function SystemSection({
   );
 }
 
-function EquipmentSection({
-  state,
+/** Build a compact one-line summary for an equipment item */
+function getEquipmentSummary(eq: EquipmentData): string {
+  const parts: string[] = [eq.name || eq.category];
+
+  if (eq.manufacturer) parts.push(eq.manufacturer);
+  if (eq.model) parts.push(eq.model);
+
+  const specs = eq.specs as Record<string, unknown>;
+  if (eq.category === "compressor") {
+    if (specs.hp) parts.push(`${specs.hp} HP`);
+    if (specs.type) parts.push(String(specs.type));
+    if (specs.vfd_equipped) parts.push("VFD");
+  } else if (eq.category === "condenser") {
+    if (specs.total_fans) parts.push(`${specs.total_fans} fans`);
+    if (specs.total_hp_fan_and_pump) parts.push(`${specs.total_hp_fan_and_pump} HP`);
+  } else if (eq.category === "evaporator") {
+    if (specs.num_units) parts.push(`${specs.num_units} units`);
+    if (specs.avg_fan_hp) parts.push(`${specs.avg_fan_hp} HP avg`);
+    if (specs.defrost_type) parts.push(String(specs.defrost_type));
+  }
+
+  if (eq.quantity > 1) parts.push(`qty ${eq.quantity}`);
+
+  return parts.join(" \u00b7 ");
+}
+
+function EquipmentCard({
+  eq,
+  index,
   dispatch,
+  defaultExpanded,
 }: {
-  state: BaselineFormState;
+  eq: EquipmentData;
+  index: number;
   dispatch: React.Dispatch<BaselineFormAction>;
+  defaultExpanded: boolean;
 }) {
-  const categories: { value: EquipmentCategory; label: string }[] = [
-    { value: "compressor", label: "Compressor" },
-    { value: "condenser", label: "Condenser" },
-    { value: "evaporator", label: "Evaporator" },
-    { value: "vessel", label: "Vessel" },
-    { value: "vfd", label: "VFD" },
-    { value: "pump", label: "Pump" },
-    { value: "other", label: "Other" },
-  ];
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   return (
-    <div className="space-y-4">
-      {state.equipment.length === 0 && (
-        <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center">
-          <p className="text-sm text-gray-400 mb-3">
-            No equipment added yet. Start by adding your compressors.
-          </p>
-        </div>
-      )}
-
-      {state.equipment.map((eq, index) => (
-        <div
-          key={eq.id ?? `new-${index}`}
-          className="rounded-lg border border-gray-200 p-4 space-y-3"
+    <div className="rounded-lg border border-gray-200 overflow-hidden">
+      {/* Collapsed header / summary */}
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+      >
+        <svg
+          className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500 uppercase">
-              {eq.category} &mdash; {eq.name || `#${index + 1}`}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  dispatch({ type: "DUPLICATE_EQUIPMENT", index })
-                }
-                className="text-xs text-gray-400 hover:text-gray-600"
-              >
-                Duplicate
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dispatch({ type: "REMOVE_EQUIPMENT", index })
-                }
-                className="text-xs text-red-500 hover:text-red-700"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+        <span className="text-sm text-gray-700 truncate flex-1">
+          {getEquipmentSummary(eq)}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "DUPLICATE_EQUIPMENT", index })}
+            className="text-[10px] text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded hover:bg-gray-100"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: "REMOVE_EQUIPMENT", index })}
+            className="text-[10px] text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50"
+          >
+            Remove
+          </button>
+        </div>
+      </button>
 
+      {/* Expanded form */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -1016,39 +1041,142 @@ function EquipmentSection({
             />
           </div>
         </div>
-      ))}
+      )}
+    </div>
+  );
+}
 
-      {/* Add equipment buttons */}
-      <div className="flex flex-wrap gap-2">
-        {categories.map((cat) => (
-          <button
-            key={cat.value}
-            type="button"
-            onClick={() =>
-              dispatch({
-                type: "ADD_EQUIPMENT",
-                category: cat.value,
-              })
-            }
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-          >
-            <svg
-              className="h-3 w-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
+const CATEGORY_ORDER: EquipmentCategory[] = [
+  "compressor",
+  "condenser",
+  "evaporator",
+  "vessel",
+  "vfd",
+  "pump",
+  "controls",
+  "other",
+];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  compressor: "Compressors",
+  condenser: "Condensers",
+  evaporator: "Evaporators",
+  vessel: "Vessels",
+  vfd: "VFDs",
+  pump: "Pumps",
+  controls: "Controls",
+  other: "Other",
+};
+
+function EquipmentSection({
+  state,
+  dispatch,
+}: {
+  state: BaselineFormState;
+  dispatch: React.Dispatch<BaselineFormAction>;
+}) {
+  // Group equipment by category, preserving original indices for dispatch
+  const grouped = useMemo(() => {
+    const groups: Record<string, Array<{ eq: EquipmentData; originalIndex: number }>> = {};
+    state.equipment.forEach((eq, i) => {
+      if (!groups[eq.category]) groups[eq.category] = [];
+      groups[eq.category]!.push({ eq, originalIndex: i });
+    });
+    return groups;
+  }, [state.equipment]);
+
+  // Categories that have items (in display order)
+  const activeCategories = CATEGORY_ORDER.filter((cat) => grouped[cat]?.length);
+  // Categories that have no items yet (for the "add" buttons at the bottom)
+  const emptyCategories = CATEGORY_ORDER.filter(
+    (cat) => !grouped[cat]?.length && ["compressor", "condenser", "evaporator", "vessel", "pump", "other"].includes(cat)
+  );
+
+  if (state.equipment.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center">
+          <p className="text-sm text-gray-400 mb-3">
+            No equipment added yet. Start by adding your compressors.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {CATEGORY_ORDER.filter((c) => c !== "controls").map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => dispatch({ type: "ADD_EQUIPMENT", category: cat })}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4.5v15m7.5-7.5h-15"
-              />
-            </svg>
-            {cat.label}
-          </button>
-        ))}
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              {CATEGORY_LABELS[cat] ?? cat}
+            </button>
+          ))}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Grouped equipment */}
+      {activeCategories.map((cat) => {
+        const items = grouped[cat]!;
+        return (
+          <div key={cat} className="space-y-2">
+            {/* Category header */}
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {CATEGORY_LABELS[cat] ?? cat} ({items.length})
+              </h4>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: "ADD_EQUIPMENT", category: cat })}
+                className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 font-medium"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add
+              </button>
+            </div>
+
+            {/* Equipment cards */}
+            <div className="space-y-1.5">
+              {items.map(({ eq, originalIndex }) => (
+                <EquipmentCard
+                  key={eq.id ?? `new-${originalIndex}`}
+                  eq={eq}
+                  index={originalIndex}
+                  dispatch={dispatch}
+                  defaultExpanded={!eq.id}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Add buttons for categories not yet added */}
+      {emptyCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+          {emptyCategories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => dispatch({ type: "ADD_EQUIPMENT", category: cat })}
+              className="inline-flex items-center gap-1 rounded-md border border-dashed border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              {CATEGORY_LABELS[cat] ?? cat}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2375,14 +2503,18 @@ export function BaselineForm({
       setSaveStatus("saving");
 
       try {
-        let result: { error?: string } = {};
+        let result: { error?: string; id?: string; success?: boolean } = {};
 
         switch (section) {
           case "contact":
-            // Save each contact
-            for (const contact of state.contacts) {
+            // Save each contact and patch back IDs for new records
+            for (let i = 0; i < state.contacts.length; i++) {
+              const contact = state.contacts[i]!;
               result = await upsertBaselineContact(token, profileId, contact);
               if (result.error) break;
+              if (result.id && !contact.id) {
+                dispatch({ type: "UPDATE_CONTACT", index: i, contact: { ...contact, id: result.id } });
+              }
             }
             break;
 
@@ -2397,9 +2529,13 @@ export function BaselineForm({
             break;
 
           case "equipment":
-            for (const eq of state.equipment) {
+            for (let i = 0; i < state.equipment.length; i++) {
+              const eq = state.equipment[i]!;
               result = await upsertBaselineEquipment(token, profileId, eq);
               if (result.error) break;
+              if (result.id && !eq.id) {
+                dispatch({ type: "UPDATE_EQUIPMENT", index: i, equipment: { ...eq, id: result.id } });
+              }
             }
             break;
 
@@ -2428,9 +2564,13 @@ export function BaselineForm({
             break;
 
           case "contractors":
-            for (const contractor of state.contractors) {
+            for (let i = 0; i < state.contractors.length; i++) {
+              const contractor = state.contractors[i]!;
               result = await upsertBaselineContractor(token, profileId, contractor);
               if (result.error) break;
+              if (result.id && !contractor.id) {
+                dispatch({ type: "UPDATE_CONTRACTOR", index: i, contractor: { ...contractor, id: result.id } });
+              }
             }
             break;
 
@@ -2462,7 +2602,7 @@ export function BaselineForm({
         }
       }
     },
-    [state, token, profileId]
+    [state, token, profileId, dispatch]
   );
 
   const flushSave = useCallback(async () => {

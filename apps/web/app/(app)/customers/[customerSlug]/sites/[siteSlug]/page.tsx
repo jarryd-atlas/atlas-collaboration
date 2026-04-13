@@ -236,6 +236,7 @@ export default async function SitePage({ params }: SitePageProps) {
                   savingsAnalysis={assessmentData?.savingsAnalysis ?? null}
                   siteId={site.id}
                   tenantId={site.tenant_id}
+                  customerId={customer.id}
                   isLocked={isLocked}
                   dataSources={assessmentData?.dataSources ?? []}
                   siteContacts={assessmentData?.siteContacts ?? []}
@@ -259,6 +260,7 @@ export default async function SitePage({ params }: SitePageProps) {
               savingsAnalysis={assessmentData?.savingsAnalysis ?? null}
               siteId={site.id}
               tenantId={site.tenant_id}
+              customerId={customer.id}
               isLocked={isLocked}
               dataSources={assessmentData?.dataSources ?? []}
               siteContacts={assessmentData?.siteContacts ?? []}

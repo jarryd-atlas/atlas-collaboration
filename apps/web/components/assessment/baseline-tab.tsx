@@ -23,6 +23,7 @@ interface BaselineTabProps {
   savingsAnalysis: any;
   siteId: string;
   tenantId: string;
+  customerId: string;
   isLocked: boolean;
   dataSources: any[];
   siteContacts: any[];
@@ -44,6 +45,7 @@ export function BaselineTab({
   savingsAnalysis,
   siteId,
   tenantId,
+  customerId,
   isLocked,
   dataSources,
   siteContacts,
@@ -75,6 +77,7 @@ export function BaselineTab({
           siteContacts={siteContacts}
           siteId={siteId}
           tenantId={tenantId}
+          customerId={customerId}
           isLocked={isLocked}
         />
       </CollapsibleSection>

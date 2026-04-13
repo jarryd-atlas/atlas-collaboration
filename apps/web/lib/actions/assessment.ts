@@ -637,6 +637,7 @@ export async function addSiteContact(data: {
   email?: string;
   phone?: string;
   isPrimary?: boolean;
+  stakeholderId?: string;
 }) {
   try {
     await requireSession();
@@ -661,6 +662,7 @@ export async function addSiteContact(data: {
         phone: data.phone || null,
         is_primary: data.isPrimary ?? false,
         sort_order: sortOrder,
+        stakeholder_id: data.stakeholderId || null,
       })
       .select()
       .single();
@@ -668,6 +670,131 @@ export async function addSiteContact(data: {
     if (error) return { error: error.message };
     revalidatePath("/customers");
     return { contact: row };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+/**
+ * Link an existing account stakeholder to a site as a site contact.
+ * Copies current stakeholder data into the site_contacts row and stores the stakeholder_id reference.
+ */
+export async function linkStakeholderToSite(data: {
+  assessmentId: string;
+  siteId: string;
+  tenantId: string;
+  stakeholderId: string;
+}) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+
+    // Fetch stakeholder details
+    const { data: stakeholder, error: shErr } = await fromTable(admin, "account_stakeholders")
+      .select("name, title, email, phone")
+      .eq("id", data.stakeholderId)
+      .single();
+
+    if (shErr || !stakeholder) return { error: "Stakeholder not found" };
+
+    // Check if already linked to this site
+    const { data: alreadyLinked } = await fromTable(admin, "site_contacts")
+      .select("id")
+      .eq("assessment_id", data.assessmentId)
+      .eq("stakeholder_id", data.stakeholderId)
+      .maybeSingle();
+
+    if (alreadyLinked) return { error: "This contact is already linked to this site" };
+
+    // Get sort order
+    const { data: existing } = await fromTable(admin, "site_contacts")
+      .select("sort_order")
+      .eq("assessment_id", data.assessmentId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+
+    const sortOrder = existing && existing.length > 0 ? (existing[0].sort_order ?? 0) + 1 : 0;
+
+    const { data: row, error } = await fromTable(admin, "site_contacts")
+      .insert({
+        assessment_id: data.assessmentId,
+        site_id: data.siteId,
+        tenant_id: data.tenantId,
+        stakeholder_id: data.stakeholderId,
+        name: stakeholder.name,
+        title: stakeholder.title || null,
+        email: stakeholder.email || null,
+        phone: stakeholder.phone || null,
+        sort_order: sortOrder,
+      })
+      .select()
+      .single();
+
+    if (error) return { error: error.message };
+    revalidatePath("/customers");
+    return { contact: row };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+/**
+ * Create a new account stakeholder and link them to a site.
+ * This ensures the contact lives in the central company contacts database.
+ */
+export async function createStakeholderAndLinkToSite(data: {
+  assessmentId: string;
+  siteId: string;
+  tenantId: string;
+  customerId: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+}) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+
+    // Find or create account_plan for this customer
+    let { data: accountPlan } = await fromTable(admin, "account_plans")
+      .select("id")
+      .eq("customer_id", data.customerId)
+      .maybeSingle();
+
+    if (!accountPlan) {
+      const { data: newPlan, error: planErr } = await fromTable(admin, "account_plans")
+        .insert({ customer_id: data.customerId, tenant_id: data.tenantId })
+        .select("id")
+        .single();
+      if (planErr || !newPlan) return { error: "Failed to create account plan" };
+      accountPlan = newPlan;
+    }
+
+    // Create the stakeholder in account_stakeholders
+    const { data: stakeholder, error: shErr } = await fromTable(admin, "account_stakeholders")
+      .insert({
+        account_plan_id: accountPlan.id,
+        tenant_id: data.tenantId,
+        name: data.name,
+        title: data.title || null,
+        email: data.email || null,
+        phone: data.phone || null,
+      })
+      .select("id, name, title, email, phone")
+      .single();
+
+    if (shErr || !stakeholder) return { error: shErr?.message || "Failed to create stakeholder" };
+
+    // Now link to site
+    const result = await linkStakeholderToSite({
+      assessmentId: data.assessmentId,
+      siteId: data.siteId,
+      tenantId: data.tenantId,
+      stakeholderId: stakeholder.id,
+    });
+
+    return result;
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Unexpected error" };
   }

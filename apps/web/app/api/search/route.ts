@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = createSupabaseAdmin();
-    const tsQuery = q.split(/\s+/).filter(Boolean).join(" & ");
+    // Prefix matching (:*) so partial words match — "San Anto" → "San:* & Anto:*" matches "San Antonio"
+    const tsQuery = q.split(/\s+/).filter(Boolean).map((t) => `${t}:*`).join(" & ");
     if (!tsQuery) return NextResponse.json([]);
 
     // For CK internal users, search all. For customers, filter by tenant.
@@ -30,7 +31,14 @@ export async function GET(request: NextRequest) {
       .textSearch("search_vector", tsQuery)
       .limit(5);
 
-    // 2) Sites matching by customer name (e.g. searching "americold" returns all their sites)
+    // 2) Sites matching by name via ILIKE (fallback for partial words tsvector misses)
+    let sitesByNameQuery = admin
+      .from("sites")
+      .select("id, name, slug, pipeline_stage, customer:customers!inner(slug, name)")
+      .ilike("name", likePattern)
+      .limit(5);
+
+    // 3) Sites matching by customer name (e.g. searching "americold" returns all their sites)
     let sitesByCustomerQuery = admin
       .from("sites")
       .select("id, name, slug, pipeline_stage, customer:customers!inner(slug, name)")
@@ -112,6 +120,7 @@ export async function GET(request: NextRequest) {
     // Apply tenant filter for customer users
     if (!isInternal && tenantId) {
       sitesQuery = sitesQuery.eq("tenant_id", tenantId);
+      sitesByNameQuery = sitesByNameQuery.eq("tenant_id", tenantId);
       sitesByCustomerQuery = sitesByCustomerQuery.eq("tenant_id", tenantId);
       customersQuery = customersQuery.eq("tenant_id", tenantId);
       milestonesQuery = milestonesQuery.eq("tenant_id", tenantId);
@@ -138,11 +147,12 @@ export async function GET(request: NextRequest) {
     }
 
     const [
-      sitesRes, sitesByCustomerRes, customersRes, milestonesRes, tasksRes,
+      sitesRes, sitesByNameRes, sitesByCustomerRes, customersRes, milestonesRes, tasksRes,
       voiceNotesRes, transcriptionsRes, commentsRes,
       rocksRes, meetingSeriesRes, customerMeetingsRes, initiativesRes,
     ] = await Promise.all([
       sitesQuery,
+      sitesByNameQuery,
       sitesByCustomerQuery,
       customersQuery,
       milestonesQuery,
@@ -174,7 +184,7 @@ export async function GET(request: NextRequest) {
     // Sites (from search_vector match + customer name match, deduplicated)
     const seenSiteIds = new Set<string>();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allSites = [...(sitesRes.data ?? []), ...(sitesByCustomerRes.data ?? [])] as any[];
+    const allSites = [...(sitesRes.data ?? []), ...(sitesByNameRes.data ?? []), ...(sitesByCustomerRes.data ?? [])] as any[];
     for (const s of allSites) {
       if (seenSiteIds.has(s.id)) continue;
       seenSiteIds.add(s.id);

@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   Target,
   Contact,
+  TrendingUp,
 } from "lucide-react";
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -69,6 +70,7 @@ const CK_NAV: NavItem[] = [
   { label: "My Tasks", href: "/tasks", icon: <ListTodo className="h-5 w-5" />, matchPrefix: "/tasks" },
   { label: "Meetings", href: "/meetings", icon: <Users className="h-5 w-5" />, matchPrefix: "/meetings" },
   { label: "Rocks", href: "/rocks", icon: <Target className="h-5 w-5" />, matchPrefix: "/rocks" },
+  { label: "Forecast", href: "/forecast", icon: <TrendingUp className="h-5 w-5" />, matchPrefix: "/forecast" },
   { label: "Contacts", href: "/contacts", icon: <Contact className="h-5 w-5" />, matchPrefix: "/contacts" },
   { label: "Voice Notes", href: "/voice-notes", icon: <Mic className="h-5 w-5" />, matchPrefix: "/voice-notes" },
   { label: "Reports", href: "/reports", icon: <FileText className="h-5 w-5" />, matchPrefix: "/reports" },

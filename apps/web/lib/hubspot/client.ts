@@ -18,6 +18,7 @@ const BASE_URL = "https://api.hubapi.com";
 async function hubspotFetch<T>(token: string, path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",

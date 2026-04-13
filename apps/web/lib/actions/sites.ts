@@ -34,7 +34,7 @@ export async function getTransferPreview(siteId: string) {
     // Count child records
     const tables = [
       "milestones", "flagged_issues", "voice_notes", "status_reports",
-      "tasks", "site_contacts", "site_contractors", "site_interviews",
+      "tasks", "site_contacts", "site_contractors",
       "site_assessments", "handoff_reports", "document_extractions",
     ];
 
@@ -99,7 +99,7 @@ export async function getMergePreview(primarySiteId: string, secondarySiteId: st
     // Count what the secondary site has
     const tables = [
       "milestones", "flagged_issues", "voice_notes", "status_reports",
-      "tasks", "site_contacts", "site_contractors", "site_interviews",
+      "tasks", "site_contacts", "site_contractors",
       "site_assessments", "handoff_reports",
     ];
 

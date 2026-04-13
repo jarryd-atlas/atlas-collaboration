@@ -24,7 +24,7 @@ import { DocumentsTab } from "../../../../../../components/assessment/documents-
 import { LaborTab } from "../../../../../../components/assessment/labor-tab";
 import { ShareBaselineFormButton } from "../../../../../../components/assessment/share-baseline-form-button";
 import { BaselineTabWrapper } from "../../../../../../components/assessment/baseline-tab-wrapper";
-import { Mic } from "lucide-react";
+
 import { EditableSiteAddress } from "../../../../../../components/sites/editable-site-address";
 
 interface SitePageProps {
@@ -174,15 +174,7 @@ export default async function SitePage({ params }: SitePageProps) {
                 assessmentId={assessment.id}
               />
             )}
-            {isInternal && (
-              <Link
-                href={`/customers/${customerSlug}/sites/${siteSlug}/interview`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-              >
-                <Mic className="h-4 w-4" />
-                AI Interview
-              </Link>
-            )}
+
             <CustomerPortalLink
               currentPath={`/customers/${customerSlug}/sites/${siteSlug}`}
               customerSlug={customerSlug}

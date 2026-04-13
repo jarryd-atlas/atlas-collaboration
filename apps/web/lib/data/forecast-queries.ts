@@ -159,14 +159,14 @@ export function computeBuckets(deals: ForecastDeal[]): ForecastBuckets {
 
   // Cumulative waterfall: Commit ⊂ Best Case ⊂ Pipeline
   const commitTotal = sum(commitDeals);
-  const bestCaseTotal = commitTotal + sum(mostLikelyDeals);
-  const pipelineTotal = bestCaseTotal + sum(bestCaseDeals) + sum(pipelineDeals) + sum(uncategorizedDeals);
+  const bestCaseTotal = commitTotal + sum(mostLikelyDeals) + sum(bestCaseDeals);
+  const pipelineTotal = bestCaseTotal + sum(pipelineDeals) + sum(uncategorizedDeals);
 
   const allPipelineDeals = [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals, ...uncategorizedDeals];
 
   return {
     commit: { deals: commitDeals, total: commitTotal },
-    bestCase: { deals: [...commitDeals, ...mostLikelyDeals], total: bestCaseTotal },
+    bestCase: { deals: [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals], total: bestCaseTotal },
     pipeline: { deals: allPipelineDeals, total: pipelineTotal },
   };
 }

@@ -56,17 +56,17 @@ function computeBuckets(deals: ForecastDeal[]) {
   const uncategorizedDeals = deals.filter((d) => !d.forecastCategory);
 
   const commitTotal = sumAmount(commitDeals);
-  const bestCaseTotal = commitTotal + sumAmount(mostLikelyDeals);
-  const pipelineTotal = bestCaseTotal + sumAmount(bestCaseDeals) + sumAmount(pipelineDeals) + sumAmount(uncategorizedDeals);
+  const bestCaseTotal = commitTotal + sumAmount(mostLikelyDeals) + sumAmount(bestCaseDeals);
+  const pipelineTotal = bestCaseTotal + sumAmount(pipelineDeals) + sumAmount(uncategorizedDeals);
 
   const allPipelineDeals = [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals, ...uncategorizedDeals];
 
   return {
     commit: { deals: commitDeals, total: commitTotal, count: commitDeals.length },
     bestCase: {
-      deals: [...commitDeals, ...mostLikelyDeals],
+      deals: [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals],
       total: bestCaseTotal,
-      count: commitDeals.length + mostLikelyDeals.length,
+      count: commitDeals.length + mostLikelyDeals.length + bestCaseDeals.length,
     },
     pipeline: {
       deals: allPipelineDeals,

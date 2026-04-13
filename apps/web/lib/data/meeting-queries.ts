@@ -407,7 +407,7 @@ export async function getStandupDealData(): Promise<Record<string, StandupDeal[]
       arr: props.arc ?? null,
       install: props.nrc ?? null,
       upgrade: props.upgrade_revenue ?? null,
-      forecastCategory: props.hs_manual_forecast_category ?? null,
+      forecastCategory: props.hs_manual_forecast_category?.toLowerCase() ?? null,
       closeDate: props.closedate ?? null,
     });
   }

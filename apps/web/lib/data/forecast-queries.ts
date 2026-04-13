@@ -263,8 +263,9 @@ export async function getForecastDeals(): Promise<ForecastDeal[]> {
     // Exclude closed deals
     if (CLOSED_STAGE_IDS.has(stageId)) continue;
 
-    // Exclude omitted deals
-    const category = props.hs_manual_forecast_category ?? null;
+    // Normalize forecast category to lowercase (HubSpot returns UPPER_CASE)
+    const rawCategory = props.hs_manual_forecast_category ?? null;
+    const category = rawCategory ? rawCategory.toLowerCase() : null;
     if (category === "omit") continue;
 
     const customerId = site?.customer_id;

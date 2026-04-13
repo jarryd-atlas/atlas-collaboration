@@ -775,6 +775,8 @@ export function CustomerDetailLayout({
           allStakeholders={stakeholders}
           isCKInternal={isCKInternal}
           defaultReportsTo={defaultReportsTo}
+          sites={sites.filter((s): s is typeof s & { id: string } => !!s.id)}
+          customerId={customer.id}
           onClose={handleCloseStakeholderForm}
         />
       )}

@@ -2,9 +2,18 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createStakeholder, updateStakeholder, deleteStakeholder } from "../../lib/actions/account-plan";
-import { X, Trash2, Search, Check } from "lucide-react";
+import { updateStakeholderSiteLinks } from "../../lib/actions/assessment";
+import { X, Trash2, Search, Check, MapPin, Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { Stakeholder } from "./org-chart-node";
+
+interface SiteOption {
+  id: string;
+  name: string;
+  city?: string | null;
+  state?: string | null;
+  slug?: string;
+}
 
 interface StakeholderFormProps {
   stakeholder?: Stakeholder | null;
@@ -13,6 +22,8 @@ interface StakeholderFormProps {
   allStakeholders: Stakeholder[];
   isCKInternal: boolean;
   defaultReportsTo?: string | null;
+  sites?: SiteOption[];
+  customerId?: string;
   onClose: () => void;
 }
 
@@ -23,6 +34,8 @@ export function StakeholderForm({
   allStakeholders,
   isCKInternal,
   defaultReportsTo,
+  sites = [],
+  customerId,
   onClose,
 }: StakeholderFormProps) {
   const isEdit = !!stakeholder;
@@ -40,6 +53,27 @@ export function StakeholderForm({
     notes: stakeholder?.notes ?? "",
     reports_to: stakeholder?.reports_to ?? defaultReportsTo ?? "",
   });
+
+  // Linked sites state
+  const [linkedSiteIds, setLinkedSiteIds] = useState<Set<string>>(new Set());
+  const [originalLinkedSiteIds, setOriginalLinkedSiteIds] = useState<Set<string>>(new Set());
+  const [loadingSites, setLoadingSites] = useState(false);
+
+  // Load currently linked sites on mount (edit mode only)
+  useEffect(() => {
+    if (!isEdit || !stakeholder?.id || sites.length === 0) return;
+
+    setLoadingSites(true);
+    fetch(`/api/contacts/linked-sites?stakeholderId=${encodeURIComponent(stakeholder.id)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const ids = new Set<string>(data.siteIds ?? []);
+        setLinkedSiteIds(ids);
+        setOriginalLinkedSiteIds(new Set(ids));
+      })
+      .catch(() => {})
+      .finally(() => setLoadingSites(false));
+  }, [isEdit, stakeholder?.id, sites.length]);
 
   // Filter out self and descendants from reports_to options to prevent circular refs
   const reportsToOptions = allStakeholders.filter((s) => s.id !== stakeholder?.id);
@@ -63,11 +97,33 @@ export function StakeholderForm({
       reports_to: form.reports_to || null,
     };
 
-    if (isEdit) {
-      await updateStakeholder(stakeholder.id, data);
+    let stakeholderId = stakeholder?.id;
+
+    if (isEdit && stakeholderId) {
+      await updateStakeholder(stakeholderId, data);
     } else {
-      await createStakeholder(accountPlanId, tenantId, data);
+      const result = await createStakeholder(accountPlanId, tenantId, data);
+      // For new stakeholders, we need the ID to link sites
+      if (result && typeof result === "object" && "id" in result) {
+        stakeholderId = (result as { id: string }).id;
+      }
     }
+
+    // Update site links if we have sites and a stakeholder ID
+    if (stakeholderId && sites.length > 0) {
+      const siteIdsToAdd = [...linkedSiteIds].filter((id) => !originalLinkedSiteIds.has(id));
+      const siteIdsToRemove = [...originalLinkedSiteIds].filter((id) => !linkedSiteIds.has(id));
+
+      if (siteIdsToAdd.length > 0 || siteIdsToRemove.length > 0) {
+        await updateStakeholderSiteLinks({
+          stakeholderId,
+          tenantId,
+          siteIdsToAdd,
+          siteIdsToRemove,
+        });
+      }
+    }
+
     setSaving(false);
     onClose();
   }
@@ -78,6 +134,18 @@ export function StakeholderForm({
     await deleteStakeholder(stakeholder.id);
     setSaving(false);
     onClose();
+  }
+
+  function toggleSite(siteId: string) {
+    setLinkedSiteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(siteId)) {
+        next.delete(siteId);
+      } else {
+        next.add(siteId);
+      }
+      return next;
+    });
   }
 
   return (
@@ -119,6 +187,54 @@ export function StakeholderForm({
               />
             </div>
           </div>
+
+          {/* Linked Sites */}
+          {sites.length > 0 && (
+            <div className="border-t border-gray-100 pt-3 mt-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                <label className="text-[10px] font-medium text-gray-500 uppercase">Linked Sites</label>
+                {loadingSites && <Loader2 className="h-3 w-3 text-gray-400 animate-spin" />}
+              </div>
+              <p className="text-[11px] text-gray-400 mb-2">
+                Select sites where this person is a key contact.
+              </p>
+              <div className="max-h-40 overflow-y-auto rounded-md border border-gray-200 divide-y divide-gray-100">
+                {sites.map((site) => {
+                  const isLinked = linkedSiteIds.has(site.id);
+                  return (
+                    <label
+                      key={site.id}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors",
+                        isLinked ? "bg-indigo-50/50" : "hover:bg-gray-50",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isLinked}
+                        onChange={() => toggleSite(site.id)}
+                        className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div className="min-w-0">
+                        <span className="text-sm text-gray-900">{site.name}</span>
+                        {(site.city || site.state) && (
+                          <span className="text-xs text-gray-400 ml-1.5">
+                            {[site.city, site.state].filter(Boolean).join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {linkedSiteIds.size > 0 && (
+                <p className="text-[11px] text-indigo-500 mt-1.5">
+                  {linkedSiteIds.size} site{linkedSiteIds.size !== 1 ? "s" : ""} selected
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Internal-only fields */}
           {isCKInternal && (

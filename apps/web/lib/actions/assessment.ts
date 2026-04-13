@@ -839,3 +839,46 @@ export async function deleteSiteContact(contactId: string) {
     return { error: err instanceof Error ? err.message : "Unexpected error" };
   }
 }
+
+/**
+ * Bulk update which sites a stakeholder is linked to.
+ * Adds new links and removes old ones in a single operation.
+ */
+export async function updateStakeholderSiteLinks(data: {
+  stakeholderId: string;
+  tenantId: string;
+  siteIdsToAdd: string[];
+  siteIdsToRemove: string[];
+}) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+
+    // Remove unlinked sites
+    for (const siteId of data.siteIdsToRemove) {
+      await fromTable(admin, "site_contacts")
+        .delete()
+        .eq("stakeholder_id", data.stakeholderId)
+        .eq("site_id", siteId);
+    }
+
+    // Add new site links
+    for (const siteId of data.siteIdsToAdd) {
+      // Get or create assessment for the site
+      const assessmentResult = await createOrGetAssessment(siteId, data.tenantId);
+      if (assessmentResult.error || !assessmentResult.assessment) continue;
+
+      await linkStakeholderToSite({
+        assessmentId: assessmentResult.assessment.id,
+        siteId,
+        tenantId: data.tenantId,
+        stakeholderId: data.stakeholderId,
+      });
+    }
+
+    revalidatePath("/customers");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}

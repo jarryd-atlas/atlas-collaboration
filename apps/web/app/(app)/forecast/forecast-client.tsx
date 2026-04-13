@@ -52,10 +52,14 @@ function computeBuckets(deals: ForecastDeal[]) {
   const mostLikelyDeals = deals.filter((d) => d.forecastCategory === "most_likely");
   const bestCaseDeals = deals.filter((d) => d.forecastCategory === "best_case");
   const pipelineDeals = deals.filter((d) => d.forecastCategory === "pipeline");
+  // Uncategorized deals (null category) still belong in the pipeline total
+  const uncategorizedDeals = deals.filter((d) => !d.forecastCategory);
 
   const commitTotal = sumAmount(commitDeals);
   const bestCaseTotal = commitTotal + sumAmount(mostLikelyDeals);
-  const pipelineTotal = bestCaseTotal + sumAmount(bestCaseDeals) + sumAmount(pipelineDeals);
+  const pipelineTotal = bestCaseTotal + sumAmount(bestCaseDeals) + sumAmount(pipelineDeals) + sumAmount(uncategorizedDeals);
+
+  const allPipelineDeals = [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals, ...uncategorizedDeals];
 
   return {
     commit: { deals: commitDeals, total: commitTotal, count: commitDeals.length },
@@ -65,9 +69,9 @@ function computeBuckets(deals: ForecastDeal[]) {
       count: commitDeals.length + mostLikelyDeals.length,
     },
     pipeline: {
-      deals: [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals],
+      deals: allPipelineDeals,
       total: pipelineTotal,
-      count: commitDeals.length + mostLikelyDeals.length + bestCaseDeals.length + pipelineDeals.length,
+      count: allPipelineDeals.length,
     },
   };
 }

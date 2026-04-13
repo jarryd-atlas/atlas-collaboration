@@ -154,16 +154,20 @@ export function computeBuckets(deals: ForecastDeal[]): ForecastBuckets {
   const mostLikelyDeals = deals.filter((d) => d.forecastCategory === "most_likely");
   const bestCaseDeals = deals.filter((d) => d.forecastCategory === "best_case");
   const pipelineDeals = deals.filter((d) => d.forecastCategory === "pipeline");
+  // Uncategorized deals (null category) still belong in the pipeline total
+  const uncategorizedDeals = deals.filter((d) => !d.forecastCategory);
 
   // Cumulative waterfall: Commit ⊂ Best Case ⊂ Pipeline
   const commitTotal = sum(commitDeals);
   const bestCaseTotal = commitTotal + sum(mostLikelyDeals);
-  const pipelineTotal = bestCaseTotal + sum(bestCaseDeals) + sum(pipelineDeals);
+  const pipelineTotal = bestCaseTotal + sum(bestCaseDeals) + sum(pipelineDeals) + sum(uncategorizedDeals);
+
+  const allPipelineDeals = [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals, ...uncategorizedDeals];
 
   return {
     commit: { deals: commitDeals, total: commitTotal },
     bestCase: { deals: [...commitDeals, ...mostLikelyDeals], total: bestCaseTotal },
-    pipeline: { deals: [...commitDeals, ...mostLikelyDeals, ...bestCaseDeals, ...pipelineDeals], total: pipelineTotal },
+    pipeline: { deals: allPipelineDeals, total: pipelineTotal },
   };
 }
 

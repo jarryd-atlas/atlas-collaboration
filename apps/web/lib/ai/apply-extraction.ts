@@ -238,6 +238,38 @@ export async function applyExtraction(params: ApplyExtractionParams): Promise<st
     appliedSections.push("labor");
   }
 
+  // ── Site Contacts ──────────────────────────────────────────
+  if (data.siteContacts && data.siteContacts.length > 0) {
+    for (const contact of data.siteContacts) {
+      const { data: inserted } = await fromTable(admin, "site_contacts")
+        .insert({
+          assessment_id: assessmentId,
+          site_id: siteId,
+          tenant_id: tenantId,
+          name: contact.name || "Unknown",
+          title: contact.title || null,
+          email: contact.email || null,
+          phone: contact.phone || null,
+        })
+        .select("id")
+        .single();
+
+      if (inserted) {
+        await fromTable(admin, "baseline_data_sources").insert({
+          assessment_id: assessmentId,
+          site_id: siteId,
+          tenant_id: tenantId,
+          attachment_id: attachmentId,
+          extraction_id: extractionId,
+          target_table: "site_contacts",
+          target_record_id: inserted.id,
+          confidence: data.confidence,
+        });
+      }
+    }
+    appliedSections.push("siteContacts");
+  }
+
   // ── Update extraction status ───────────────────────────────
   await fromTable(admin, "document_extractions")
     .update({

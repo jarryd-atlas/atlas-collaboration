@@ -47,6 +47,7 @@ const SITE_CATEGORIES = [
   { key: "mass-balance", label: "Mass Balance Worksheet", icon: Gauge, color: "text-orange-600", bg: "bg-orange-50" },
   { key: "electrical-drawings", label: "Electrical Drawings", icon: Zap, color: "text-yellow-600", bg: "bg-yellow-50" },
   { key: "additional-photos", label: "Additional Site Photos", icon: ImagePlus, color: "text-teal-600", bg: "bg-teal-50" },
+  { key: "interview-transcript", label: "Interview Transcripts", icon: MessageSquarePlus, color: "text-indigo-600", bg: "bg-indigo-50" },
 ] as const;
 
 type CategoryKey = (typeof SITE_CATEGORIES)[number]["key"];

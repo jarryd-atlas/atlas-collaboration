@@ -7,6 +7,27 @@ import { applyExtraction } from "../../../../lib/ai/apply-extraction";
 const fromTable = (admin: ReturnType<typeof createSupabaseAdmin>, table: string) =>
   (admin as any).from(table);
 
+/** Built-in extraction instructions for interview/meeting transcripts */
+const INTERVIEW_TRANSCRIPT_INSTRUCTIONS = `This document is a meeting interview transcript or conversation recording between site personnel and assessors.
+
+IMPORTANT CONTEXT:
+- This is conversational data, not a structured document. Extract facts mentioned in dialogue.
+- People may discuss equipment informally (e.g. "we have 4 compressors" → extract equipment).
+- Operational details are often mentioned in passing (hours, schedules, pain points).
+- Look for mentions of staffing, labor challenges, manual processes, and automation opportunities.
+- Extract any contact names, titles, emails, or phone numbers mentioned.
+- Pay attention to temperature challenges, seasonality patterns, and curtailment participation.
+- Note any mentions of utility providers, rate structures, or energy costs.
+
+PRIORITIZE extracting:
+1. Equipment mentioned (compressors, condensers, evaporators, controls)
+2. Operational parameters (hours, schedules, system type, refrigerant)
+3. Labor/staffing details (headcount, roles, pain points, manual processes)
+4. Site contacts (names, titles, contact info of people mentioned)
+5. Operations details (pressures, load shedding, curtailment, seasonality)
+
+Set confidence proportionally lower for conversational data (0.5-0.8 range) since interview statements are less precise than formal documents.`;
+
 /**
  * POST /api/ai/analyze-document
  * Receives pre-processed content from the browser (text/CSV for spreadsheets,
@@ -76,6 +97,11 @@ export async function POST(req: NextRequest) {
         .eq("is_active", true)
         .maybeSingle();
       categoryInstructions = catInstr?.instructions as string | undefined;
+    }
+
+    // Built-in instructions for interview transcripts
+    if (category === "interview-transcript" && !categoryInstructions) {
+      categoryInstructions = INTERVIEW_TRANSCRIPT_INSTRUCTIONS;
     }
 
     // 4. Validate we have something to analyze
@@ -166,6 +192,7 @@ export async function POST(req: NextRequest) {
 
 function guessDocumentType(fileName: string, sectionsFound: string[]): string {
   const lower = fileName.toLowerCase();
+  if (lower.includes("transcript") || lower.includes("interview")) return "interview_transcript";
   if (lower.includes("bill") || lower.includes("utility") || lower.includes("invoice")) return "utility_bill";
   if (lower.includes("p&id") || lower.includes("pid") || lower.includes("diagram")) return "p_and_id";
   if (lower.includes("round") || lower.includes("log")) return "round_sheet";

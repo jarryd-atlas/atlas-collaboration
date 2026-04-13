@@ -7,6 +7,7 @@ import { OperationsTab } from "./operations-tab";
 import { SavingsTab } from "./savings-tab";
 import { TouScheduleSection } from "./tou-schedule-section";
 import { SiteContactsSection } from "./site-contacts-section";
+import { TranscriptUpload } from "./transcript-upload";
 import { CollapsibleSection } from "../ui/collapsible-section";
 
 interface BaselineTabProps {
@@ -115,6 +116,19 @@ export function BaselineTab({
           </div>
         </CollapsibleSection>
       )}
+
+      {/* Interview Transcripts */}
+      <CollapsibleSection
+        title="Interview Transcripts"
+        defaultOpen={true}
+      >
+        <TranscriptUpload
+          siteId={siteId}
+          tenantId={tenantId}
+          assessmentId={assessment?.id}
+          isLocked={isLocked}
+        />
+      </CollapsibleSection>
 
       {/* Equipment Section */}
       <CollapsibleSection

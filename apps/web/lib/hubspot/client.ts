@@ -71,6 +71,32 @@ export async function getDeals(
   return result.results ?? [];
 }
 
+/** List all deals with pagination (fetches all pages) */
+export async function listAllDeals(
+  token: string,
+  properties: string[]
+): Promise<HubSpotDeal[]> {
+  const allDeals: HubSpotDeal[] = [];
+  let after: string | undefined;
+
+  do {
+    const params = new URLSearchParams();
+    params.set("limit", "100");
+    properties.forEach((p) => params.append("properties", p));
+    if (after) params.set("after", after);
+
+    const result = await hubspotFetch<{
+      results: HubSpotDeal[];
+      paging?: { next?: { after: string } };
+    }>(token, `/crm/v3/objects/deals?${params.toString()}`);
+
+    allDeals.push(...(result.results ?? []));
+    after = result.paging?.next?.after;
+  } while (after);
+
+  return allDeals;
+}
+
 /** Search deals by name (for combobox) */
 export async function searchDeals(
   token: string,

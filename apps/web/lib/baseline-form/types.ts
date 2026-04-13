@@ -20,6 +20,7 @@ export const BASELINE_FORM_SECTIONS = [
   "contact",
   "facility",
   "system",
+  "network",
   "equipment",
   "documents",
   "energy",
@@ -35,6 +36,7 @@ export const SECTION_LABELS: Record<BaselineFormSection, string> = {
   contact: "Your Info",
   facility: "Your Facility",
   system: "Refrigeration System",
+  network: "Network & Connectivity",
   equipment: "Equipment",
   documents: "Documents",
   energy: "Energy & Utility",
@@ -48,6 +50,7 @@ export const SECTION_DESCRIPTIONS: Record<BaselineFormSection, string> = {
   contact: "Tell us about yourself and your team at this facility",
   facility: "Help us understand your facility and operating schedule",
   system: "Describe your refrigeration system configuration",
+  network: "Test your internet connection and describe your network setup",
   equipment: "List your compressors, condensers, and evaporators",
   documents: "Review existing documents or upload new ones",
   energy: "Share your utility provider and rate structure details",
@@ -72,7 +75,6 @@ export interface ContactData {
 
 export interface FacilityData {
   facility_type: FacilityType | "";
-  product_notes: string;
   operating_days_per_week: number | null;
   daily_operational_hours: number | null;
   runs_24_7: boolean;
@@ -157,10 +159,14 @@ export interface OperationsData {
   can_shutdown: boolean;
   shutdown_constraints: string;
   curtailment_enrolled: boolean;
+  curtailment_frequency: string;
   curtailment_barriers: string;
   seasonality_notes: string;
   temperature_challenges: string;
   operational_nuances: string;
+  product_notes: string;
+  customer_mix: string;
+  staffing_notes: string;
 }
 
 export interface HeadcountEntry {
@@ -176,6 +182,44 @@ export interface EfficiencyData {
   manual_processes: string;
   time_sinks: string;
   automation_opportunities: string;
+}
+
+export type ConnectionType =
+  | "fiber"
+  | "cable"
+  | "dsl"
+  | "cellular"
+  | "satellite"
+  | "fixed_wireless"
+  | "unknown"
+  | "";
+
+export interface NetworkTestResult {
+  id?: string;
+  tested_at: string;
+  download_mbps: number | null;
+  upload_mbps: number | null;
+  latency_ms: number | null;
+  jitter_ms: number | null;
+  user_agent: string;
+  connection_info: string;
+  ip_address: string;
+  city: string;
+  region: string;
+  country: string;
+  timezone: string;
+  isp: string;
+  notes: string;
+}
+
+export interface NetworkData {
+  isp_name: string;
+  connection_type: ConnectionType;
+  has_backup_connection: boolean;
+  backup_connection_type: string;
+  known_issues: string;
+  network_stability_notes: string;
+  test_results: NetworkTestResult[];
 }
 
 export interface ContractorData {
@@ -202,6 +246,7 @@ export interface BaselineFormState {
   contacts: ContactData[];
   facility: FacilityData;
   system: SystemData;
+  network: NetworkData;
   equipment: EquipmentData[];
   energy: EnergyData;
   operations: OperationsData;
@@ -246,6 +291,9 @@ export type BaselineFormAction =
   | { type: "UPDATE_HEADCOUNT"; index: number; entry: HeadcountEntry }
   | { type: "ADD_HEADCOUNT" }
   | { type: "REMOVE_HEADCOUNT"; index: number }
+  | { type: "SET_NETWORK"; network: Partial<NetworkData> }
+  | { type: "ADD_NETWORK_TEST"; result: NetworkTestResult }
+  | { type: "REMOVE_NETWORK_TEST"; index: number }
   | { type: "SET_CONTRACTORS"; contractors: ContractorData[] }
   | { type: "UPDATE_CONTRACTOR"; index: number; contractor: ContractorData }
   | { type: "ADD_CONTRACTOR" }

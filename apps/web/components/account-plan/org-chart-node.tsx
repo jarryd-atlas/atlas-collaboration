@@ -1,7 +1,8 @@
 "use client";
 
+import { forwardRef } from "react";
 import { cn } from "../../lib/utils";
-import { Plus, Pencil, User } from "lucide-react";
+import { Plus, GripVertical, User } from "lucide-react";
 
 export interface Stakeholder {
   id: string;
@@ -16,6 +17,7 @@ export interface Stakeholder {
   notes: string | null;
   reports_to: string | null;
   is_ai_suggested: boolean;
+  persona_type: string | null;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -49,11 +51,21 @@ interface OrgChartNodeProps {
   isCKInternal: boolean;
   onEdit: () => void;
   onAddReport: () => void;
+  /** Spread onto the drag handle element for DnD */
+  dragHandleProps?: Record<string, any>;
+  /** Whether this node is currently being dragged over */
+  isDropTarget?: boolean;
+  /** Whether this node is currently being dragged */
+  isDragging?: boolean;
 }
 
-export function OrgChartNode({ stakeholder, isCKInternal, onEdit, onAddReport }: OrgChartNodeProps) {
+export function OrgChartNode({ stakeholder, isCKInternal, onEdit, onAddReport, dragHandleProps, isDropTarget, isDragging }: OrgChartNodeProps) {
   return (
-    <div className="group relative w-[180px]">
+    <div className={cn(
+      "group relative w-[180px] transition-all",
+      isDragging && "opacity-30 scale-95",
+      isDropTarget && "ring-2 ring-brand-green ring-offset-2 rounded-lg",
+    )}>
       <div
         onClick={onEdit}
         className={cn(
@@ -63,9 +75,28 @@ export function OrgChartNode({ stakeholder, isCKInternal, onEdit, onAddReport }:
       >
         {/* Avatar placeholder + name */}
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-            <User className="h-3.5 w-3.5 text-gray-400" />
-          </div>
+          {/* Drag handle */}
+          {dragHandleProps ? (
+            <div
+              {...dragHandleProps}
+              onPointerDown={(e) => {
+                // Prevent the card onClick from firing
+                e.stopPropagation();
+                // Call dnd-kit's onPointerDown
+                dragHandleProps.onPointerDown?.(e);
+              }}
+              className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0 cursor-grab active:cursor-grabbing hover:bg-gray-200 transition-colors touch-none select-none"
+              title="Drag to reorganize"
+              role="button"
+              tabIndex={0}
+            >
+              <GripVertical className="h-3.5 w-3.5 text-gray-400" />
+            </div>
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+              <User className="h-3.5 w-3.5 text-gray-400" />
+            </div>
+          )}
           <div className="min-w-0">
             <p className="text-xs font-semibold text-gray-900 truncate">{stakeholder.name}</p>
             {stakeholder.title && (

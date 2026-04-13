@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { SetPageContext } from "../layout/page-context";
 import { CompactCustomerHeader } from "./compact-customer-header";
 import { SitesList } from "../sites/sites-list";
@@ -9,38 +10,69 @@ import { TaskDetailInline, type TaskForPanel } from "../tasks/task-detail-panel"
 import { SiteOverviewInline } from "./site-overview-inline";
 import { AddSiteButton } from "../forms/customer-actions";
 import { CreateSiteDialog } from "../forms/create-site-dialog";
-import { AccountPlanTabs } from "../account-plan/account-plan-tabs";
 import { AccountStageTracker } from "../account-plan/account-stage-tracker";
 import { EnterpriseDealCard } from "../account-plan/enterprise-deal-card";
-import { WhitespaceMap } from "../account-plan/whitespace-map";
-import { StrategySection } from "../account-plan/strategy-section";
-import { SiteDealsSummary } from "../account-plan/site-deals-summary";
-import { OrgChartTree } from "../account-plan/org-chart-tree";
-import { OrgChartList } from "../account-plan/org-chart-list";
-import { StakeholderForm } from "../account-plan/stakeholder-form";
-import { GoalList } from "../account-plan/goal-list";
-import { MilestoneTimeline } from "../account-plan/milestone-timeline";
-import { AILeadershipLookup } from "../account-plan/ai-leadership-lookup";
-import { CompanyIntelligence } from "../account-plan/company-intelligence";
-import { AccountHealthScorecard } from "../account-plan/account-health-scorecard";
-import { ExpansionPipeline } from "../account-plan/expansion-pipeline";
-import { WinEvidence } from "../account-plan/win-evidence";
-import { AISuccessPlan } from "../account-plan/ai-success-plan";
-import { FacilityLookup } from "../account-plan/facility-lookup";
-import { MeetingPrepDialog } from "../account-plan/meeting-prep-dialog";
-import { CustomerMeetingsList, type CustomerMeeting } from "../account-plan/customer-meetings-list";
 import { MeetingsOverviewCard } from "../account-plan/meetings-overview-card";
-import { CustomerEmailsList } from "../account-plan/customer-emails-list";
-import { EmailDigestCard } from "../account-plan/email-digest-card";
-import { EmailSyncButton } from "../account-plan/email-sync-button";
-import { MeetingSyncButton } from "../account-plan/meeting-sync-button";
-import { CustomerTicketsList } from "../account-plan/customer-tickets-list";
-import { TicketSyncButton } from "../account-plan/ticket-sync-button";
-import { ImportSitesDialog } from "../forms/import-sites-dialog";
+import type { CustomerMeeting } from "../account-plan/customer-meetings-list";
 import type { Stakeholder } from "../account-plan/org-chart-node";
 import { cn } from "../../lib/utils";
-import { PanelLeftClose, PanelLeftOpen, MapPin, LayoutGrid, List, Plus } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, MapPin, LayoutGrid, List, Plus, Table2, GitBranch } from "lucide-react";
 import type { AssignableUser, AssignableSite } from "../tasks/inline-task-input";
+import { CustomerTasksTable } from "../tasks/customer-tasks-table";
+import { SitesTable } from "../sites/sites-table";
+import { BusinessUnitsManager } from "./business-units-manager";
+
+// ── Lazy-loaded heavy components (only loaded when their tab is active) ──
+const loadingSpinner = () => (
+  <div className="flex items-center justify-center py-12 text-sm text-gray-400">Loading...</div>
+);
+
+const AccountPlanTabs = dynamic(() => import("../account-plan/account-plan-tabs").then(m => m.AccountPlanTabs), { loading: loadingSpinner });
+const WhitespaceMap = dynamic(() => import("../account-plan/whitespace-map").then(m => m.WhitespaceMap), { loading: loadingSpinner });
+const StrategySection = dynamic(() => import("../account-plan/strategy-section").then(m => m.StrategySection), { loading: loadingSpinner });
+const SiteDealsSummary = dynamic(() => import("../account-plan/site-deals-summary").then(m => m.SiteDealsSummary), { loading: loadingSpinner });
+const OrgChartTree = dynamic(() => import("../account-plan/org-chart-tree").then(m => m.OrgChartTree), { loading: loadingSpinner });
+const OrgChartList = dynamic(() => import("../account-plan/org-chart-list").then(m => m.OrgChartList), { loading: loadingSpinner });
+const StakeholderForm = dynamic(() => import("../account-plan/stakeholder-form").then(m => m.StakeholderForm), { loading: loadingSpinner });
+const GoalList = dynamic(() => import("../account-plan/goal-list").then(m => m.GoalList), { loading: loadingSpinner });
+const MilestoneTimeline = dynamic(() => import("../account-plan/milestone-timeline").then(m => m.MilestoneTimeline), { loading: loadingSpinner });
+const AILeadershipLookup = dynamic(() => import("../account-plan/ai-leadership-lookup").then(m => m.AILeadershipLookup), { loading: loadingSpinner });
+const CompanyIntelligence = dynamic(() => import("../account-plan/company-intelligence").then(m => m.CompanyIntelligence), { loading: loadingSpinner });
+const AccountHealthScorecard = dynamic(() => import("../account-plan/account-health-scorecard").then(m => m.AccountHealthScorecard), { loading: loadingSpinner });
+const ExpansionPipeline = dynamic(() => import("../account-plan/expansion-pipeline").then(m => m.ExpansionPipeline), { loading: loadingSpinner });
+const WinEvidence = dynamic(() => import("../account-plan/win-evidence").then(m => m.WinEvidence), { loading: loadingSpinner });
+const AISuccessPlan = dynamic(() => import("../account-plan/ai-success-plan").then(m => m.AISuccessPlan), { loading: loadingSpinner });
+const FacilityLookup = dynamic(() => import("../account-plan/facility-lookup").then(m => m.FacilityLookup), { loading: loadingSpinner });
+const MeetingPrepDialog = dynamic(() => import("../account-plan/meeting-prep-dialog").then(m => m.MeetingPrepDialog), { loading: loadingSpinner });
+const CustomerMeetingsList = dynamic(() => import("../account-plan/customer-meetings-list").then(m => m.CustomerMeetingsList), { loading: loadingSpinner });
+const CustomerEmailsList = dynamic(() => import("../account-plan/customer-emails-list").then(m => m.CustomerEmailsList), { loading: loadingSpinner });
+const EmailDigestCard = dynamic(() => import("../account-plan/email-digest-card").then(m => m.EmailDigestCard), { loading: loadingSpinner });
+const EmailSyncButton = dynamic(() => import("../account-plan/email-sync-button").then(m => m.EmailSyncButton), { loading: loadingSpinner });
+const MeetingSyncButton = dynamic(() => import("../account-plan/meeting-sync-button").then(m => m.MeetingSyncButton), { loading: loadingSpinner });
+const CustomerTicketsList = dynamic(() => import("../account-plan/customer-tickets-list").then(m => m.CustomerTicketsList), { loading: loadingSpinner });
+const TicketSyncButton = dynamic(() => import("../account-plan/ticket-sync-button").then(m => m.TicketSyncButton), { loading: loadingSpinner });
+const ImportSitesDialog = dynamic(() => import("../forms/import-sites-dialog").then(m => m.ImportSitesDialog), { loading: loadingSpinner });
+const InitiativesTab = dynamic(() => import("../initiatives/initiatives-tab").then(m => m.InitiativesTab), { loading: loadingSpinner });
+const ContactDirectory = dynamic(() => import("../account-plan/contact-directory").then(m => m.ContactDirectory), { loading: loadingSpinner });
+const SalesIntelligenceSection = dynamic(() => import("../account-plan/sales-intelligence-section").then(m => m.SalesIntelligenceSection), { loading: loadingSpinner });
+
+const SiteMapEmbed = dynamic(
+  () => import("../maps/site-map").then((m) => {
+    const { SiteMap } = m;
+    // Wrapper to pass showCustomer=false and height
+    return function SiteMapEmbed(props: { sites: any[]; customerSlug: string }) {
+      return <SiteMap sites={props.sites} showCustomer={false} height="100%" customerSlug={props.customerSlug} />;
+    };
+  }),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full text-sm text-gray-400">
+        Loading map...
+      </div>
+    ),
+  },
+);
 
 interface TeamMember {
   id: string;
@@ -108,6 +140,12 @@ interface CustomerDetailLayoutProps {
     domain: string | null;
     company_type: string | null;
     tenant_id: string;
+    hq_address?: string | null;
+    hq_city?: string | null;
+    hq_state?: string | null;
+    hq_zip?: string | null;
+    hq_latitude?: number | null;
+    hq_longitude?: number | null;
   };
   customerSlug: string;
   sites: Site[];
@@ -134,6 +172,10 @@ interface CustomerDetailLayoutProps {
   customerTickets?: any[];
   hubspotPortalId?: string | null;
   currentUserId?: string;
+  initiatives?: any[];
+  businessUnits?: { id: string; name: string; slug: string }[];
+  buyingTriggers?: any[];
+  accountObjections?: any[];
 }
 
 const STORAGE_KEY = "atlas-sites-panel-collapsed";
@@ -164,6 +206,10 @@ export function CustomerDetailLayout({
   customerTickets = [],
   hubspotPortalId,
   currentUserId,
+  initiatives = [],
+  businessUnits = [],
+  buyingTriggers = [],
+  accountObjections = [],
 }: CustomerDetailLayoutProps) {
   const [sitesCollapsed, setSitesCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -181,8 +227,8 @@ export function CustomerDetailLayout({
   const [editingStakeholder, setEditingStakeholder] = useState<Stakeholder | null>(null);
   const [defaultReportsTo, setDefaultReportsTo] = useState<string | null>(null);
 
-  // Org chart view toggle
-  const [orgChartView, setOrgChartView] = useState<"tree" | "list">("tree");
+  // People view toggle
+  const [peopleView, setPeopleView] = useState<"directory" | "tree" | "list">("directory");
 
   // Add site from Google Places
   const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
@@ -317,6 +363,13 @@ export function CustomerDetailLayout({
           />
         </div>
       )}
+      {isCKInternal && (
+        <BusinessUnitsManager
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          businessUnits={businessUnits}
+        />
+      )}
       <CompanyIntelligence
         customerId={customer.id}
         tenantId={customer.tenant_id}
@@ -333,6 +386,15 @@ export function CustomerDetailLayout({
         issues={issues}
         totalAddressable={accountPlan?.total_addressable_sites ?? null}
       />
+      {isCKInternal && (
+        <SalesIntelligenceSection
+          customerId={customer.id}
+          tenantId={customer.tenant_id}
+          buyingTriggers={buyingTriggers}
+          objections={accountObjections}
+          stakeholders={stakeholders}
+        />
+      )}
       <ExpansionPipeline
         sites={sites}
         dealLinks={dealLinks}
@@ -349,6 +411,11 @@ export function CustomerDetailLayout({
         accountPlan={accountPlan}
       />
       <SiteDealsSummary dealLinks={dealLinks} />
+      <CustomerTasksTable
+        tasks={tasks}
+        assignableUsers={assignableUsers}
+        onSelectTask={handleTaskSelect}
+      />
     </div>
   );
 
@@ -357,22 +424,29 @@ export function CustomerDetailLayout({
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-900">
-            Organization ({stakeholders.length})
+            {peopleView === "directory" ? "Contact Directory" : "Organization"} ({stakeholders.length})
           </h3>
         </div>
         <div className="flex items-center gap-2">
-          {/* View toggle */}
+          {/* View toggle: Directory | Tree | List */}
           <div className="flex items-center bg-gray-100 rounded-md p-0.5">
             <button
-              onClick={() => setOrgChartView("tree")}
-              className={cn("p-1 rounded", orgChartView === "tree" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
-              title="Tree view"
+              onClick={() => setPeopleView("directory")}
+              className={cn("p-1 rounded", peopleView === "directory" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
+              title="Directory view"
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <Table2 className="h-3.5 w-3.5" />
             </button>
             <button
-              onClick={() => setOrgChartView("list")}
-              className={cn("p-1 rounded", orgChartView === "list" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
+              onClick={() => setPeopleView("tree")}
+              className={cn("p-1 rounded", peopleView === "tree" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
+              title="Org chart tree"
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setPeopleView("list")}
+              className={cn("p-1 rounded", peopleView === "list" ? "bg-white shadow-sm" : "text-gray-400 hover:text-gray-600")}
               title="List view"
             >
               <List className="h-3.5 w-3.5" />
@@ -406,23 +480,30 @@ export function CustomerDetailLayout({
         </div>
       </div>
       <div className="flex-1 overflow-auto">
-        {/* Desktop: show tree by default, list on toggle */}
-        <div className={cn(orgChartView === "tree" ? "hidden lg:block" : "hidden")}>
+        {peopleView === "directory" && (
+          <ContactDirectory
+            stakeholders={stakeholders}
+            isCKInternal={isCKInternal}
+            onEdit={handleEditStakeholder}
+            onAdd={() => { setEditingStakeholder(null); setDefaultReportsTo(null); setShowStakeholderForm(true); }}
+          />
+        )}
+        {peopleView === "tree" && (
           <OrgChartTree
             stakeholders={stakeholders}
             isCKInternal={isCKInternal}
             onEdit={handleEditStakeholder}
             onAddReport={handleAddReport}
           />
-        </div>
-        <div className={cn(orgChartView === "list" ? "block" : "lg:hidden")}>
+        )}
+        {peopleView === "list" && (
           <OrgChartList
             stakeholders={stakeholders}
             isCKInternal={isCKInternal}
             onEdit={handleEditStakeholder}
             onAddReport={handleAddReport}
           />
-        </div>
+        )}
       </div>
     </div>
   );
@@ -569,199 +650,85 @@ export function CustomerDetailLayout({
     </div>
   );
 
+  // Map stakeholders to the format expected by InitiativesTab
+  const stakeholdersForInitiatives = stakeholders.map((s: any) => ({
+    id: s.id,
+    name: s.name ?? "",
+    email: s.email ?? null,
+    title: s.title ?? null,
+    company: s.company ?? null,
+    is_ck_internal: s.is_ck_internal ?? false,
+  }));
+
+  // Map tasks for initiative linking
+  const tasksForInitiatives = tasks.map((t: any) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    priority: t.priority,
+    assignee_id: t.assignee?.id ?? null,
+    assignee: t.assignee ?? null,
+    due_date: t.due_date ?? null,
+  }));
+
+  const initiativesTab = (
+    <InitiativesTab
+      initiatives={initiatives}
+      customerId={customer.id}
+      tenantId={customer.tenant_id}
+      accountPlanId={accountPlan?.id}
+      assignableUsers={assignableUsers}
+      stakeholders={stakeholdersForInitiatives}
+      customerTasks={tasksForInitiatives}
+      isCKInternal={isCKInternal}
+      currentUserName={currentUserName}
+      currentUserAvatar={currentUserAvatar}
+      profileId={profileId}
+    />
+  );
+
+  // Map tab — show sites with coordinates on a Google Map
+  const sitesWithCoordinates = sites.filter(
+    (s: any) => s.latitude != null && s.longitude != null,
+  );
+
+  const mapTab = (
+    <div className="h-full">
+      <SiteMapEmbed
+        sites={sitesWithCoordinates.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          address: s.address,
+          city: s.city,
+          state: s.state,
+          pipeline_stage: s.pipeline_stage,
+          latitude: s.latitude as number,
+          longitude: s.longitude as number,
+        }))}
+        customerSlug={customerSlug}
+      />
+    </div>
+  );
+
   const sitesTasksTab = (
-    <>
-      {/* Two-column layout — desktop */}
-      <div className="hidden lg:flex flex-1 overflow-hidden gap-0 h-full">
-        {/* Left: Sites panel (collapsible) */}
-        <div
-          className={cn(
-            "shrink-0 border-r border-gray-200 transition-all duration-200 flex flex-col",
-            sitesCollapsed ? "w-10" : "w-80",
-          )}
-        >
-          {sitesCollapsed ? (
-            <div className="flex flex-col items-center py-3 h-full">
-              <button
-                onClick={() => setSitesCollapsed(false)}
-                className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Expand sites panel"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </button>
-              <div className="mt-4 flex flex-col items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-[10px] text-gray-400 font-medium"
-                  style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
-                >
-                  Sites ({sites.length})
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col h-full overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 shrink-0">
-                <h2 className="text-sm font-semibold text-gray-900">Sites</h2>
-                <div className="flex items-center gap-1">
-                  {isCKInternal && (
-                    <>
-                      <FacilityLookup
-                        customerName={customer.name}
-                        customerDomain={customer.domain}
-                        customerId={customer.id}
-                        customerTenantId={customer.tenant_id}
-                        existingSites={sites}
-                      />
-                      <ImportSitesDialog
-                        customerName={customer.name}
-                        customerId={customer.id}
-                        customerTenantId={customer.tenant_id}
-                        existingSites={sites}
-                      />
-                    </>
-                  )}
-                  <AddSiteButton
-                    customerName={customer.name}
-                    customerId={customer.id}
-                    customerTenantId={customer.tenant_id}
-                  />
-                  <button
-                    onClick={() => setSitesCollapsed(true)}
-                    className="p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="Collapse sites panel"
-                  >
-                    <PanelLeftClose className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto px-2 pb-3">
-                <SitesList
-                  sites={sites}
-                  customerSlug={customerSlug}
-                  editable={isCKInternal}
-                  dealLinks={dealLinks}
-                  hubspotEnabled={hubspotEnabled}
-                  compact
-                  selectedSiteId={selectedSiteId}
-                  onSiteSelect={handleSiteSelect}
-                  onAddFromGoogle={isCKInternal ? handleAddFromGoogle : undefined}
-                  customerName={customer.name}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Site overview OR Tasks + inline detail */}
-        <div className="flex-1 flex overflow-hidden min-w-0">
-          {selectedSite ? (
-            <div className="flex-1 overflow-hidden bg-white">
-              <SiteOverviewInline
-                site={selectedSite}
-                customerSlug={customerSlug}
-                customerId={customer.id}
-                tasks={tasksForSelectedSite}
-                assignableUsers={assignableUsers}
-                currentUserName={currentUserName}
-                currentUserAvatar={currentUserAvatar}
-                onClose={() => setSelectedSiteId(null)}
-              />
-            </div>
-          ) : (
-            <>
-              <div className={cn(
-                "overflow-y-auto p-4 transition-all duration-200",
-                selectedTask ? "w-[55%]" : "w-full",
-              )}>
-                <CustomerTasksSection
-                  tasks={tasks}
-                  customerId={customer.id}
-                  tenantId={customer.tenant_id}
-                  assignableUsers={assignableUsers}
-                  assignableSites={assignableSites}
-                  currentUserName={currentUserName}
-                  currentUserAvatar={currentUserAvatar}
-                  controlledSiteId={selectedSiteId}
-                  onTaskSelect={handleTaskSelect}
-                  selectedTaskId={selectedTask?.id}
-                  issues={issues}
-                />
-              </div>
-              {selectedTask && (
-                <div className="w-[45%] border-l border-gray-200 bg-white overflow-hidden">
-                  <TaskDetailInline
-                    task={selectedTask as TaskForPanel}
-                    onClose={() => setSelectedTask(null)}
-                    tenantId={customer.tenant_id}
-                    currentUserName={currentUserName}
-                    currentUserAvatar={currentUserAvatar}
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Single-column layout — mobile */}
-      <div className="lg:hidden flex-1 overflow-y-auto space-y-6 p-4">
-        <CustomerTasksSection
-          tasks={tasks}
-          customerId={customer.id}
-          tenantId={customer.tenant_id}
-          assignableUsers={assignableUsers}
-          assignableSites={assignableSites}
-          currentUserName={currentUserName}
-          currentUserAvatar={currentUserAvatar}
-          issues={issues}
-        />
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Sites</h2>
-            <div className="flex items-center gap-2">
-              {isCKInternal && (
-                <>
-                  <FacilityLookup
-                    customerName={customer.name}
-                    customerDomain={customer.domain}
-                    customerId={customer.id}
-                    customerTenantId={customer.tenant_id}
-                    existingSites={sites}
-                  />
-                  <ImportSitesDialog
-                    customerName={customer.name}
-                    customerId={customer.id}
-                    customerTenantId={customer.tenant_id}
-                    existingSites={sites}
-                  />
-                </>
-              )}
-              <AddSiteButton
-                customerName={customer.name}
-                customerId={customer.id}
-                customerTenantId={customer.tenant_id}
-              />
-            </div>
-          </div>
-          <SitesList
-            sites={sites}
-            customerSlug={customerSlug}
-            editable={isCKInternal}
-            dealLinks={dealLinks}
-            hubspotEnabled={hubspotEnabled}
-            onAddFromGoogle={isCKInternal ? handleAddFromGoogle : undefined}
-            customerName={customer.name}
-          />
-        </div>
-      </div>
-    </>
+    <div className="overflow-y-auto p-4 h-full">
+      <SitesTable
+        sites={sites}
+        customerSlug={customerSlug}
+        dealLinks={dealLinks}
+        isCKInternal={isCKInternal}
+        businessUnits={businessUnits}
+        onAddSite={isCKInternal ? () => setShowAddSiteDialog(true) : undefined}
+      />
+    </div>
   );
 
   return (
     <>
       <SetPageContext customerId={customer.id} customerName={customer.name} tenantId={customer.tenant_id} />
 
-      <div className="flex flex-col" style={{ height: "calc(100vh - 4rem)" }}>
+      <div className="-mx-6 -mt-6 -mb-24 flex flex-col overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
         {/* Compact header */}
         <CompactCustomerHeader
           customer={customer}
@@ -773,6 +740,14 @@ export function CustomerDetailLayout({
           sites={sites as any}
           accountStage={accountPlan?.account_stage}
           enterpriseDealValue={enterpriseDeal?.target_value}
+          championStatus={
+            (() => {
+              const champs = stakeholders.filter((s: any) => s.stakeholder_role === "champion");
+              if (champs.length === 0) return stakeholders.length > 0 ? "none" as const : undefined;
+              const atRisk = champs.some((s: any) => s.relationship_strength === "weak" || s.relationship_strength === "developing");
+              return atRisk ? "at_risk" as const : "healthy" as const;
+            })()
+          }
         />
 
         {/* Tabbed content */}
@@ -780,11 +755,13 @@ export function CustomerDetailLayout({
           {{
             overview: overviewTab,
             people: peopleTab,
+            initiatives: initiativesTab,
             meetings: meetingsTab,
             emails: emailsTab,
             tickets: ticketsTab,
             successPlan: successPlanTab,
             sitesTasks: sitesTasksTab,
+            map: mapTab,
           }}
         </AccountPlanTabs>
       </div>

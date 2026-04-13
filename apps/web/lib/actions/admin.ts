@@ -92,6 +92,43 @@ export async function denyUser(profileId: string) {
   }
 }
 
+export async function updateUserProfile(
+  profileId: string,
+  updates: { role?: UserRole; title?: string | null; team?: string | null },
+) {
+  try {
+    const { claims } = await requireSession();
+    if (claims.appRole !== "super_admin" && claims.appRole !== "admin") {
+      return { error: "Forbidden: admin only" };
+    }
+
+    // Only super_admin can change roles
+    if (updates.role && claims.appRole !== "super_admin") {
+      return { error: "Forbidden: only super_admin can change roles" };
+    }
+
+    const admin = createSupabaseAdmin();
+    const patch: Record<string, unknown> = {};
+    if (updates.role !== undefined) patch.role = updates.role;
+    if (updates.title !== undefined) patch.title = updates.title;
+    if (updates.team !== undefined) patch.team = updates.team;
+
+    if (Object.keys(patch).length === 0) return { success: true };
+
+    const { error: dbError } = await admin
+      .from("profiles")
+      .update(patch as any)
+      .eq("id", profileId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
 export async function updateUserRole(profileId: string, role: UserRole) {
   try {
     const { claims } = await requireSession();

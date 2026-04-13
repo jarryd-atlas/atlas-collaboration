@@ -6,6 +6,7 @@ import type {
   ContractorData,
   FacilityData,
   SystemData,
+  NetworkData,
   EquipmentData,
   EnergyData,
   OperationsData,
@@ -335,7 +336,6 @@ export async function upsertBaselineFacilityAndSystem(
 
     // Facility fields
     if (facility.facility_type !== undefined) record.facility_type = facility.facility_type || null;
-    if (facility.product_notes !== undefined) record.product_notes = facility.product_notes || null;
     if (facility.operating_days_per_week !== undefined) record.operating_days_per_week = facility.operating_days_per_week;
     if (facility.daily_operational_hours !== undefined) record.daily_operational_hours = facility.daily_operational_hours;
     if (facility.runs_24_7 !== undefined) record.runs_24_7 = facility.runs_24_7;
@@ -559,6 +559,146 @@ export async function upsertBaselineEfficiency(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Network Diagnostics → site_network_diagnostics + site_network_test_results
+// ═══════════════════════════════════════════════════════════════
+
+export async function upsertBaselineNetwork(
+  token: string,
+  profileId: string,
+  network: { isp_name?: string; connection_type?: string; has_backup_connection?: boolean; backup_connection_type?: string; known_issues?: string; network_stability_notes?: string }
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const record: Record<string, unknown> = {
+      assessment_id: session.assessment_id,
+      site_id: session.site_id,
+      tenant_id: session.tenant_id,
+      last_edited_by: profileId,
+      updated_at: new Date().toISOString(),
+    };
+
+    for (const [key, value] of Object.entries(network)) {
+      if (value !== undefined) {
+        record[key] = value === "" ? null : value;
+      }
+    }
+
+    const { data: existing } = await fromTable(admin, "site_network_diagnostics")
+      .select("id")
+      .eq("assessment_id", session.assessment_id)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await fromTable(admin, "site_network_diagnostics")
+        .update(record)
+        .eq("id", existing.id);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await fromTable(admin, "site_network_diagnostics")
+        .insert(record);
+      if (error) return { error: error.message };
+    }
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_network_diagnostics",
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function insertNetworkTestResult(
+  token: string,
+  profileId: string,
+  result: {
+    download_mbps: number | null;
+    upload_mbps: number | null;
+    latency_ms: number | null;
+    jitter_ms: number | null;
+    user_agent: string;
+    connection_info: string;
+    ip_address?: string;
+    city?: string;
+    region?: string;
+    country?: string;
+    timezone?: string;
+    isp?: string;
+    notes: string;
+  }
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const { data, error } = await fromTable(admin, "site_network_test_results")
+      .insert({
+        assessment_id: session.assessment_id,
+        site_id: session.site_id,
+        tenant_id: session.tenant_id,
+        tested_at: new Date().toISOString(),
+        download_mbps: result.download_mbps,
+        upload_mbps: result.upload_mbps,
+        latency_ms: result.latency_ms,
+        jitter_ms: result.jitter_ms,
+        user_agent: result.user_agent,
+        connection_info: result.connection_info,
+        ip_address: result.ip_address || null,
+        city: result.city || null,
+        region: result.region || null,
+        country: result.country || null,
+        timezone: result.timezone || null,
+        isp: result.isp || null,
+        notes: result.notes || null,
+        source: "baseline_form",
+      })
+      .select("id, tested_at")
+      .single();
+
+    if (error) return { error: error.message };
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_network_test_results",
+      action: "created",
+    });
+    return { id: data.id, tested_at: data.tested_at };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function deleteNetworkTestResult(
+  token: string,
+  profileId: string,
+  resultId: string
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const { error } = await fromTable(admin, "site_network_test_results")
+      .delete()
+      .eq("id", resultId)
+      .eq("assessment_id", session.assessment_id);
+    if (error) return { error: error.message };
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_network_test_results",
+      action: "deleted",
+      record_id: resultId,
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Generate Baseline Form Link
 // ═══════════════════════════════════════════════════════════════
 
@@ -704,16 +844,14 @@ export async function getBaselineFormData(token: string) {
       .single();
 
     // Load existing baseline data in parallel
-    const [contacts, equipment, operationalParams, touSchedule, operations, laborBaseline, contractors, attachments] =
+    const [contacts, equipment, operationalParams, touSchedule, operations, laborBaseline, contractors, networkDiagnostics, networkTestResults, attachments] =
       await Promise.all([
         fromTable(admin, "site_contacts")
           .select("*")
-          .eq("assessment_id", interview.assessment_id)
-          .order("sort_order"),
+          .eq("assessment_id", interview.assessment_id),
         fromTable(admin, "site_equipment")
           .select("*")
-          .eq("assessment_id", interview.assessment_id)
-          .order("sort_order"),
+          .eq("assessment_id", interview.assessment_id),
         fromTable(admin, "site_operational_params")
           .select("*")
           .eq("assessment_id", interview.assessment_id)
@@ -733,7 +871,18 @@ export async function getBaselineFormData(token: string) {
         fromTable(admin, "site_contractors")
           .select("*")
           .eq("assessment_id", interview.assessment_id)
-          .order("sort_order")
+          .then((res: { data: unknown[] | null }) => res)
+          .catch(() => ({ data: [] })),
+        fromTable(admin, "site_network_diagnostics")
+          .select("*")
+          .eq("assessment_id", interview.assessment_id)
+          .maybeSingle()
+          .then((res: { data: unknown | null }) => res)
+          .catch(() => ({ data: null })),
+        fromTable(admin, "site_network_test_results")
+          .select("*")
+          .eq("assessment_id", interview.assessment_id)
+          .order("tested_at", { ascending: false })
           .then((res: { data: unknown[] | null }) => res)
           .catch(() => ({ data: [] })),
         fromTable(admin, "attachments")
@@ -742,6 +891,18 @@ export async function getBaselineFormData(token: string) {
           .eq("entity_id", interview.site_id)
           .order("created_at", { ascending: false }),
       ]);
+
+    // Natural sort helper: C-1, C-2, ... C-10 (not C-1, C-10, C-2)
+    const natSort = (arr: any[], key: string) =>
+      [...(arr ?? [])].sort((a, b) =>
+        (a[key] ?? "").localeCompare(b[key] ?? "", undefined, { numeric: true })
+      );
+    const natSortEquip = (arr: any[]) =>
+      [...(arr ?? [])].sort((a, b) => {
+        const catCmp = (a.category ?? "").localeCompare(b.category ?? "");
+        if (catCmp !== 0) return catCmp;
+        return (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true });
+      });
 
     return {
       context: {
@@ -755,13 +916,15 @@ export async function getBaselineFormData(token: string) {
       },
       formProgress: interview.form_progress ?? {},
       status: interview.status,
-      contacts: contacts.data ?? [],
-      equipment: equipment.data ?? [],
+      contacts: natSort(contacts.data ?? [], "name"),
+      equipment: natSortEquip(equipment.data ?? []),
       operationalParams: operationalParams.data ?? null,
       touSchedule: touSchedule.data ?? null,
       operations: operations.data ?? null,
       laborBaseline: laborBaseline.data ?? null,
-      contractors: contractors.data ?? [],
+      contractors: natSort(contractors.data ?? [], "company_name"),
+      networkDiagnostics: networkDiagnostics.data ?? null,
+      networkTestResults: networkTestResults.data ?? [],
       attachments: attachments.data ?? [],
     };
   } catch {

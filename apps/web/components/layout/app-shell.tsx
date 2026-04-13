@@ -8,6 +8,7 @@ import { MobileSidebar } from "./mobile-sidebar";
 import { QuickActions } from "./quick-actions";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
 import { PageContextProvider } from "./page-context";
+import { UpdateBanner } from "./update-banner";
 
 interface SessionClaims {
   tenantId?: string;
@@ -77,6 +78,9 @@ export function AppShell({
 
   return (
     <PageContextProvider>
+      {/* Update / re-auth banners */}
+      <UpdateBanner />
+
       {/* Customer preview banner */}
       {isCustomerPreview && (
         <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-amber-400 px-4 py-1.5 text-xs font-semibold text-amber-900">
@@ -109,7 +113,7 @@ export function AppShell({
             onMenuToggle={() => setMobileOpen(true)}
             breadcrumbs={breadcrumbs}
           />
-          <div className="p-6">{children}</div>
+          <div className="p-6 pb-24">{children}</div>
         </main>
 
         {/* Quick Actions FAB — hidden in customer preview */}

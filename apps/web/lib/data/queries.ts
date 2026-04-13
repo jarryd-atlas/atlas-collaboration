@@ -40,6 +40,32 @@ export async function getCustomerBySlug(slug: string) {
 
 // ─── Sites ──────────────────────────────────────────────────
 
+export async function getAllSitesWithCustomers() {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("sites")
+    .select("id, name, slug, address, city, state, pipeline_stage, latitude, longitude, customer_id, customers(id, name, slug)")
+    .not("latitude" as any, "is", null)
+    .not("longitude" as any, "is", null)
+    .order("name");
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
+export async function getCustomerHQLocations() {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, name, slug, hq_address, hq_city, hq_state, hq_latitude, hq_longitude")
+    .not("hq_latitude" as any, "is", null)
+    .not("hq_longitude" as any, "is", null)
+    .order("name");
+
+  if (error) throw error;
+  return (data ?? []) as any[];
+}
+
 export async function getSitesForCustomer(customerId: string) {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
@@ -851,11 +877,15 @@ export async function getEquipmentForSite(siteId: string) {
   const { data, error } = await fromTable(supabase, "site_equipment")
     .select("*")
     .eq("site_id", siteId)
-    .order("category")
-    .order("sort_order", { ascending: true });
+    .order("category");
 
   if (error) throw error;
-  return (data ?? []) as any[];
+  // Natural sort by name within each category (C-1, C-2, ... C-10 instead of C-1, C-10, C-2)
+  return ((data ?? []) as any[]).sort((a: any, b: any) => {
+    const catCmp = (a.category ?? "").localeCompare(b.category ?? "");
+    if (catCmp !== 0) return catCmp;
+    return (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true });
+  });
 }
 
 export async function getEnergyDataForSite(siteId: string) {
@@ -973,10 +1003,61 @@ export async function getSiteContactsForSite(siteId: string) {
   const admin = createSupabaseAdmin();
   const { data, error } = await fromTable(admin, "site_contacts")
     .select("*")
-    .eq("site_id", siteId)
-    .order("sort_order");
+    .eq("site_id", siteId);
+  if (error) throw error;
+  return ((data ?? []) as any[]).sort((a: any, b: any) =>
+    (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true })
+  );
+}
+
+export async function getAllSiteContacts() {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "site_contacts")
+    .select("*, sites(name, slug, customer_id, customers(name, slug))")
+    .order("name", { ascending: true });
   if (error) throw error;
   return (data ?? []) as any[];
+}
+
+export async function getNetworkDiagnosticsForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "site_network_diagnostics" as any)
+    .select("*")
+    .eq("site_id", siteId)
+    .maybeSingle();
+  if (error) {
+    console.warn("site_network_diagnostics query failed:", error.message);
+    return null;
+  }
+  return data as any;
+}
+
+export async function getNetworkTestResultsForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "site_network_test_results" as any)
+    .select("*")
+    .eq("site_id", siteId)
+    .order("tested_at", { ascending: false });
+  if (error) {
+    console.warn("site_network_test_results query failed:", error.message);
+    return [] as any[];
+  }
+  return (data ?? []) as any[];
+}
+
+export async function getSiteContractorsForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "site_contractors" as any)
+    .select("*")
+    .eq("site_id", siteId);
+  if (error) {
+    // Table may not exist yet — return empty array gracefully
+    console.warn("site_contractors query failed:", error.message);
+    return [] as any[];
+  }
+  return ((data ?? []) as any[]).sort((a: any, b: any) =>
+    (a.company_name ?? "").localeCompare(b.company_name ?? "", undefined, { numeric: true })
+  );
 }
 
 // ─── Handoff Reports ────────────────────────────────────────
@@ -1040,6 +1121,9 @@ export async function getFullAssessmentData(siteId: string) {
     laborBaseline,
     touSchedule,
     siteContacts,
+    siteContractors,
+    networkDiagnostics,
+    networkTestResults,
   ] = await Promise.all([
     getAssessmentForSite(siteId),
     getEquipmentForSite(siteId),
@@ -1053,6 +1137,9 @@ export async function getFullAssessmentData(siteId: string) {
     getLaborBaselineForSite(siteId),
     getTouScheduleForSite(siteId),
     getSiteContactsForSite(siteId),
+    getSiteContractorsForSite(siteId),
+    getNetworkDiagnosticsForSite(siteId),
+    getNetworkTestResultsForSite(siteId),
   ]);
 
   // Fetch data sources only if assessment exists
@@ -1074,6 +1161,9 @@ export async function getFullAssessmentData(siteId: string) {
     touSchedule,
     dataSources,
     siteContacts,
+    siteContractors,
+    networkDiagnostics,
+    networkTestResults,
   };
 }
 
@@ -1137,123 +1227,41 @@ export interface CustomerListItem {
 export async function getCustomersWithAccountData(): Promise<CustomerListItem[]> {
   const supabase = createSupabaseAdmin();
 
-  const [
-    customersRes,
-    plansRes,
-    dealsRes,
-    sitesRes,
-    stakeholdersRes,
-    goalsRes,
-    milestonesRes,
-    tasksRes,
-    issuesRes,
-  ] = await Promise.all([
-    supabase.from("customers").select("*").order("name"),
-    fromTable(supabase, "account_plans").select("customer_id, id, account_stage, total_addressable_sites"),
-    fromTable(supabase, "enterprise_deals").select("customer_id, deal_name, target_value, deal_stage, target_close_date"),
-    supabase.from("sites").select("id, customer_id, pipeline_stage"),
-    fromTable(supabase, "account_stakeholders").select("account_plan_id"),
-    fromTable(supabase, "success_plan_goals").select("account_plan_id, is_achieved"),
-    fromTable(supabase, "success_plan_milestones").select("account_plan_id, status"),
-    supabase.from("tasks").select("id, status, customer_id, site_id"),
-    supabase.from("flagged_issues").select("id, status, site_id"),
-  ]);
+  // Uses the customer_list_summary DB view which does all aggregation in SQL
+  // (replaces 9 separate queries + JS post-processing)
+  const { data, error } = await (supabase as any)
+    .from("customer_list_summary")
+    .select("*");
 
-  const customers = (customersRes.data ?? []) as any[];
-  const plans = (plansRes.data ?? []) as any[];
-  const deals = (dealsRes.data ?? []) as any[];
-  const sites = (sitesRes.data ?? []) as any[];
-  const stakeholders = (stakeholdersRes.data ?? []) as any[];
-  const goals = (goalsRes.data ?? []) as any[];
-  const milestones = (milestonesRes.data ?? []) as any[];
-  const tasks = (tasksRes.data ?? []) as any[];
-  const issues = (issuesRes.data ?? []) as any[];
-
-  // Build lookup maps
-  const planByCustomer = new Map(plans.map((p: any) => [p.customer_id, p]));
-  const dealByCustomer = new Map(deals.map((d: any) => [d.customer_id, d]));
-
-  // Sites grouped by customer
-  const sitesByCustomer = new Map<string, any[]>();
-  const siteToCustomer = new Map<string, string>();
-  for (const s of sites) {
-    if (!sitesByCustomer.has(s.customer_id)) sitesByCustomer.set(s.customer_id, []);
-    sitesByCustomer.get(s.customer_id)!.push(s);
-    siteToCustomer.set(s.id, s.customer_id);
+  if (error) {
+    console.error("customer_list_summary error:", error.message);
+    return [];
   }
 
-  // Stakeholders counted per plan → per customer
-  const stakeholderCountByPlan = new Map<string, number>();
-  for (const s of stakeholders) {
-    stakeholderCountByPlan.set(s.account_plan_id, (stakeholderCountByPlan.get(s.account_plan_id) ?? 0) + 1);
-  }
-
-  // Goals per plan
-  const goalsByPlan = new Map<string, { total: number; achieved: number }>();
-  for (const g of goals) {
-    const entry = goalsByPlan.get(g.account_plan_id) ?? { total: 0, achieved: 0 };
-    entry.total++;
-    if (g.is_achieved) entry.achieved++;
-    goalsByPlan.set(g.account_plan_id, entry);
-  }
-
-  // Milestones per plan
-  const milestonesByPlan = new Map<string, { total: number; completed: number }>();
-  for (const m of milestones) {
-    const entry = milestonesByPlan.get(m.account_plan_id) ?? { total: 0, completed: 0 };
-    entry.total++;
-    if (m.status === "completed") entry.completed++;
-    milestonesByPlan.set(m.account_plan_id, entry);
-  }
-
-  // Open tasks per customer (via customer_id or site_id)
-  const openTasksByCustomer = new Map<string, number>();
-  for (const t of tasks) {
-    if (t.status === "done") continue;
-    const custId = t.customer_id || siteToCustomer.get(t.site_id);
-    if (custId) openTasksByCustomer.set(custId, (openTasksByCustomer.get(custId) ?? 0) + 1);
-  }
-
-  // Open issues per customer (via site_id)
-  const openIssuesByCustomer = new Map<string, number>();
-  for (const i of issues) {
-    if (i.status !== "open") continue;
-    const custId = siteToCustomer.get(i.site_id);
-    if (custId) openIssuesByCustomer.set(custId, (openIssuesByCustomer.get(custId) ?? 0) + 1);
-  }
-
-  return customers.map((c: any) => {
-    const plan = planByCustomer.get(c.id);
-    const deal = dealByCustomer.get(c.id);
-    const custSites = sitesByCustomer.get(c.id) ?? [];
-    const goalData = plan ? goalsByPlan.get(plan.id) : null;
-    const msData = plan ? milestonesByPlan.get(plan.id) : null;
-
-    return {
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      domain: c.domain ?? null,
-      company_type: c.company_type ?? null,
-      account_stage: plan?.account_stage ?? null,
-      total_addressable_sites: plan?.total_addressable_sites ?? null,
-      deal_name: deal?.deal_name ?? null,
-      target_value: deal?.target_value ? Number(deal.target_value) : null,
-      deal_stage: deal?.deal_stage ?? null,
-      target_close_date: deal?.target_close_date ?? null,
-      stakeholder_count: plan ? (stakeholderCountByPlan.get(plan.id) ?? 0) : 0,
-      goals_total: goalData?.total ?? 0,
-      goals_achieved: goalData?.achieved ?? 0,
-      milestones_total: msData?.total ?? 0,
-      milestones_completed: msData?.completed ?? 0,
-      open_tasks: openTasksByCustomer.get(c.id) ?? 0,
-      open_issues: openIssuesByCustomer.get(c.id) ?? 0,
-      total_sites: custSites.length,
-      active_sites: custSites.filter((s: any) => s.pipeline_stage === "active").length,
-      deploying_sites: custSites.filter((s: any) => s.pipeline_stage === "deployment").length,
-      eval_sites: custSites.filter((s: any) => ["evaluation", "qualified", "prospect"].includes(s.pipeline_stage)).length,
-    };
-  });
+  return (data ?? []).map((c: any) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    domain: c.domain ?? null,
+    company_type: c.company_type ?? null,
+    account_stage: c.account_stage ?? null,
+    total_addressable_sites: c.total_addressable_sites ?? null,
+    deal_name: c.deal_name ?? null,
+    target_value: c.target_value ? Number(c.target_value) : null,
+    deal_stage: c.deal_stage ?? null,
+    target_close_date: c.target_close_date ?? null,
+    stakeholder_count: c.stakeholder_count ?? 0,
+    goals_total: c.goals_total ?? 0,
+    goals_achieved: c.goals_achieved ?? 0,
+    milestones_total: c.milestones_total ?? 0,
+    milestones_completed: c.milestones_completed ?? 0,
+    open_tasks: c.open_tasks ?? 0,
+    open_issues: c.open_issues ?? 0,
+    total_sites: c.total_sites ?? 0,
+    active_sites: c.active_sites ?? 0,
+    deploying_sites: c.deploying_sites ?? 0,
+    eval_sites: c.eval_sites ?? 0,
+  }));
 }
 
 // ─── Account Plans ──────────────────────────────────────────
@@ -1312,4 +1320,216 @@ export async function getEnterpriseDeal(customerId: string) {
 
   if (error) throw error;
   return data as any | null;
+}
+
+// ─── Initiatives ───────────────────────────────────────────
+
+export async function getInitiativesForCustomer(customerId: string) {
+  const supabase = createSupabaseAdmin();
+  const { data: initiatives, error } = await fromTable(supabase, "initiatives")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  if (!initiatives || initiatives.length === 0) return [];
+
+  // Fetch owner profiles in batch
+  const ownerIds = [...new Set((initiatives as any[]).map((i: any) => i.owner_id).filter(Boolean))] as string[];
+  let ownerProfiles: Record<string, any> = {};
+  if (ownerIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url, email")
+      .in("id", ownerIds);
+    if (profiles) {
+      for (const p of profiles) {
+        ownerProfiles[p.id] = p;
+      }
+    }
+  }
+
+  // Fetch counts for each initiative
+  const initiativeIds = (initiatives as any[]).map((i: any) => i.id);
+
+  const [taskLinks, decisions, stakeholderLinks] = await Promise.all([
+    fromTable(supabase, "initiative_tasks")
+      .select("initiative_id, task_id")
+      .in("initiative_id", initiativeIds),
+    fromTable(supabase, "initiative_decisions")
+      .select("initiative_id")
+      .in("initiative_id", initiativeIds),
+    fromTable(supabase, "initiative_stakeholders")
+      .select("initiative_id")
+      .in("initiative_id", initiativeIds),
+  ]);
+
+  // Count tasks per initiative
+  const taskCountMap: Record<string, number> = {};
+  for (const row of (taskLinks.data ?? []) as any[]) {
+    taskCountMap[row.initiative_id] = (taskCountMap[row.initiative_id] ?? 0) + 1;
+  }
+
+  // Count decisions per initiative
+  const decisionCountMap: Record<string, number> = {};
+  for (const row of (decisions.data ?? []) as any[]) {
+    decisionCountMap[row.initiative_id] = (decisionCountMap[row.initiative_id] ?? 0) + 1;
+  }
+
+  // Count stakeholders per initiative
+  const stakeholderCountMap: Record<string, number> = {};
+  for (const row of (stakeholderLinks.data ?? []) as any[]) {
+    stakeholderCountMap[row.initiative_id] = (stakeholderCountMap[row.initiative_id] ?? 0) + 1;
+  }
+
+  return (initiatives as any[]).map((i: any) => ({
+    ...i,
+    owner: ownerProfiles[i.owner_id] ?? null,
+    taskCount: taskCountMap[i.id] ?? 0,
+    decisionCount: decisionCountMap[i.id] ?? 0,
+    stakeholderCount: stakeholderCountMap[i.id] ?? 0,
+  }));
+}
+
+export async function getInitiativeDetail(initiativeId: string) {
+  const supabase = createSupabaseAdmin();
+
+  const { data: initiative, error } = await fromTable(supabase, "initiatives")
+    .select("*")
+    .eq("id", initiativeId)
+    .single();
+
+  if (error) throw error;
+  if (!initiative) return null;
+
+  // Fetch related data in parallel
+  const [ownerRes, stakeholdersRes, tasksRes, decisionsRes, commentsRes] = await Promise.all([
+    supabase.from("profiles").select("id, full_name, avatar_url, email").eq("id", initiative.owner_id).single(),
+    fromTable(supabase, "initiative_stakeholders")
+      .select("id, stakeholder_id, role")
+      .eq("initiative_id", initiativeId),
+    fromTable(supabase, "initiative_tasks")
+      .select("task_id")
+      .eq("initiative_id", initiativeId),
+    fromTable(supabase, "initiative_decisions")
+      .select("*")
+      .eq("initiative_id", initiativeId)
+      .order("decided_at", { ascending: false }),
+    supabase.from("comments")
+      .select("id, body, created_at, author_id")
+      .eq("entity_type", "initiative" as any)
+      .eq("entity_id", initiativeId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  // Fetch stakeholder details
+  const stakeholderIds = (stakeholdersRes.data ?? []).map((s: any) => s.stakeholder_id);
+  let stakeholderDetails: any[] = [];
+  if (stakeholderIds.length > 0) {
+    const { data: details } = await fromTable(supabase, "account_stakeholders")
+      .select("id, name, email, title, company, is_ck_internal")
+      .in("id", stakeholderIds);
+    stakeholderDetails = details ?? [];
+  }
+
+  // Merge stakeholder data
+  const stakeholders = (stakeholdersRes.data ?? []).map((link: any) => {
+    const detail = stakeholderDetails.find((d: any) => d.id === link.stakeholder_id);
+    return { ...link, stakeholder: detail ?? null };
+  });
+
+  // Fetch task details
+  const taskIds = (tasksRes.data ?? []).map((t: any) => t.task_id);
+  let tasks: any[] = [];
+  if (taskIds.length > 0) {
+    const { data: taskData } = await supabase
+      .from("tasks")
+      .select("id, title, status, priority, assignee_id, due_date")
+      .in("id", taskIds);
+
+    // Fetch assignee profiles for tasks
+    const assigneeIds = [...new Set((taskData ?? []).map((t: any) => t.assignee_id).filter(Boolean))] as string[];
+    let assigneeMap: Record<string, any> = {};
+    if (assigneeIds.length > 0) {
+      const { data: assignees } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", assigneeIds);
+      for (const a of (assignees ?? [])) {
+        assigneeMap[a.id] = a;
+      }
+    }
+
+    tasks = (taskData ?? []).map((t: any) => ({
+      ...t,
+      assignee: assigneeMap[t.assignee_id] ?? null,
+    }));
+  }
+
+  // Fetch decision author profiles
+  const decisionAuthorIds = [...new Set((decisionsRes.data ?? []).map((d: any) => d.decided_by).filter(Boolean))] as string[];
+  let decisionAuthorMap: Record<string, any> = {};
+  if (decisionAuthorIds.length > 0) {
+    const { data: authors } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", decisionAuthorIds);
+    for (const a of (authors ?? [])) {
+      decisionAuthorMap[a.id] = a;
+    }
+  }
+  const decisions = (decisionsRes.data ?? []).map((d: any) => ({
+    ...d,
+    author: decisionAuthorMap[d.decided_by] ?? null,
+  }));
+
+  // Fetch comment author profiles
+  const commentAuthorIds = [...new Set((commentsRes.data ?? []).map((c: any) => c.author_id).filter(Boolean))] as string[];
+  let commentAuthorMap: Record<string, any> = {};
+  if (commentAuthorIds.length > 0) {
+    const { data: authors } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url")
+      .in("id", commentAuthorIds);
+    for (const a of (authors ?? [])) {
+      commentAuthorMap[a.id] = a;
+    }
+  }
+  const comments = (commentsRes.data ?? []).map((c: any) => ({
+    ...c,
+    author: commentAuthorMap[c.author_id] ?? null,
+  }));
+
+  return {
+    ...initiative,
+    owner: ownerRes.data ?? null,
+    stakeholders,
+    tasks,
+    decisions,
+    comments,
+  };
+}
+
+// ─── Business Units ──────────────────────────────────────────
+
+export interface BusinessUnit {
+  id: string;
+  customer_id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export async function getBusinessUnits(customerId: string): Promise<BusinessUnit[]> {
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await (supabase as any)
+    .from("business_units")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("name");
+
+  if (error) throw error;
+  return (data ?? []) as BusinessUnit[];
 }

@@ -53,6 +53,8 @@ interface InlineTaskInputProps {
   showAiExpand?: boolean;
   /** Auto-focus the input on mount */
   autoFocus?: boolean;
+  /** Initiative to auto-link created tasks to */
+  initiativeId?: string;
 }
 
 /**
@@ -76,6 +78,7 @@ export function InlineTaskInput({
   onSiteChange,
   showAiExpand = true,
   autoFocus = false,
+  initiativeId,
 }: InlineTaskInputProps) {
   const [isActive, setIsActive] = useState(autoFocus);
   const [value, setValue] = useState("");
@@ -207,6 +210,7 @@ export function InlineTaskInput({
       const effectiveCustomerId = selectedCustomerId || customerId;
       if (effectiveCustomerId) formData.set("customerId", effectiveCustomerId);
       if (assigneeId) formData.set("assigneeId", assigneeId);
+      if (initiativeId) formData.set("initiativeId", initiativeId);
 
       startTransition(async () => {
         const result = await createTaskInline(formData);

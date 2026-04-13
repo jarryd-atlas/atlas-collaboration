@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Dialog, DialogHeader, DialogBody } from "../ui/dialog";
 import {
   InlineTaskInput,
@@ -9,13 +9,8 @@ import {
   type AssignableCustomer,
 } from "../tasks/inline-task-input";
 import { usePageContext } from "../layout/page-context";
-import { fetchSitesWithMilestones, fetchAssignableUsers, fetchCustomers } from "../../lib/actions";
+import { fetchQuickTaskData } from "../../lib/actions";
 import { Building2, MapPin, Loader2, X } from "lucide-react";
-
-interface QuickTaskDialogProps {
-  open: boolean;
-  onClose: () => void;
-}
 
 interface SiteOption {
   id: string;
@@ -24,20 +19,34 @@ interface SiteOption {
   tenant_id: string;
 }
 
+interface PrefetchedData {
+  sites: any[];
+  customers: any[];
+  users: any[];
+}
+
+interface QuickTaskDialogProps {
+  open: boolean;
+  onClose: () => void;
+  prefetchedData?: PrefetchedData | null;
+}
+
 /**
  * Smart context-aware Quick Task dialog.
  *
+ * - Accepts prefetched data for instant open (no loading spinner)
  * - Auto-detects page context (customer, site) and shows as editable chips
  * - User can clear context chips or use @ mentions to set company/site/person
  * - @ mention support for companies, people, and sites
  * - Sites filtered to selected customer in the @ dropdown
  */
-export function QuickTaskDialog({ open, onClose }: QuickTaskDialogProps) {
+export function QuickTaskDialog({ open, onClose, prefetchedData }: QuickTaskDialogProps) {
   const [loading, setLoading] = useState(false);
   const [allCustomers, setAllCustomers] = useState<AssignableCustomer[]>([]);
   const [allSites, setAllSites] = useState<SiteOption[]>([]);
   const [assignableUsers, setAssignableUsers] = useState<AssignableUser[]>([]);
   const [fallbackTenantId, setFallbackTenantId] = useState("");
+  const dataLoaded = useRef(false);
 
   // Editable context state
   const [selectedCustomer, setSelectedCustomer] = useState<AssignableCustomer | null>(null);
@@ -45,56 +54,75 @@ export function QuickTaskDialog({ open, onClose }: QuickTaskDialogProps) {
 
   const pageCtx = usePageContext();
 
-  // Fetch all data when dialog opens
+  // Apply data (from prefetch or fetch) and set context
+  const applyData = useCallback((raw: PrefetchedData) => {
+    const customers = (raw.customers ?? []).map((c: any) => ({
+      id: c.id as string,
+      name: c.name as string,
+      tenant_id: c.tenant_id as string,
+    }));
+    setAllCustomers(customers);
+
+    const sites = (raw.sites ?? []).map((s: any) => ({
+      id: s.id as string,
+      name: s.name as string,
+      customer_id: s.customer_id as string,
+      tenant_id: s.tenant_id as string,
+    }));
+    setAllSites(sites);
+
+    if (sites[0]) setFallbackTenantId(sites[0].tenant_id);
+
+    const users = (raw.users ?? []).map((u: any) => ({
+      id: u.id as string,
+      full_name: u.full_name as string,
+      avatar_url: u.avatar_url as string | null,
+      group: "CK Team",
+    }));
+    setAssignableUsers(users);
+
+    dataLoaded.current = true;
+    return customers;
+  }, []);
+
+  // Set context from current page
+  const applyPageContext = useCallback((customers: AssignableCustomer[]) => {
+    if (pageCtx.customerId && pageCtx.customerName) {
+      const matched = customers.find((c) => c.id === pageCtx.customerId);
+      setSelectedCustomer(matched ?? {
+        id: pageCtx.customerId,
+        name: pageCtx.customerName,
+        tenant_id: pageCtx.tenantId ?? "",
+      });
+    }
+    if (pageCtx.siteId && pageCtx.siteName) {
+      setSelectedSite({ id: pageCtx.siteId, name: pageCtx.siteName });
+    }
+  }, [pageCtx]);
+
+  // When dialog opens, use prefetched data or fetch as fallback
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
 
-    Promise.all([
-      fetchSitesWithMilestones(),
-      fetchAssignableUsers(),
-      fetchCustomers(),
-    ]).then(([sitesResult, usersResult, customersResult]) => {
-      const customers = (customersResult.customers ?? []).map((c: any) => ({
-        id: c.id as string,
-        name: c.name as string,
-        tenant_id: c.tenant_id as string,
-      }));
-      setAllCustomers(customers);
+    // Reset context selections on each open
+    setSelectedCustomer(null);
+    setSelectedSite(null);
 
-      const sites = (sitesResult.sites ?? []).map((s: any) => ({
-        id: s.id as string,
-        name: s.name as string,
-        customer_id: s.customer_id as string,
-        tenant_id: s.tenant_id as string,
-      }));
-      setAllSites(sites);
-
-      if (sites[0]) setFallbackTenantId(sites[0].tenant_id);
-
-      const users = (usersResult.users ?? []).map((u: any) => ({
-        id: u.id as string,
-        full_name: u.full_name as string,
-        avatar_url: u.avatar_url as string | null,
-        group: "CK Team",
-      }));
-      setAssignableUsers(users);
-
-      // Initialize context from page
-      if (pageCtx.customerId && pageCtx.customerName) {
-        const matched = customers.find((c: AssignableCustomer) => c.id === pageCtx.customerId);
-        setSelectedCustomer(matched ?? {
-          id: pageCtx.customerId,
-          name: pageCtx.customerName,
-          tenant_id: pageCtx.tenantId ?? "",
-        });
-      }
-      if (pageCtx.siteId && pageCtx.siteName) {
-        setSelectedSite({ id: pageCtx.siteId, name: pageCtx.siteName });
-      }
-
+    if (prefetchedData) {
+      const customers = applyData(prefetchedData);
+      applyPageContext(customers);
       setLoading(false);
-    });
+    } else if (!dataLoaded.current) {
+      setLoading(true);
+      fetchQuickTaskData().then((data) => {
+        const customers = applyData(data);
+        applyPageContext(customers);
+        setLoading(false);
+      });
+    } else {
+      // Data already loaded from a previous open
+      applyPageContext(allCustomers);
+    }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter sites to selected customer for @ mention
@@ -129,9 +157,7 @@ export function QuickTaskDialog({ open, onClose }: QuickTaskDialogProps) {
   }, [allSites, allCustomers, selectedCustomer]);
 
   function handleClose() {
-    setAllCustomers([]);
-    setAllSites([]);
-    setAssignableUsers([]);
+    // Don't clear data — keep it cached for instant reopen
     setSelectedCustomer(null);
     setSelectedSite(null);
     onClose();

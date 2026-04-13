@@ -1,7 +1,7 @@
 import { getMyRelevantTasks, getLatestCommentsForTasks, getInternalProfiles } from "../../../lib/data/queries";
 import { getCurrentUser } from "../../../lib/data/current-user";
 import { TasksClient } from "./tasks-client";
-import type { AssignableUser, AssignableSite } from "../../../components/tasks/inline-task-input";
+import type { AssignableUser, AssignableSite, AssignableCustomer } from "../../../components/tasks/inline-task-input";
 
 export default async function TasksPage() {
   let allTasks: Awaited<ReturnType<typeof getMyRelevantTasks>> = [];
@@ -54,15 +54,21 @@ export default async function TasksPage() {
     };
   });
 
-  // Extract unique sites from tasks for the @ mention picker
+  // Extract unique sites and customers from tasks for pickers
   const siteMap = new Map<string, AssignableSite>();
+  const customerMap = new Map<string, AssignableCustomer>();
   for (const task of allTasks) {
     const site = task.milestone?.site ?? task.direct_site;
     if (site && !siteMap.has(site.id)) {
       siteMap.set(site.id, { id: site.id, name: site.name, slug: site.slug });
     }
+    const customer = task.milestone?.site?.customer ?? task.direct_site?.customer ?? task.direct_customer;
+    if (customer && !customerMap.has(customer.id)) {
+      customerMap.set(customer.id, { id: customer.id, name: customer.name, tenant_id: customer.tenant_id ?? "" });
+    }
   }
   const assignableSites = Array.from(siteMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const assignableCustomers = Array.from(customerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   const todoTasks = tasksWithContext.filter((t) => t.status === "todo");
   const inProgressTasks = tasksWithContext.filter((t) => t.status === "in_progress");
@@ -75,6 +81,7 @@ export default async function TasksPage() {
   return (
     <TasksClient
       allTasks={allTasks}
+      tasksWithContext={tasksWithContext}
       todoTasks={todoTasks}
       inProgressTasks={inProgressTasks}
       inReviewTasks={inReviewTasks}
@@ -84,6 +91,7 @@ export default async function TasksPage() {
       currentUserAvatar={currentUserAvatar}
       assignableUsers={assignableUsers}
       assignableSites={assignableSites}
+      assignableCustomers={assignableCustomers}
     />
   );
 }

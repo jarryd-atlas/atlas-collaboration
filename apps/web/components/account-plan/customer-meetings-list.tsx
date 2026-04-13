@@ -122,21 +122,51 @@ export function CustomerMeetingsList({
     return map;
   }, [existingStakeholders]);
 
-  const { upcoming, past } = useMemo(() => {
-    const up: CustomerMeeting[] = [];
+  const { thisWeek, nextWeek, later, past } = useMemo(() => {
+    const now = new Date();
+    // Start of this week (Sunday)
+    const startOfThisWeek = new Date(now);
+    startOfThisWeek.setDate(now.getDate() - now.getDay());
+    startOfThisWeek.setHours(0, 0, 0, 0);
+    // End of this week (Saturday 23:59:59)
+    const endOfThisWeek = new Date(startOfThisWeek);
+    endOfThisWeek.setDate(startOfThisWeek.getDate() + 6);
+    endOfThisWeek.setHours(23, 59, 59, 999);
+    // End of next week
+    const endOfNextWeek = new Date(endOfThisWeek);
+    endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
+
+    const tw: CustomerMeeting[] = [];
+    const nw: CustomerMeeting[] = [];
+    const la: CustomerMeeting[] = [];
     const pa: CustomerMeeting[] = [];
+
     for (const m of meetings) {
-      if (isUpcoming(m.meeting_date)) {
-        up.push(m);
-      } else {
+      const d = new Date(m.meeting_date);
+      if (d < now && d < startOfThisWeek) {
         pa.push(m);
+      } else if (d < now) {
+        // Earlier this week but already passed
+        tw.push(m);
+      } else if (d <= endOfThisWeek) {
+        tw.push(m);
+      } else if (d <= endOfNextWeek) {
+        nw.push(m);
+      } else {
+        la.push(m);
       }
     }
-    // Upcoming: soonest first
-    up.sort((a, b) => new Date(a.meeting_date).getTime() - new Date(b.meeting_date).getTime());
+
+    // Soonest first for upcoming sections
+    const asc = (a: CustomerMeeting, b: CustomerMeeting) =>
+      new Date(a.meeting_date).getTime() - new Date(b.meeting_date).getTime();
+    tw.sort(asc);
+    nw.sort(asc);
+    la.sort(asc);
     // Past: most recent first
     pa.sort((a, b) => new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime());
-    return { upcoming: up, past: pa };
+
+    return { thisWeek: tw, nextWeek: nw, later: la, past: pa };
   }, [meetings]);
 
   if (meetings.length === 0) {
@@ -374,15 +404,41 @@ export function CustomerMeetingsList({
 
   return (
     <div className="overflow-y-auto p-4 h-full space-y-6">
-      {/* Upcoming */}
-      {upcoming.length > 0 && (
+      {/* This Week */}
+      {thisWeek.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
             <CalendarDays className="h-3.5 w-3.5 text-purple-500" />
-            Upcoming ({upcoming.length})
+            This Week ({thisWeek.length})
           </h3>
           <div className="space-y-2">
-            {upcoming.map(renderMeeting)}
+            {thisWeek.map(renderMeeting)}
+          </div>
+        </div>
+      )}
+
+      {/* Next Week */}
+      {nextWeek.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <CalendarDays className="h-3.5 w-3.5 text-blue-500" />
+            Next Week ({nextWeek.length})
+          </h3>
+          <div className="space-y-2">
+            {nextWeek.map(renderMeeting)}
+          </div>
+        </div>
+      )}
+
+      {/* Later */}
+      {later.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <CalendarDays className="h-3.5 w-3.5 text-gray-400" />
+            Later ({later.length})
+          </h3>
+          <div className="space-y-2">
+            {later.map(renderMeeting)}
           </div>
         </div>
       )}

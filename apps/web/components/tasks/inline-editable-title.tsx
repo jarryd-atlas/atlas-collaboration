@@ -9,17 +9,20 @@ interface InlineEditableTitleProps {
   taskId: string;
   initialTitle: string;
   className?: string;
+  /** Single click to edit (default: double-click) */
+  singleClickEdit?: boolean;
 }
 
 export function InlineEditableTitle({
   taskId,
   initialTitle,
   className,
+  singleClickEdit = false,
 }: InlineEditableTitleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [value, setValue] = useState(initialTitle);
   const [isPending, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
 
   // Sync with server
@@ -31,9 +34,17 @@ export function InlineEditableTitle({
     setIsEditing(true);
     setValue(initialTitle);
     requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select();
+        autoResize(textareaRef.current);
+      }
     });
+  }
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
   }
 
   function save() {
@@ -59,25 +70,40 @@ export function InlineEditableTitle({
     setIsEditing(false);
   }
 
+  const clickHandler = singleClickEdit
+    ? {
+        onClick: (e: React.MouseEvent) => {
+          if (!isEditing) {
+            e.stopPropagation();
+            startEditing();
+          }
+        },
+      }
+    : {
+        onDoubleClick: (e: React.MouseEvent) => {
+          if (!isEditing) {
+            e.stopPropagation();
+            startEditing();
+          }
+        },
+      };
+
   return (
     <div
       className={cn("min-w-0 w-full text-sm font-medium text-gray-900", className)}
-      onDoubleClick={(e) => {
-        if (!isEditing) {
-          e.stopPropagation();
-          startEditing();
-        }
-      }}
+      {...clickHandler}
     >
       {isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
+        <textarea
+          ref={textareaRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            autoResize(e.target);
+          }}
           onBlur={save}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               save();
             }
@@ -87,15 +113,17 @@ export function InlineEditableTitle({
             }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="text-sm font-medium text-gray-900 bg-white border border-brand-green/40 rounded px-1.5 py-0.5 outline-none ring-1 ring-brand-green/20 w-full min-w-[200px]"
+          rows={1}
+          className="text-sm font-medium text-gray-900 bg-white border border-brand-green/40 rounded px-1.5 py-0.5 outline-none ring-1 ring-brand-green/20 w-full min-w-[200px] resize-none overflow-hidden"
         />
       ) : (
         <span
           className={cn(
-            "truncate block cursor-text hover:bg-gray-100 rounded px-0.5 -mx-0.5 transition-colors",
+            "block rounded px-0.5 -mx-0.5 transition-colors",
+            singleClickEdit ? "cursor-pointer hover:bg-gray-100" : "cursor-text hover:bg-gray-100",
             isPending && "opacity-50",
           )}
-          title="Double-click to edit"
+          title={singleClickEdit ? "Click to edit" : "Double-click to edit"}
         >
           {value}
         </span>

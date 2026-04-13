@@ -22,8 +22,10 @@ import { OverviewTab } from "../../../../../../components/assessment/overview-ta
 import { BaselineTab } from "../../../../../../components/assessment/baseline-tab";
 import { DocumentsTab } from "../../../../../../components/assessment/documents-tab";
 import { LaborTab } from "../../../../../../components/assessment/labor-tab";
-import { BaselineFormLinkButton } from "../../../../../../components/assessment/baseline-form-link-button";
-import { MapPin, Mic } from "lucide-react";
+import { ShareBaselineFormButton } from "../../../../../../components/assessment/share-baseline-form-button";
+import { BaselineTabWrapper } from "../../../../../../components/assessment/baseline-tab-wrapper";
+import { Mic } from "lucide-react";
+import { EditableSiteAddress } from "../../../../../../components/sites/editable-site-address";
 
 interface SitePageProps {
   params: Promise<{ customerSlug: string; siteSlug: string }>;
@@ -145,12 +147,18 @@ export default async function SitePage({ params }: SitePageProps) {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{site.name}</h1>
-            {site.city && (
+            {isInternal ? (
+              <EditableSiteAddress
+                siteId={site.id}
+                address={site.address}
+                city={site.city}
+                state={site.state}
+              />
+            ) : site.city ? (
               <p className="text-gray-500 mt-1 flex items-center gap-1">
-                <MapPin className="h-4 w-4" />
                 {site.address && `${site.address}, `}{site.city}, {site.state}
               </p>
-            )}
+            ) : null}
             {isInternal && hubspotPortalId && (
               <div className="mt-2">
                 <SiteDealLink siteId={site.id} existingLinks={hubspotLinks} portalId={hubspotPortalId} fieldMappings={hubspotFieldMappings} />
@@ -159,8 +167,9 @@ export default async function SitePage({ params }: SitePageProps) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {isInternal && assessment?.id && (
-              <BaselineFormLinkButton
+              <ShareBaselineFormButton
                 siteId={site.id}
+                siteName={site.name}
                 tenantId={site.tenant_id}
                 assessmentId={assessment.id}
               />
@@ -216,7 +225,35 @@ export default async function SitePage({ params }: SitePageProps) {
               assessmentId={assessment?.id}
             />
           ),
-          baseline: (
+          baseline: isInternal ? (
+            <BaselineTabWrapper
+              siteId={site.id}
+              tenantId={site.tenant_id}
+              assessmentId={assessment?.id}
+              internalView={
+                <BaselineTab
+                  assessment={assessment}
+                  equipment={assessmentData?.equipment ?? []}
+                  energyData={assessmentData?.energyData ?? []}
+                  rateStructure={assessmentData?.rateStructure ?? null}
+                  touSchedule={assessmentData?.touSchedule ?? null}
+                  operationalParams={assessmentData?.operationalParams ?? null}
+                  operations={assessmentData?.operations ?? null}
+                  loadBreakdown={assessmentData?.loadBreakdown ?? null}
+                  arcoPerformance={assessmentData?.arcoPerformance ?? null}
+                  savingsAnalysis={assessmentData?.savingsAnalysis ?? null}
+                  siteId={site.id}
+                  tenantId={site.tenant_id}
+                  isLocked={isLocked}
+                  dataSources={assessmentData?.dataSources ?? []}
+                  siteContacts={assessmentData?.siteContacts ?? []}
+                  siteContractors={assessmentData?.siteContractors ?? []}
+                  networkDiagnostics={assessmentData?.networkDiagnostics ?? null}
+                  networkTestResults={assessmentData?.networkTestResults ?? []}
+                />
+              }
+            />
+          ) : (
             <BaselineTab
               assessment={assessment}
               equipment={assessmentData?.equipment ?? []}
@@ -233,6 +270,9 @@ export default async function SitePage({ params }: SitePageProps) {
               isLocked={isLocked}
               dataSources={assessmentData?.dataSources ?? []}
               siteContacts={assessmentData?.siteContacts ?? []}
+              siteContractors={assessmentData?.siteContractors ?? []}
+              networkDiagnostics={assessmentData?.networkDiagnostics ?? null}
+              networkTestResults={assessmentData?.networkTestResults ?? []}
             />
           ),
           labor: (

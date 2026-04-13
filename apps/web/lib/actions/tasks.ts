@@ -126,6 +126,28 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
 }
 
 /**
+ * Update task priority.
+ */
+export async function updateTaskPriority(taskId: string, priority: string) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ priority } as any)
+      .eq("id", taskId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
  * Update task title. Both CK and customer users can edit task titles.
  */
 export async function updateTaskTitle(taskId: string, title: string) {
@@ -215,6 +237,94 @@ export async function updateTaskAssignee(taskId: string, assigneeId: string | nu
         // Non-critical
       }
     }
+
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Update task due date.
+ */
+export async function updateTaskDueDate(taskId: string, dueDate: string | null) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ due_date: dueDate })
+      .eq("id", taskId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Update task description.
+ */
+export async function updateTaskDescription(taskId: string, description: string | null) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ description: description?.trim() || null })
+      .eq("id", taskId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Update task customer association.
+ */
+export async function updateTaskCustomer(taskId: string, customerId: string | null) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ customer_id: customerId } as any)
+      .eq("id", taskId);
+
+    if (dbError) return { error: dbError.message };
+
+    revalidatePath("/customers");
+    revalidatePath("/tasks");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
+  }
+}
+
+/**
+ * Update task site association.
+ */
+export async function updateTaskSite(taskId: string, siteId: string | null) {
+  try {
+    await requireSession();
+    const admin = createSupabaseAdmin();
+    const { error: dbError } = await admin
+      .from("tasks")
+      .update({ site_id: siteId })
+      .eq("id", taskId);
+
+    if (dbError) return { error: dbError.message };
 
     revalidatePath("/customers");
     revalidatePath("/tasks");
@@ -320,6 +430,19 @@ export async function createTaskInline(formData: FormData) {
         site_id: sId,
       }));
       await (admin as any).from("task_sites").insert(taskSiteRows).throwOnError();
+    }
+
+    // Auto-link to initiative if specified
+    const initiativeId = (formData.get("initiativeId") as string) || null;
+    if (initiativeId) {
+      try {
+        await (admin as any).from("initiative_tasks").insert({
+          initiative_id: initiativeId,
+          task_id: data.id,
+        });
+      } catch {
+        // Non-critical — task was created, linking is best-effort
+      }
     }
 
     // Send notification to assignee

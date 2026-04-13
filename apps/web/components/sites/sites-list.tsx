@@ -8,6 +8,7 @@ import { EmptyState } from "../ui/empty-state";
 import { updateSiteNextStep } from "../../lib/actions";
 import { MapPin, ArrowRight, Search, X, ExternalLink, Plus } from "lucide-react";
 import { InlineDealLinker } from "../hubspot/inline-deal-linker";
+import { SiteActionsMenu } from "./site-actions-menu";
 import { cn } from "../../lib/utils";
 
 interface Site {
@@ -47,6 +48,8 @@ interface SitesListProps {
   onAddFromGoogle?: (place: { name: string; address: string; city: string; state: string }) => void;
   /** Company name — used to scope Google Places search */
   customerName?: string;
+  /** Customer ID — needed for site actions (transfer/merge) */
+  customerId?: string;
 }
 
 /** All possible pipeline stages with display labels, in pipeline order */
@@ -113,6 +116,7 @@ export function SitesList({
   onSiteSelect,
   onAddFromGoogle,
   customerName,
+  customerId,
 }: SitesListProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -496,6 +500,16 @@ export function SitesList({
                     <p className="text-xs text-gray-400">Re-eval</p>
                     <p className="text-xs text-gray-500">{site.dq_reeval_date}</p>
                   </div>
+                )}
+
+                {/* Site actions menu (transfer / merge) — internal users only */}
+                {editable && site.id && customerId && customerName && (
+                  <SiteActionsMenu
+                    site={{ id: site.id, name: site.name, slug: site.slug, address: site.address }}
+                    customerId={customerId}
+                    customerName={customerName}
+                    siblingsSites={sites.filter((s) => s.id).map((s) => ({ id: s.id!, name: s.name, slug: s.slug, address: s.address }))}
+                  />
                 )}
 
                 {/* Navigate icon — in selection mode, separate from row click */}

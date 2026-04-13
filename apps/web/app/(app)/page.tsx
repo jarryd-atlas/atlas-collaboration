@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { getCustomersWithAccountData, getAllFlaggedIssues, getAllOpenTasks } from "../../lib/data/queries";
 import type { CustomerListItem } from "../../lib/data/queries";
 import { getStandupDealData, getUpcomingMeetingsAllCustomers } from "../../lib/data/meeting-queries";
 import type { DashboardMeeting } from "../../lib/data/meeting-queries";
 import { getCurrentUser } from "../../lib/data/current-user";
+import { triggerCalendarSyncForCurrentUser } from "../../lib/calendar/trigger-sync";
 import { StatusBadge } from "../../components/ui/badge";
 import { Avatar } from "../../components/ui/avatar";
 import { DashboardMeetingsClient } from "../../components/dashboard/dashboard-meetings";
@@ -57,6 +59,8 @@ export default async function DashboardPage() {
   } catch {
     // If Supabase is not connected, show empty state
   }
+
+  after(triggerCalendarSyncForCurrentUser);
 
   const displayName = currentUser?.full_name?.split(" ")[0] ?? "there";
 

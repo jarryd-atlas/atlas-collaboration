@@ -141,16 +141,6 @@ export function FacilitySection({ state, dispatch, token, profileId }: SectionPr
         </div>
       </div>
 
-      {/* Product Notes */}
-      <Textarea
-        label="What do you store or process at this facility?"
-        placeholder="e.g., Frozen poultry, ice cream, produce staging..."
-        rows={3}
-        value={facility.product_notes}
-        onChange={(e) => dispatch({ type: "SET_FACILITY", facility: { product_notes: e.target.value } })}
-        onBlur={() => save({ product_notes: facility.product_notes })}
-      />
-
       {/* Operating Schedule */}
       <div className="border border-gray-200 rounded-xl p-5 bg-white space-y-4">
         <h4 className="text-sm font-medium text-gray-700">Operating Schedule</h4>

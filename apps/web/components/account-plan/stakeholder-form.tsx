@@ -35,6 +35,7 @@ export function StakeholderForm({
     department: stakeholder?.department ?? "",
     stakeholder_role: stakeholder?.stakeholder_role ?? "",
     relationship_strength: stakeholder?.relationship_strength ?? "unknown",
+    persona_type: stakeholder?.persona_type ?? "",
     strategy_notes: stakeholder?.strategy_notes ?? "",
     notes: stakeholder?.notes ?? "",
     reports_to: stakeholder?.reports_to ?? defaultReportsTo ?? "",
@@ -56,6 +57,7 @@ export function StakeholderForm({
       department: form.department || undefined,
       stakeholder_role: form.stakeholder_role || undefined,
       relationship_strength: form.relationship_strength || undefined,
+      persona_type: form.persona_type || undefined,
       strategy_notes: form.strategy_notes || undefined,
       notes: form.notes || undefined,
       reports_to: form.reports_to || null,
@@ -143,6 +145,15 @@ export function StakeholderForm({
                     <option value="good">Good</option>
                     <option value="developing">Developing</option>
                     <option value="weak">Weak</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-medium text-gray-500 uppercase">Persona Type</label>
+                  <select value={form.persona_type} onChange={(e) => setForm({ ...form, persona_type: e.target.value })} className="w-full mt-0.5 px-2.5 py-1.5 text-sm border border-gray-200 rounded-md">
+                    <option value="">Not set</option>
+                    <option value="engineering_leader">Engineering Leader</option>
+                    <option value="sustainability_leader">Sustainability & Energy Leader</option>
+                    <option value="fmm">Facility Maintenance Manager</option>
                   </select>
                 </div>
               </div>

@@ -1,8 +1,10 @@
 import { redirect, notFound } from "next/navigation";
+import { after } from "next/server";
 import { getCurrentUser } from "../../../../lib/data/current-user";
 import { getMeetingSeriesDetail, getMeetingsWithItems, getStandupCustomerData, getStandupDealData, getStandupStakeholderData } from "../../../../lib/data/meeting-queries";
 import { getInternalProfiles } from "../../../../lib/data/queries";
 import { createSupabaseAdmin } from "../../../../lib/supabase/server";
+import { triggerCalendarSyncForCurrentUser } from "../../../../lib/calendar/trigger-sync";
 import { StandupDashboard } from "./standup-dashboard";
 
 interface Props {
@@ -15,6 +17,8 @@ export default async function MeetingDetailPage({ params }: Props) {
   if (!currentUser) redirect("/login");
   if (currentUser.sessionClaims?.tenantType !== "internal") redirect("/");
 
+  after(triggerCalendarSyncForCurrentUser);
+
   const [seriesDetail, meetings, customerData, internalProfiles, dealData, stakeholderData] = await Promise.all([
     getMeetingSeriesDetail(seriesId),
     getMeetingsWithItems(seriesId),
@@ -24,8 +28,9 @@ export default async function MeetingDetailPage({ params }: Props) {
     getStandupStakeholderData(),
   ]);
 
-  // Fetch this week's customer meetings from Google Calendar sync
+  // Fetch this week's + next week's customer meetings from Google Calendar sync
   let weeklyMeetings: Record<string, any[]> = {};
+  let nextWeekMeetings: Record<string, any[]> = {};
   try {
     const supabase = createSupabaseAdmin();
     const now = new Date();
@@ -35,17 +40,29 @@ export default async function MeetingDetailPage({ params }: Props) {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
     endOfWeek.setHours(23, 59, 59, 999);
+    const startOfNextWeek = new Date(endOfWeek);
+    startOfNextWeek.setDate(endOfWeek.getDate() + 1); // Next Sunday
+    startOfNextWeek.setHours(0, 0, 0, 0);
+    const endOfNextWeek = new Date(startOfNextWeek);
+    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6); // Next Saturday
+    endOfNextWeek.setHours(23, 59, 59, 999);
 
     const { data: calMeetings } = await (supabase as any)
       .from("customer_meetings")
       .select("id, customer_id, title, meeting_date, meeting_end, attendees, ck_attendees, html_link")
       .gte("meeting_date", startOfWeek.toISOString())
-      .lte("meeting_date", endOfWeek.toISOString())
+      .lte("meeting_date", endOfNextWeek.toISOString())
       .order("meeting_date", { ascending: true });
 
     for (const m of calMeetings || []) {
-      if (!weeklyMeetings[m.customer_id]) weeklyMeetings[m.customer_id] = [];
-      weeklyMeetings[m.customer_id]!.push(m);
+      const meetingDate = new Date(m.meeting_date);
+      if (meetingDate <= endOfWeek) {
+        if (!weeklyMeetings[m.customer_id]) weeklyMeetings[m.customer_id] = [];
+        weeklyMeetings[m.customer_id]!.push(m);
+      } else {
+        if (!nextWeekMeetings[m.customer_id]) nextWeekMeetings[m.customer_id] = [];
+        nextWeekMeetings[m.customer_id]!.push(m);
+      }
     }
   } catch {
     // non-critical
@@ -71,6 +88,7 @@ export default async function MeetingDetailPage({ params }: Props) {
       customerData={customerData}
       dealData={dealData}
       weeklyMeetings={weeklyMeetings}
+      nextWeekMeetings={nextWeekMeetings}
       stakeholderData={stakeholderData}
       currentUserId={currentUser.id}
       teamMembers={teamMembers}

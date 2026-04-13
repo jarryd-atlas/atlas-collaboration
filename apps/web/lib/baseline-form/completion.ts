@@ -13,6 +13,8 @@ export function getSectionCompletion(
       return getFacilityCompletion(state);
     case "system":
       return getSystemCompletion(state);
+    case "network":
+      return getNetworkCompletion(state);
     case "equipment":
       return getEquipmentCompletion(state);
     case "documents":
@@ -129,6 +131,17 @@ function getEfficiencyCompletion(state: BaselineFormState): number {
   const fields = [
     e.headcount.length > 0,
     e.pain_points.trim().length > 0 || e.manual_processes.trim().length > 0,
+  ];
+  const filled = fields.filter(Boolean).length;
+  return Math.round((filled / fields.length) * 100);
+}
+
+function getNetworkCompletion(state: BaselineFormState): number {
+  const n = state.network;
+  const fields = [
+    n.isp_name.trim().length > 0,
+    n.connection_type !== "",
+    n.test_results.length > 0,
   ];
   const filled = fields.filter(Boolean).length;
   return Math.round((filled / fields.length) * 100);

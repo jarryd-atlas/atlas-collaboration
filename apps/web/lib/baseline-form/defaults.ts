@@ -4,6 +4,7 @@ import type {
   ContractorData,
   FacilityData,
   SystemData,
+  NetworkData,
   EquipmentData,
   EnergyData,
   OperationsData,
@@ -29,7 +30,6 @@ export const emptyContact: ContactData = {
 
 export const emptyFacility: FacilityData = {
   facility_type: "",
-  product_notes: "",
   operating_days_per_week: null,
   daily_operational_hours: null,
   runs_24_7: false,
@@ -71,10 +71,14 @@ export const emptyOperations: OperationsData = {
   can_shutdown: false,
   shutdown_constraints: "",
   curtailment_enrolled: false,
+  curtailment_frequency: "",
   curtailment_barriers: "",
   seasonality_notes: "",
   temperature_challenges: "",
   operational_nuances: "",
+  product_notes: "",
+  customer_mix: "",
+  staffing_notes: "",
 };
 
 export const emptyHeadcount: HeadcountEntry = {
@@ -92,6 +96,16 @@ export const emptyEfficiency: EfficiencyData = {
   automation_opportunities: "",
 };
 
+export const emptyNetwork: NetworkData = {
+  isp_name: "",
+  connection_type: "",
+  has_backup_connection: false,
+  backup_connection_type: "",
+  known_issues: "",
+  network_stability_notes: "",
+  test_results: [],
+};
+
 export const emptyContractor: ContractorData = {
   company_name: "",
   contractor_type: "",
@@ -105,6 +119,7 @@ export const emptyFormState: BaselineFormState = {
   contacts: [],
   facility: emptyFacility,
   system: emptySystem,
+  network: emptyNetwork,
   equipment: [],
   energy: emptyEnergy,
   operations: emptyOperations,

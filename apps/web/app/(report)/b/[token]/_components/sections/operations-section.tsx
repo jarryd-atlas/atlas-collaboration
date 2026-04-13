@@ -209,16 +209,44 @@ export function OperationsSection({ state, dispatch, token, profileId }: Section
         </label>
 
         {ops.curtailment_enrolled && (
-          <Textarea
-            label="Barriers or considerations"
-            placeholder="Describe any barriers or constraints with curtailment participation..."
-            rows={3}
-            value={ops.curtailment_barriers}
-            onChange={(e) => updateOps("curtailment_barriers", e.target.value)}
-            onBlur={() => saveField("curtailment_barriers")}
-          />
+          <>
+            <Input
+              label="Curtailment Frequency"
+              placeholder="e.g., 5-10 events/year"
+              value={ops.curtailment_frequency}
+              onChange={(e) => updateOps("curtailment_frequency", e.target.value)}
+              onBlur={() => saveField("curtailment_frequency")}
+            />
+            <Textarea
+              label="Barriers or considerations"
+              placeholder="Describe any barriers or constraints with curtailment participation..."
+              rows={3}
+              value={ops.curtailment_barriers}
+              onChange={(e) => updateOps("curtailment_barriers", e.target.value)}
+              onBlur={() => saveField("curtailment_barriers")}
+            />
+          </>
         )}
       </div>
+
+      {/* Products & Customer Mix */}
+      <Textarea
+        label="Products / Goods Stored"
+        placeholder="e.g., Frozen meats, dairy products, ice cream..."
+        rows={3}
+        value={ops.product_notes}
+        onChange={(e) => updateOps("product_notes", e.target.value)}
+        onBlur={() => saveField("product_notes")}
+      />
+
+      <Textarea
+        label="Customer Mix"
+        placeholder="What types of customers do you serve?"
+        rows={3}
+        value={ops.customer_mix}
+        onChange={(e) => updateOps("customer_mix", e.target.value)}
+        onBlur={() => saveField("customer_mix")}
+      />
 
       {/* Seasonality */}
       <Textarea
@@ -238,6 +266,16 @@ export function OperationsSection({ state, dispatch, token, profileId }: Section
         value={ops.temperature_challenges}
         onChange={(e) => updateOps("temperature_challenges", e.target.value)}
         onBlur={() => saveField("temperature_challenges")}
+      />
+
+      {/* Staffing */}
+      <Textarea
+        label="Staffing Notes"
+        placeholder="Staffing levels, shifts, seasonal labor changes..."
+        rows={3}
+        value={ops.staffing_notes}
+        onChange={(e) => updateOps("staffing_notes", e.target.value)}
+        onBlur={() => saveField("staffing_notes")}
       />
     </div>
   );

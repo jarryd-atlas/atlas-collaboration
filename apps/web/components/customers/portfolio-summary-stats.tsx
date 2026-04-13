@@ -2,6 +2,7 @@
 
 import { Building2, DollarSign, Rocket, TrendingUp, Crown } from "lucide-react";
 import type { CustomerListItem } from "../../lib/data/queries";
+import { formatCurrency } from "../../lib/format";
 
 interface PortfolioSummaryStatsProps {
   customers: CustomerListItem[];
@@ -29,7 +30,7 @@ export function PortfolioSummaryStats({ customers }: PortfolioSummaryStatsProps)
     },
     {
       label: "Deal Pipeline",
-      value: pipelineValue > 0 ? `$${(pipelineValue / 1000).toFixed(0)}k` : "—",
+      value: formatCurrency(pipelineValue > 0 ? pipelineValue : null),
       icon: DollarSign,
       color: "text-green-600",
       bg: "bg-green-50",

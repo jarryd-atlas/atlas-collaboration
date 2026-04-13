@@ -11,5 +11,7 @@
   // Runtime vars set via Cloudflare dashboard (Settings > Variables and Secrets)
   // SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY
   // GCS_SERVICE_ACCOUNT_JSON, GCS_BUCKET
+  // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (for Calendar & Gmail OAuth refresh)
+  // CRON_SECRET (for scheduled sync endpoints)
   // NEXT_PUBLIC_* vars are baked in at build time
 }

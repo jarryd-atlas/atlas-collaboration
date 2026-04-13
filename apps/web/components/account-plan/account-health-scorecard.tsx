@@ -7,7 +7,7 @@ interface AccountHealthScorecardProps {
   sites: { pipeline_stage: string }[];
   goals: { is_achieved: boolean }[];
   milestones: { status: string }[];
-  stakeholders: { stakeholder_role: string | null }[];
+  stakeholders: { stakeholder_role: string | null; relationship_strength: string | null }[];
   issues: { status: string }[];
   totalAddressable: number | null;
 }
@@ -27,8 +27,12 @@ export function AccountHealthScorecard({
   const goalsAchieved = goals.filter((g) => g.is_achieved).length;
   const milestonesCompleted = milestones.filter((m) => m.status === "completed").length;
   const openIssues = issues.filter((i) => i.status === "open").length;
-  const hasChampion = stakeholders.some((s) => s.stakeholder_role === "champion");
+  const champions = stakeholders.filter((s) => s.stakeholder_role === "champion");
+  const hasChampion = champions.length > 0;
   const hasDecisionMaker = stakeholders.some((s) => s.stakeholder_role === "decision_maker");
+  const championAtRisk = hasChampion && champions.some(
+    (s) => s.relationship_strength === "weak" || s.relationship_strength === "developing"
+  );
 
   const addressable = totalAddressable ?? sites.length;
   const penetration = addressable > 0 ? Math.round((activeSites / addressable) * 100) : 0;
@@ -72,17 +76,27 @@ export function AccountHealthScorecard({
     {
       label: "Stakeholders",
       value: String(stakeholders.length),
-      sub: hasChampion && hasDecisionMaker
-        ? "Champion + DM identified"
-        : hasChampion
-          ? "Champion identified"
-          : hasDecisionMaker
-            ? "DM identified"
-            : stakeholders.length > 0
-              ? "No champion/DM yet"
-              : "none mapped",
+      sub: championAtRisk
+        ? "Champion at risk"
+        : hasChampion && hasDecisionMaker
+          ? "Champion + DM identified"
+          : hasChampion
+            ? "Champion identified"
+            : hasDecisionMaker
+              ? "DM identified"
+              : stakeholders.length > 0
+                ? "No champion/DM yet"
+                : "none mapped",
       icon: Users,
-      color: hasChampion && hasDecisionMaker ? "text-green-600" : stakeholders.length > 0 ? "text-amber-600" : "text-gray-400",
+      color: championAtRisk
+        ? "text-amber-600"
+        : hasChampion && hasDecisionMaker
+          ? "text-green-600"
+          : !hasChampion && stakeholders.length > 0
+            ? "text-red-500"
+            : stakeholders.length > 0
+              ? "text-amber-600"
+              : "text-gray-400",
     },
   ];
 

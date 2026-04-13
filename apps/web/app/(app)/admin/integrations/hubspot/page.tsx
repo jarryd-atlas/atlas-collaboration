@@ -2,7 +2,7 @@ import { requireSession } from "../../../../../lib/supabase/server";
 import { getHubSpotConfig, getHubSpotSiteLinks, getHubSpotFieldMappings, getHubSpotSyncLog } from "../../../../../lib/data/hubspot-queries";
 import { redirect } from "next/navigation";
 import { HubSpotConnection } from "./_components/hubspot-connection";
-import { DealLinker } from "./_components/deal-linker";
+import { DealsTable } from "./_components/deals-table";
 import { FieldMappings } from "./_components/field-mappings";
 import { SyncDashboard } from "./_components/sync-dashboard";
 
@@ -23,7 +23,7 @@ export default async function HubSpotIntegrationPage() {
   const isConnected = !!config?.is_active;
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-6xl">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">HubSpot Integration</h1>
@@ -36,7 +36,7 @@ export default async function HubSpotIntegrationPage() {
       <HubSpotConnection config={config} />
 
       {/* Deal Linker — only show when connected */}
-      {isConnected && <DealLinker siteLinks={siteLinks} />}
+      {isConnected && <DealsTable siteLinks={siteLinks} />}
 
       {/* Field Mappings */}
       {isConnected && <FieldMappings mappings={fieldMappings} />}

@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, MapPin, Target, ListTodo, Mic, MessageSquare, Building2, X } from "lucide-react";
+import { Search, MapPin, Target, ListTodo, Mic, MessageSquare, Building2, X, Mountain, CalendarDays, Video, Lightbulb } from "lucide-react";
+import { PipelineStageBadge } from "../ui/badge";
 
-type SearchResult = { id: string; title: string; subtitle: string; type: string; href: string };
+type SearchResult = { id: string; title: string; subtitle: string; type: string; href: string; pipelineStage?: string };
 import { cn } from "../../lib/utils";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -15,6 +16,10 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   task: <ListTodo className="h-4 w-4" />,
   voice_note: <Mic className="h-4 w-4" />,
   comment: <MessageSquare className="h-4 w-4" />,
+  rock: <Mountain className="h-4 w-4" />,
+  meeting: <CalendarDays className="h-4 w-4" />,
+  customer_meeting: <Video className="h-4 w-4" />,
+  initiative: <Lightbulb className="h-4 w-4" />,
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -24,6 +29,10 @@ const TYPE_LABELS: Record<string, string> = {
   task: "Tasks",
   voice_note: "Voice Notes",
   comment: "Comments",
+  rock: "Rocks",
+  meeting: "Meetings",
+  customer_meeting: "Calendar Meetings",
+  initiative: "Initiatives",
 };
 
 export function SearchDialog() {
@@ -138,7 +147,7 @@ export function SearchDialog() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search sites, milestones, tasks, voice notes..."
+              placeholder="Search companies, sites, meetings, rocks, tasks..."
               className="flex-1 py-4 text-sm bg-transparent outline-none placeholder:text-gray-400"
             />
             <button
@@ -186,6 +195,9 @@ export function SearchDialog() {
                           {result.subtitle}
                         </p>
                       </div>
+                      {result.pipelineStage && (
+                        <PipelineStageBadge stage={result.pipelineStage} className="shrink-0 text-[10px]" />
+                      )}
                     </button>
                   );
                 })}
@@ -196,7 +208,7 @@ export function SearchDialog() {
           {/* Footer */}
           {!query.trim() && (
             <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-400">
-              Type to search across sites, milestones, tasks, and voice notes
+              Type to search across companies, sites, meetings, rocks, tasks, and more
             </div>
           )}
         </div>

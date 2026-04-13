@@ -26,14 +26,14 @@ export async function GET(request: NextRequest) {
     // 1) Sites matching by their own search_vector (name, city, state, address)
     let sitesQuery = admin
       .from("sites")
-      .select("id, name, slug, customer:customers!inner(slug, name)")
+      .select("id, name, slug, pipeline_stage, customer:customers!inner(slug, name)")
       .textSearch("search_vector", tsQuery)
       .limit(5);
 
     // 2) Sites matching by customer name (e.g. searching "americold" returns all their sites)
     let sitesByCustomerQuery = admin
       .from("sites")
-      .select("id, name, slug, customer:customers!inner(slug, name)")
+      .select("id, name, slug, pipeline_stage, customer:customers!inner(slug, name)")
       .ilike("customers.name", likePattern)
       .limit(10);
 
@@ -56,19 +56,19 @@ export async function GET(request: NextRequest) {
       .textSearch("search_vector", tsQuery)
       .limit(5);
 
-    // Voice notes: search by title (ilike) since no tsvector column
+    // Voice notes: search via tsvector (fast full-text search)
     let voiceNotesQuery = admin
       .from("voice_notes")
       .select("id, title, status, site:sites(slug, name, customer:customers!inner(slug)), milestone:milestones(slug, name)")
-      .ilike("title", likePattern)
+      .textSearch("search_vector", tsQuery)
       .eq("status", "ready")
       .limit(5);
 
-    // Also search transcriptions by summary text, joined back to voice_notes
+    // Transcriptions: search via tsvector (summary + raw_text)
     let transcriptionsQuery = admin
       .from("transcriptions")
       .select("id, summary, voice_note:voice_notes!inner(id, title, status, site:sites(slug, name, customer:customers!inner(slug)), milestone:milestones(slug, name))")
-      .ilike("summary", likePattern)
+      .textSearch("search_vector", tsQuery)
       .limit(5);
 
     // Comments: search via existing search_vector
@@ -76,6 +76,37 @@ export async function GET(request: NextRequest) {
       .from("comments")
       .select("id, body, entity_type, entity_id, author:profiles!inner(full_name)")
       .textSearch("search_vector", tsQuery)
+      .limit(5);
+
+    // Rocks: search by title (internal only, no tenant_id column)
+    const rocksQuery = (admin as any)
+      .from("rocks")
+      .select("id, title, status, level, owner:profiles!rocks_owner_id_fkey(full_name)")
+      .ilike("title", likePattern)
+      .limit(5);
+
+    // Meeting series: search by title (internal only)
+    const meetingSeriesQuery = (admin as any)
+      .from("meeting_series")
+      .select("id, title, type")
+      .ilike("title", likePattern)
+      .limit(5);
+
+    // Customer meetings: search by title (internal only, recent/upcoming only)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const customerMeetingsQuery = (admin as any)
+      .from("customer_meetings")
+      .select("id, title, meeting_date, customer:customers!inner(slug, name)")
+      .ilike("title", likePattern)
+      .gte("meeting_date", thirtyDaysAgo)
+      .order("meeting_date", { ascending: false })
+      .limit(5);
+
+    // Initiatives: search by title (collaborative — visible to customer users too)
+    let initiativesQuery = (admin as any)
+      .from("initiatives")
+      .select("id, title, status, customer:customers!inner(slug, name)")
+      .ilike("title", likePattern)
       .limit(5);
 
     // Apply tenant filter for customer users
@@ -88,12 +119,29 @@ export async function GET(request: NextRequest) {
       voiceNotesQuery = voiceNotesQuery.eq("tenant_id", tenantId);
       transcriptionsQuery = transcriptionsQuery.eq("tenant_id", tenantId);
       commentsQuery = commentsQuery.eq("tenant_id", tenantId);
+      initiativesQuery = initiativesQuery.eq("tenant_id", tenantId);
     }
 
-    // Customer users should not see voice notes (CK-only feature)
+    // Customer users should not see voice notes, rocks, meetings (CK-only features)
     const includeVoiceNotes = isInternal;
+    const includeInternalOnly = isInternal;
 
-    const [sitesRes, sitesByCustomerRes, customersRes, milestonesRes, tasksRes, voiceNotesRes, transcriptionsRes, commentsRes] = await Promise.all([
+    // For meeting series, we need participant filtering
+    const profileId = session.claims.profileId;
+    let participantSeriesIds: Set<string> | null = null;
+    if (includeInternalOnly && profileId) {
+      const { data: participantRows } = await (admin as any)
+        .from("meeting_participants")
+        .select("series_id")
+        .eq("profile_id", profileId);
+      participantSeriesIds = new Set((participantRows ?? []).map((r: any) => r.series_id));
+    }
+
+    const [
+      sitesRes, sitesByCustomerRes, customersRes, milestonesRes, tasksRes,
+      voiceNotesRes, transcriptionsRes, commentsRes,
+      rocksRes, meetingSeriesRes, customerMeetingsRes, initiativesRes,
+    ] = await Promise.all([
       sitesQuery,
       sitesByCustomerQuery,
       customersQuery,
@@ -102,9 +150,13 @@ export async function GET(request: NextRequest) {
       includeVoiceNotes ? voiceNotesQuery : Promise.resolve({ data: [] }),
       includeVoiceNotes ? transcriptionsQuery : Promise.resolve({ data: [] }),
       commentsQuery,
+      includeInternalOnly ? rocksQuery : Promise.resolve({ data: [] }),
+      includeInternalOnly ? meetingSeriesQuery : Promise.resolve({ data: [] }),
+      includeInternalOnly ? customerMeetingsQuery : Promise.resolve({ data: [] }),
+      initiativesQuery,
     ]);
 
-    type Result = { id: string; title: string; subtitle: string; type: string; href: string };
+    type Result = { id: string; title: string; subtitle: string; type: string; href: string; pipelineStage?: string };
     const results: Result[] = [];
 
     // Customers
@@ -132,6 +184,7 @@ export async function GET(request: NextRequest) {
         subtitle: s.customer?.name ?? "",
         type: "site",
         href: `/customers/${s.customer?.slug}/sites/${s.slug}`,
+        pipelineStage: s.pipeline_stage ?? undefined,
       });
     }
 
@@ -196,6 +249,61 @@ export async function GET(request: NextRequest) {
         subtitle: `${c.author?.full_name ?? "Unknown"} · ${c.entity_type}`,
         type: "comment",
         href: "#", // Comments don't have their own page — could link to parent entity
+      });
+    }
+
+    // Rocks
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const r of (rocksRes.data ?? []) as any[]) {
+      const ownerName = r.owner?.full_name;
+      results.push({
+        id: r.id,
+        title: r.title,
+        subtitle: ownerName ? `Rock · ${ownerName}` : "Rock",
+        type: "rock",
+        href: "/rocks",
+      });
+    }
+
+    // Meeting series (filtered to user's series)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const ms of (meetingSeriesRes.data ?? []) as any[]) {
+      if (participantSeriesIds && !participantSeriesIds.has(ms.id)) continue;
+      const typeLabel = ms.type === "one_on_one" ? "1:1" : ms.type === "standup" ? "Standup" : ms.type;
+      results.push({
+        id: ms.id,
+        title: ms.title,
+        subtitle: typeLabel,
+        type: "meeting",
+        href: `/meetings/${ms.id}`,
+      });
+    }
+
+    // Customer meetings (synced from Google Calendar)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const cm of (customerMeetingsRes.data ?? []) as any[]) {
+      const dateStr = cm.meeting_date
+        ? new Date(cm.meeting_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "";
+      results.push({
+        id: cm.id,
+        title: cm.title,
+        subtitle: `${cm.customer?.name ?? ""}${dateStr ? ` · ${dateStr}` : ""}`,
+        type: "customer_meeting",
+        href: `/customers/${cm.customer?.slug ?? ""}`,
+      });
+    }
+
+    // Initiatives
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const i of (initiativesRes.data ?? []) as any[]) {
+      const statusLabel = i.status ? i.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) : "";
+      results.push({
+        id: i.id,
+        title: i.title,
+        subtitle: `${i.customer?.name ?? ""}${statusLabel ? ` · ${statusLabel}` : ""}`,
+        type: "initiative",
+        href: `/customers/${i.customer?.slug ?? ""}`,
       });
     }
 

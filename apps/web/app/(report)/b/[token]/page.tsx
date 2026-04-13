@@ -4,6 +4,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getBaselineFormData } from "../../../../lib/actions/baseline-form";
+import { createSupabaseAdmin } from "../../../../lib/supabase/server";
 import { FormLogin } from "./_components/form-login";
 import { BaselineForm } from "./_components/baseline-form";
 
@@ -71,9 +72,15 @@ export default async function BaselinePage({ params }: BaselinePageProps) {
     );
   }
 
-  // Look up or create a profile ID for this user
-  // For external form users, we use the auth user id as profileId
-  const profileId = user.id;
+  // Look up the profile ID for this auth user (use admin to bypass RLS)
+  const admin = createSupabaseAdmin();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  const profileId = profile?.id ?? user.id;
 
   return (
     <div className="min-h-screen bg-white">

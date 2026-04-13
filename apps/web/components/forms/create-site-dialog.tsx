@@ -39,6 +39,8 @@ export function CreateSiteDialog({
   const [address, setAddress] = useState(initialValues?.address ?? "");
   const [city, setCity] = useState(initialValues?.city ?? "");
   const [state, setState] = useState(initialValues?.state ?? "");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const router = useRouter();
 
   function handlePlaceSelect(details: {
@@ -46,6 +48,8 @@ export function CreateSiteDialog({
     address: string;
     city: string;
     state: string;
+    lat?: number;
+    lng?: number;
   }) {
     if (!siteName) {
       const parts: string[] = [];
@@ -56,6 +60,10 @@ export function CreateSiteDialog({
     setAddress(details.address);
     setCity(details.city);
     setState(details.state);
+    if (details.lat && details.lng) {
+      setLatitude(details.lat);
+      setLongitude(details.lng);
+    }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -149,6 +157,8 @@ export function CreateSiteDialog({
               }
             />
           </div>
+          {latitude != null && <input type="hidden" name="latitude" value={latitude} />}
+          {longitude != null && <input type="hidden" name="longitude" value={longitude} />}
           <Select
             id="site-stage"
             name="pipelineStage"

@@ -22,6 +22,7 @@ export function TaskStatusDropdown({ taskId, currentStatus }: TaskStatusDropdown
   const [isOpen, setIsOpen] = useState(false);
   const [optimisticStatus, setOptimisticStatus] = useState(currentStatus);
   const [isPending, startTransition] = useTransition();
+  const [openUp, setOpenUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -67,7 +68,13 @@ export function TaskStatusDropdown({ taskId, currentStatus }: TaskStatusDropdown
     >
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (!isOpen && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setOpenUp(rect.bottom + 200 > window.innerHeight);
+          }
+          setIsOpen(!isOpen);
+        }}
         className={cn(
           "cursor-pointer transition-opacity",
           isPending && "opacity-50",
@@ -78,7 +85,10 @@ export function TaskStatusDropdown({ taskId, currentStatus }: TaskStatusDropdown
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-36 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden">
+        <div className={cn(
+          "absolute left-0 w-36 rounded-lg border border-gray-200 bg-white shadow-lg z-50 overflow-hidden",
+          openUp ? "bottom-full mb-1" : "top-full mt-1",
+        )}>
           {STATUSES.map((s) => (
             <button
               key={s.value}

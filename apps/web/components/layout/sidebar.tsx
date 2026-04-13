@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Building2,
   ListTodo,
+  MapPin,
   Mic,
   FileText,
   FolderOpen,
@@ -22,6 +23,8 @@ import {
   ExternalLink,
   PanelLeftClose,
   PanelLeftOpen,
+  Target,
+  Contact,
 } from "lucide-react";
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -62,8 +65,11 @@ interface SidebarProps {
 const CK_NAV: NavItem[] = [
   { label: "Dashboard", href: "/", icon: <LayoutDashboard className="h-5 w-5" />, matchPrefix: undefined },
   { label: "Companies", href: "/customers", icon: <Building2 className="h-5 w-5" />, matchPrefix: "/customers" },
+  { label: "Map", href: "/map", icon: <MapPin className="h-5 w-5" />, matchPrefix: "/map" },
   { label: "My Tasks", href: "/tasks", icon: <ListTodo className="h-5 w-5" />, matchPrefix: "/tasks" },
   { label: "Meetings", href: "/meetings", icon: <Users className="h-5 w-5" />, matchPrefix: "/meetings" },
+  { label: "Rocks", href: "/rocks", icon: <Target className="h-5 w-5" />, matchPrefix: "/rocks" },
+  { label: "Contacts", href: "/contacts", icon: <Contact className="h-5 w-5" />, matchPrefix: "/contacts" },
   { label: "Voice Notes", href: "/voice-notes", icon: <Mic className="h-5 w-5" />, matchPrefix: "/voice-notes" },
   { label: "Reports", href: "/reports", icon: <FileText className="h-5 w-5" />, matchPrefix: "/reports" },
 ];

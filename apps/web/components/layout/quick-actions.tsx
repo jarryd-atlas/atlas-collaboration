@@ -7,6 +7,7 @@ import { QuickFlagIssueDialog } from "../forms/quick-flag-issue-dialog";
 import { VoiceRecordDialog } from "../forms/voice-record-dialog";
 import { FeedbackDialog } from "../forms/feedback-dialog";
 import { usePageContext } from "./page-context";
+import { fetchQuickTaskData } from "../../lib/actions";
 
 interface QuickActionsProps {
   /** Whether the user is a CK internal user (shows "Create Customer" option) */
@@ -26,6 +27,16 @@ export function QuickActions({ isInternal = false }: QuickActionsProps) {
   const [activeDialog, setActiveDialog] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageCtx = usePageContext();
+  const cachedData = useRef<Awaited<ReturnType<typeof fetchQuickTaskData>> | null>(null);
+  const [dataReady, setDataReady] = useState(false);
+
+  // Prefetch quick task data on mount so dialog opens instantly
+  useEffect(() => {
+    fetchQuickTaskData().then((data) => {
+      cachedData.current = data;
+      setDataReady(true);
+    });
+  }, []);
 
   const toggle = useCallback(() => {
     setIsOpen((prev) => !prev);
@@ -228,6 +239,7 @@ export function QuickActions({ isInternal = false }: QuickActionsProps) {
       <QuickTaskDialog
         open={activeDialog === "create-task"}
         onClose={() => setActiveDialog(null)}
+        prefetchedData={cachedData.current}
       />
       <QuickFlagIssueDialog
         open={activeDialog === "flag-issue"}

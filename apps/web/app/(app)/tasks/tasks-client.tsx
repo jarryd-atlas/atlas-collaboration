@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { PriorityBadge } from "../../../components/ui/badge";
-import { Avatar } from "../../../components/ui/avatar";
+import { useState, useMemo } from "react";
 import { EmptyState } from "../../../components/ui/empty-state";
 import { VoiceTaskCreator } from "../../../components/tasks/voice-task-creator";
-import { InlineTaskInput, type AssignableUser, type AssignableSite } from "../../../components/tasks/inline-task-input";
+import { InlineTaskInput, type AssignableUser, type AssignableSite, type AssignableCustomer } from "../../../components/tasks/inline-task-input";
 import { TaskStatusDropdown } from "../../../components/tasks/task-status-dropdown";
-import { InlineEditableTitle } from "../../../components/tasks/inline-editable-title";
+import { TaskPriorityDropdown } from "../../../components/tasks/task-priority-dropdown";
+import { TaskAssigneeDropdown } from "../../../components/tasks/task-assignee-dropdown";
+import { TaskDueDatePicker } from "../../../components/tasks/task-due-date-picker";
 import { TaskDetailPanel } from "../../../components/tasks/task-detail-panel";
-import { Calendar, ListTodo, Sparkles } from "lucide-react";
+import { ListTodo, Sparkles, PanelRightOpen } from "lucide-react";
 import Link from "next/link";
+
+type ViewMode = "status" | "customer";
 
 interface TaskWithContext {
   id: string;
@@ -18,6 +20,7 @@ interface TaskWithContext {
   status: string;
   priority: string;
   due_date: string | null;
+  description?: string | null;
   created_by?: string | null;
   assigneeName: string | null;
   assigneeAvatar?: string | null;
@@ -30,6 +33,7 @@ interface TaskWithContext {
 
 interface TasksClientProps {
   allTasks: unknown[];
+  tasksWithContext: TaskWithContext[];
   todoTasks: TaskWithContext[];
   inProgressTasks: TaskWithContext[];
   inReviewTasks: TaskWithContext[];
@@ -39,10 +43,12 @@ interface TasksClientProps {
   currentUserAvatar?: string | null;
   assignableUsers?: AssignableUser[];
   assignableSites?: AssignableSite[];
+  assignableCustomers?: AssignableCustomer[];
 }
 
 export function TasksClient({
   allTasks,
+  tasksWithContext,
   todoTasks,
   inProgressTasks,
   inReviewTasks,
@@ -52,9 +58,29 @@ export function TasksClient({
   currentUserAvatar,
   assignableUsers = [],
   assignableSites = [],
+  assignableCustomers = [],
 }: TasksClientProps) {
   const [showAiCreator, setShowAiCreator] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithContext | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("status");
+
+  // Group tasks by customer for customer view
+  const customerGroups = useMemo(() => {
+    if (viewMode !== "customer") return [];
+    const map = new Map<string, TaskWithContext[]>();
+    for (const task of tasksWithContext) {
+      const key = task.customerInfo?.name ?? "CK";
+      const list = map.get(key) ?? [];
+      list.push(task);
+      map.set(key, list);
+    }
+    // Sort alphabetically, with "CK" at the end
+    return Array.from(map.entries()).sort((a, b) => {
+      if (a[0] === "CK") return 1;
+      if (b[0] === "CK") return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [tasksWithContext, viewMode]);
 
   return (
     <div className="space-y-6">
@@ -81,13 +107,39 @@ export function TasksClient({
         </div>
       </div>
 
-      {/* Inline task creation */}
-      <InlineTaskInput
-        tenantId={tenantId}
-        assignableUsers={assignableUsers}
-        assignableSites={assignableSites}
-        placeholder="Add a task and press Enter... Use @ to assign"
-      />
+      {/* View toggle + Inline task creation */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <InlineTaskInput
+            tenantId={tenantId}
+            assignableUsers={assignableUsers}
+            assignableSites={assignableSites}
+            placeholder="Add a task and press Enter... Use @ to assign"
+          />
+        </div>
+        <div className="flex items-center bg-gray-100 rounded-lg p-0.5 shrink-0">
+          <button
+            onClick={() => setViewMode("status")}
+            className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+              viewMode === "status"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Status
+          </button>
+          <button
+            onClick={() => setViewMode("customer")}
+            className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+              viewMode === "customer"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Customer
+          </button>
+        </div>
+      </div>
 
       {/* AI Task Creator Panel */}
       {showAiCreator && (
@@ -113,11 +165,23 @@ export function TasksClient({
             </button>
           }
         />
+      ) : viewMode === "status" ? (
+        <div className="space-y-6">
+          <TaskSection title="In Progress" tasks={inProgressTasks} onSelectTask={setSelectedTask} assignableUsers={assignableUsers} />
+          <TaskSection title="In Review" tasks={inReviewTasks} onSelectTask={setSelectedTask} assignableUsers={assignableUsers} />
+          <TaskSection title="To Do" tasks={todoTasks} onSelectTask={setSelectedTask} assignableUsers={assignableUsers} />
+        </div>
       ) : (
         <div className="space-y-6">
-          <TaskSection title="In Progress" tasks={inProgressTasks} onSelectTask={setSelectedTask} />
-          <TaskSection title="In Review" tasks={inReviewTasks} onSelectTask={setSelectedTask} />
-          <TaskSection title="To Do" tasks={todoTasks} onSelectTask={setSelectedTask} />
+          {customerGroups.map(([customerName, tasks]) => (
+            <TaskSection
+              key={customerName}
+              title={customerName}
+              tasks={tasks}
+              onSelectTask={setSelectedTask}
+              assignableUsers={assignableUsers}
+            />
+          ))}
         </div>
       )}
 
@@ -129,6 +193,10 @@ export function TasksClient({
         tenantId={tenantId}
         currentUserName={currentUserName}
         currentUserAvatar={currentUserAvatar}
+        assignableUsers={assignableUsers}
+        assignableCustomers={assignableCustomers}
+        assignableSites={assignableSites}
+        onTaskUpdated={(updated) => setSelectedTask((prev) => prev ? { ...prev, ...updated } : null)}
       />
     </div>
   );
@@ -138,10 +206,12 @@ function TaskSection({
   title,
   tasks,
   onSelectTask,
+  assignableUsers,
 }: {
   title: string;
   tasks: TaskWithContext[];
   onSelectTask: (task: TaskWithContext) => void;
+  assignableUsers: AssignableUser[];
 }) {
   if (tasks.length === 0) return null;
 
@@ -157,56 +227,64 @@ function TaskSection({
         {tasks.map((task) => (
           <div
             key={task.id}
-            className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-            onClick={() => onSelectTask(task)}
+            className="px-6 py-4 hover:bg-gray-50 transition-colors"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <TaskStatusDropdown taskId={task.id} currentStatus={task.status} />
-                <div className="min-w-0 flex-1">
-                  <InlineEditableTitle taskId={task.id} initialTitle={task.title} />
-                  {/* Latest update preview */}
-                  {task.latestComment && (
-                    <p className="text-xs text-gray-400 truncate mt-0.5">
-                      <span className="font-medium">{task.latestComment.authorName}:</span>{" "}
-                      {task.latestComment.body}
-                    </p>
-                  )}
-                  {/* Breadcrumb context */}
-                  {task.customerInfo && task.siteInfo && task.milestoneInfo && (
-                    <p className="text-xs text-gray-400 mt-0.5" onClick={(e) => e.stopPropagation()}>
-                      <Link
-                        href={`/customers/${task.customerInfo.slug}/sites/${task.siteInfo.slug}/milestones/${task.milestoneInfo.slug}`}
-                        className="hover:text-gray-600"
-                      >
-                        {task.customerInfo.name} &rarr; {task.siteInfo.name} &rarr; {task.milestoneInfo.name}
-                      </Link>
-                    </p>
-                  )}
-                  {task.customerInfo && !task.siteInfo && (
-                    <p className="text-xs text-gray-400 mt-0.5" onClick={(e) => e.stopPropagation()}>
-                      <Link
-                        href={`/customers/${task.customerInfo.slug}`}
-                        className="hover:text-gray-600"
-                      >
-                        {task.customerInfo.name}
-                      </Link>
-                      <span className="ml-1 text-gray-300">&middot; Company task</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <PriorityBadge priority={task.priority} />
-                {task.due_date && (
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <Calendar className="h-3 w-3" /> {task.due_date}
-                  </span>
+            <div className="flex items-center gap-3">
+              <TaskStatusDropdown taskId={task.id} currentStatus={task.status} />
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <span
+                  className="text-sm font-medium text-gray-900 truncate block cursor-pointer hover:text-gray-600"
+                  onClick={() => onSelectTask(task)}
+                >
+                  {task.title}
+                </span>
+                {/* Latest update preview */}
+                {task.latestComment && (
+                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                    <span className="font-medium">{task.latestComment.authorName}:</span>{" "}
+                    {task.latestComment.body}
+                  </p>
                 )}
-                {task.assigneeName && (
-                  <Avatar name={task.assigneeName} src={task.assigneeAvatar} size="sm" />
+                {/* Breadcrumb context */}
+                {task.customerInfo && task.siteInfo && task.milestoneInfo && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    <Link
+                      href={`/customers/${task.customerInfo.slug}/sites/${task.siteInfo.slug}/milestones/${task.milestoneInfo.slug}`}
+                      className="hover:text-gray-600"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {task.customerInfo.name} &rarr; {task.siteInfo.name} &rarr; {task.milestoneInfo.name}
+                    </Link>
+                  </p>
+                )}
+                {task.customerInfo && !task.siteInfo && (
+                  <p className="text-xs text-gray-400 mt-0.5 truncate">
+                    <Link
+                      href={`/customers/${task.customerInfo.slug}`}
+                      className="hover:text-gray-600"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {task.customerInfo.name}
+                    </Link>
+                    <span className="ml-1 text-gray-300">&middot; Company task</span>
+                  </p>
                 )}
               </div>
+              <TaskPriorityDropdown taskId={task.id} currentPriority={task.priority} />
+              <TaskDueDatePicker taskId={task.id} currentDueDate={task.due_date} />
+              <TaskAssigneeDropdown
+                taskId={task.id}
+                currentAssignee={task.assignee ?? null}
+                assignableUsers={assignableUsers}
+              />
+              <button
+                type="button"
+                onClick={() => onSelectTask(task)}
+                className="text-gray-300 hover:text-gray-500 transition-colors p-0.5"
+                title="Open task details"
+              >
+                <PanelRightOpen className="h-4 w-4" />
+              </button>
             </div>
           </div>
         ))}

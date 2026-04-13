@@ -98,6 +98,7 @@ export async function createStakeholder(
     department?: string;
     stakeholder_role?: string;
     relationship_strength?: string;
+    persona_type?: string;
     strategy_notes?: string;
     notes?: string;
     reports_to?: string | null;
@@ -125,6 +126,7 @@ export async function updateStakeholder(
     department?: string;
     stakeholder_role?: string;
     relationship_strength?: string;
+    persona_type?: string;
     strategy_notes?: string;
     notes?: string;
     reports_to?: string | null;

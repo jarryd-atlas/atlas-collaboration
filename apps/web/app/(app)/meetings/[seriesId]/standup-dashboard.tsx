@@ -107,6 +107,7 @@ interface StandupDashboardProps {
   customerData: CustomerData[];
   dealData: Record<string, StandupDeal[]>;
   weeklyMeetings: Record<string, any[]>;
+  nextWeekMeetings: Record<string, any[]>;
   stakeholderData: Record<string, StakeholderInfo[]>;
   currentUserId: string;
   teamMembers: TeamMember[];
@@ -147,6 +148,7 @@ export function StandupDashboard({
   customerData,
   dealData,
   weeklyMeetings,
+  nextWeekMeetings,
   stakeholderData,
   currentUserId,
   teamMembers,
@@ -286,6 +288,7 @@ export function StandupDashboard({
               items={customerItems}
               deals={dealData[customer.id] ?? []}
               calendarMeetings={weeklyMeetings[customer.id] ?? []}
+              nextWeekMeetings={nextWeekMeetings[customer.id] ?? []}
               stakeholders={stakeholderData[customer.id] ?? []}
               onAddItem={handleAddItem}
               onUpdateItem={handleUpdateItem}

@@ -7,7 +7,8 @@ import { CustomerPortalLink } from "../layout/customer-portal-link";
 import { Avatar } from "../ui/avatar";
 import { CustomerTeamManager } from "../forms/customer-team-manager";
 import { CustomerActions } from "../forms/customer-actions";
-import { Users, Plus, ChevronDown } from "lucide-react";
+import { Users, Plus, ChevronDown, MapPin, Pencil, AlertTriangle, Shield } from "lucide-react";
+import { EditHQInline } from "./edit-hq-inline";
 
 interface TeamMember {
   id: string;
@@ -36,6 +37,12 @@ interface CompactCustomerHeaderProps {
     domain: string | null;
     company_type: string | null;
     tenant_id: string;
+    hq_address?: string | null;
+    hq_city?: string | null;
+    hq_state?: string | null;
+    hq_zip?: string | null;
+    hq_latitude?: number | null;
+    hq_longitude?: number | null;
   };
   customerSlug: string;
   stats: {
@@ -51,6 +58,7 @@ interface CompactCustomerHeaderProps {
   sites: Array<{ id: string; name: string; slug: string; tenant_id: string; [key: string]: unknown }>;
   accountStage?: string;
   enterpriseDealValue?: number | null;
+  championStatus?: "none" | "at_risk" | "healthy";
 }
 
 export function CompactCustomerHeader({
@@ -63,8 +71,10 @@ export function CompactCustomerHeader({
   sites,
   accountStage,
   enterpriseDealValue,
+  championStatus,
 }: CompactCustomerHeaderProps) {
   const [showTeamPopover, setShowTeamPopover] = useState(false);
+  const [showHQEdit, setShowHQEdit] = useState(false);
 
   return (
     <div className="space-y-2 pb-4 border-b border-gray-100">
@@ -91,10 +101,47 @@ export function CompactCustomerHeader({
                 ${Number(enterpriseDealValue).toLocaleString()} target
               </span>
             )}
+            {isCKInternal && championStatus === "none" && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-50 text-red-600" title="No champion identified on this account">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                No Champion
+              </span>
+            )}
+            {isCKInternal && championStatus === "at_risk" && (
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-600" title="Champion relationship is weak or developing">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                Champion at Risk
+              </span>
+            )}
           </div>
-          {customer.domain && (
-            <p className="text-gray-500 text-sm mt-0.5">{customer.domain}</p>
-          )}
+          <div className="flex items-center gap-3 mt-0.5">
+            {customer.domain && (
+              <p className="text-gray-500 text-sm">{customer.domain}</p>
+            )}
+            {(customer.hq_city || customer.hq_state) ? (
+              <span className="flex items-center gap-1 text-sm text-gray-400">
+                <MapPin className="h-3 w-3" />
+                {[customer.hq_city, customer.hq_state].filter(Boolean).join(", ")}
+                {isCKInternal && (
+                  <button
+                    onClick={() => setShowHQEdit(!showHQEdit)}
+                    className="p-0.5 rounded hover:bg-gray-100 text-gray-300 hover:text-gray-500 transition-colors"
+                    title="Edit HQ location"
+                  >
+                    <Pencil className="h-2.5 w-2.5" />
+                  </button>
+                )}
+              </span>
+            ) : isCKInternal ? (
+              <button
+                onClick={() => setShowHQEdit(true)}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <MapPin className="h-3 w-3" />
+                Add HQ
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <CustomerPortalLink
@@ -177,6 +224,23 @@ export function CompactCustomerHeader({
           sites={sites}
         />
       </div>
+
+      {/* HQ edit inline */}
+      {showHQEdit && (
+        <EditHQInline
+          customerId={customer.id}
+          customerName={customer.name}
+          currentHQ={{
+            hq_address: customer.hq_address,
+            hq_city: customer.hq_city,
+            hq_state: customer.hq_state,
+            hq_zip: customer.hq_zip,
+            hq_latitude: customer.hq_latitude,
+            hq_longitude: customer.hq_longitude,
+          }}
+          onClose={() => setShowHQEdit(false)}
+        />
+      )}
     </div>
   );
 }

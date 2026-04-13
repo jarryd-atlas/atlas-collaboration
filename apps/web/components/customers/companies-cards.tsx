@@ -4,17 +4,11 @@ import Link from "next/link";
 import { CompanyTypeBadge, AccountStageBadge, DealStageBadge } from "../ui/badge";
 import { Building2, ArrowRight, AlertCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { formatCurrency } from "../../lib/format";
 import type { CustomerListItem } from "../../lib/data/queries";
 
 interface CompaniesCardsProps {
   customers: CustomerListItem[];
-}
-
-function formatCurrency(value: number | null): string {
-  if (!value) return "";
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}k`;
-  return `$${value.toLocaleString()}`;
 }
 
 export function CompaniesCards({ customers }: CompaniesCardsProps) {

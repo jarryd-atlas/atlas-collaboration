@@ -63,11 +63,22 @@ function parseAddressList(raw: string): Array<{ email: string; name: string }> {
   return raw.split(",").map((a) => parseEmailAddress(a.trim())).filter((a) => a.email.includes("@"));
 }
 
-/** Decode base64url-encoded body data */
+/** Extract email addresses from plain text body */
+function extractEmailsFromBody(body: string): string[] {
+  if (!body) return [];
+  const regex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const matches = body.match(regex) ?? [];
+  // Deduplicate and lowercase
+  return [...new Set(matches.map((e) => e.toLowerCase()))];
+}
+
+/** Decode base64url-encoded body data as UTF-8 */
 function decodeBase64Url(data: string): string {
   const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
   try {
-    return atob(base64);
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
   } catch {
     return "";
   }
@@ -336,12 +347,21 @@ export async function POST(req: NextRequest) {
           synced++;
           customersMatched.add(customer.id);
 
-          // Auto-add stakeholders for external contacts
+          // Auto-add stakeholders for external contacts (headers + body)
           const accountPlanId = customerToAccountPlan.get(customer.id);
           if (accountPlanId) {
+            // Contacts from headers
             const externalContacts = direction === "inbound"
               ? [from]
               : [...toList, ...ccList].filter((a) => getEmailDomain(a.email) === domain);
+
+            // Contacts from email body text (forwarded emails often contain addresses)
+            const headerEmails = new Set([from.email, ...toList.map((a) => a.email), ...ccList.map((a) => a.email)]);
+            const bodyEmails = extractEmailsFromBody(bodyPlain)
+              .filter((e) => !isCKEmail(e) && getEmailDomain(e) === domain && !headerEmails.has(e));
+            for (const bodyEmail of bodyEmails) {
+              externalContacts.push({ email: bodyEmail, name: nameFromEmail(bodyEmail) });
+            }
 
             for (const contact of externalContacts) {
               const emailLower = contact.email.toLowerCase();
@@ -349,15 +369,16 @@ export async function POST(req: NextRequest) {
                 !stakeholderEmails.has(emailLower) &&
                 !newStakeholderEmails.has(emailLower)
               ) {
+                // Use ON CONFLICT to handle race conditions (unique index on email)
                 const { error: stakeErr } = await (supabase as any)
                   .from("account_stakeholders")
-                  .insert({
+                  .upsert({
                     account_plan_id: accountPlanId,
                     tenant_id: tenant.id,
                     name: contact.name,
                     email: emailLower,
                     is_ai_suggested: true,
-                  });
+                  }, { onConflict: "account_plan_id,email", ignoreDuplicates: true });
 
                 if (!stakeErr) {
                   stakeholdersAdded++;

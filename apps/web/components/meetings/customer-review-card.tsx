@@ -93,6 +93,7 @@ interface CustomerReviewCardProps {
   items: MeetingItem[];
   deals?: StandupDeal[];
   calendarMeetings?: CalendarMeeting[];
+  nextWeekMeetings?: CalendarMeeting[];
   stakeholders?: StakeholderInfo[];
   onAddItem: (
     type: "note" | "action_item",
@@ -137,6 +138,7 @@ export function CustomerReviewCard({
   items,
   deals = [],
   calendarMeetings = [],
+  nextWeekMeetings = [],
   stakeholders = [],
   onAddItem,
   onUpdateItem,
@@ -251,7 +253,12 @@ export function CustomerReviewCard({
 
           {/* This week's calendar meetings */}
           {calendarMeetings.length > 0 && (
-            <WeeklyMeetingsSection meetings={calendarMeetings} stakeholders={stakeholders} />
+            <WeeklyMeetingsSection meetings={calendarMeetings} stakeholders={stakeholders} label="this week" />
+          )}
+
+          {/* Next week's calendar meetings — collapsed by default */}
+          {nextWeekMeetings.length > 0 && (
+            <WeeklyMeetingsSection meetings={nextWeekMeetings} stakeholders={stakeholders} label="next week" defaultCollapsed />
           )}
 
           {/* Deals table */}
@@ -572,8 +579,8 @@ const ATTENDEE_RESPONSE_COLORS: Record<string, string> = {
   needsAction: "bg-gray-100 text-gray-500",
 };
 
-function WeeklyMeetingsSection({ meetings, stakeholders = [] }: { meetings: CalendarMeeting[]; stakeholders?: StakeholderInfo[] }) {
-  const [open, setOpen] = useState(true);
+function WeeklyMeetingsSection({ meetings, stakeholders = [], label = "this week", defaultCollapsed = false }: { meetings: CalendarMeeting[]; stakeholders?: StakeholderInfo[]; label?: string; defaultCollapsed?: boolean }) {
+  const [open, setOpen] = useState(!defaultCollapsed);
   const [expandedMeetingId, setExpandedMeetingId] = useState<string | null>(null);
 
   const upcoming = meetings.filter((m) => isUpcoming(m.meeting_date));
@@ -593,7 +600,7 @@ function WeeklyMeetingsSection({ meetings, stakeholders = [] }: { meetings: Cale
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         <CalendarDays className="h-3 w-3" />
         <span>
-          {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} this week
+          {meetings.length} meeting{meetings.length !== 1 ? "s" : ""} {label}
           {upcoming.length > 0 && (
             <span className="text-purple-500 normal-case ml-1">({upcoming.length} upcoming)</span>
           )}

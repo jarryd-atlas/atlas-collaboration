@@ -10,6 +10,7 @@ interface SectionShellProps {
   onBack: () => void;
   isFirst: boolean;
   isLast: boolean;
+  saving?: boolean;
   children: ReactNode;
 }
 
@@ -20,6 +21,7 @@ export function SectionShell({
   onBack,
   isFirst,
   isLast,
+  saving = false,
   children,
 }: SectionShellProps) {
   return (
@@ -56,22 +58,49 @@ export function SectionShell({
           <div />
         )}
 
-        <Button type="button" variant="primary" onClick={onNext}>
-          {isLast ? "Review & Submit" : "Continue"}
-          {!isLast && (
-            <svg
-              className="h-4 w-4 ml-1"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8.25 4.5l7.5 7.5-7.5 7.5"
-              />
-            </svg>
+        <Button type="button" variant="primary" onClick={onNext} disabled={saving}>
+          {saving ? (
+            <>
+              <svg
+                className="animate-spin h-4 w-4 mr-1"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              Saving...
+            </>
+          ) : (
+            <>
+              {isLast ? "Review & Submit" : "Continue"}
+              {!isLast && (
+                <svg
+                  className="h-4 w-4 ml-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M8.25 4.5l7.5 7.5-7.5 7.5"
+                  />
+                </svg>
+              )}
+            </>
           )}
         </Button>
       </div>

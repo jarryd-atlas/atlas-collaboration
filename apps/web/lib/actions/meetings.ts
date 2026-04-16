@@ -40,24 +40,68 @@ export async function createMeetingSeries(
 
     const admin = createSupabaseAdmin();
 
-    // Create the series
-    const { data: series, error: seriesError } = await fromTable(admin, "meeting_series")
-      .insert({
-        tenant_id: claims.tenantId,
-        type,
-        title: title.trim(),
-        created_by: claims.profileId,
-        customer_id: type === "account_360" ? options?.customerId ?? null : null,
-        cadence: type === "account_360" ? options?.cadence ?? "weekly" : null,
-      })
-      .select("id")
-      .single();
+    // Create the series.
+    // For account_360 we prefer the RPC function (bypasses PostgREST column cache).
+    // Falls back to a plain insert + update if the RPC isn't available yet.
+    let seriesId: string;
 
-    if (seriesError) return { error: seriesError.message };
+    if (type === "account_360") {
+      // Try RPC first — works even when PostgREST column cache is stale
+      const { data: rpcId, error: rpcError } = await (admin as any).rpc(
+        "create_account360_series",
+        {
+          p_tenant_id: claims.tenantId,
+          p_type: type,
+          p_title: title.trim(),
+          p_created_by: claims.profileId,
+          p_customer_id: options?.customerId,
+          p_cadence: options?.cadence ?? "weekly",
+        },
+      );
+
+      if (!rpcError && rpcId) {
+        seriesId = rpcId;
+      } else {
+        // Fallback: insert without new columns, then try to update them
+        const { data: series, error: seriesError } = await fromTable(admin, "meeting_series")
+          .insert({
+            tenant_id: claims.tenantId,
+            type,
+            title: title.trim(),
+            created_by: claims.profileId,
+          })
+          .select("id")
+          .single();
+
+        if (seriesError) return { error: seriesError.message };
+        seriesId = series.id;
+
+        // Best-effort: set customer_id / cadence (may fail if cache is stale)
+        await fromTable(admin, "meeting_series")
+          .update({
+            customer_id: options?.customerId ?? null,
+            cadence: options?.cadence ?? "weekly",
+          })
+          .eq("id", seriesId);
+      }
+    } else {
+      const { data: series, error: seriesError } = await fromTable(admin, "meeting_series")
+        .insert({
+          tenant_id: claims.tenantId,
+          type,
+          title: title.trim(),
+          created_by: claims.profileId,
+        })
+        .select("id")
+        .single();
+
+      if (seriesError) return { error: seriesError.message };
+      seriesId = series.id;
+    }
 
     // Add participants
     const participantRows = [...allParticipantIds].map((profileId) => ({
-      series_id: series.id,
+      series_id: seriesId,
       profile_id: profileId,
     }));
 
@@ -69,7 +113,7 @@ export async function createMeetingSeries(
     // Create first meeting (today)
     const { error: meetingError } = await fromTable(admin, "meetings")
       .insert({
-        series_id: series.id,
+        series_id: seriesId,
         meeting_date: new Date().toISOString().split("T")[0],
         status: "active",
       });
@@ -77,7 +121,7 @@ export async function createMeetingSeries(
     if (meetingError) return { error: meetingError.message };
 
     revalidatePath("/meetings");
-    return { success: true, id: series.id };
+    return { success: true, id: seriesId };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "An unexpected error occurred" };
   }

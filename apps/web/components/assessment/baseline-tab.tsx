@@ -9,6 +9,22 @@ import { TouScheduleSection } from "./tou-schedule-section";
 import { SiteContactsSection } from "./site-contacts-section";
 import { TranscriptUpload } from "./transcript-upload";
 import { CollapsibleSection } from "../ui/collapsible-section";
+import { SectionStatusBadge } from "./section-status-badge";
+import { ShareSectionToggle } from "./share-section-toggle";
+import type { SectionStatus, DiscoverySection } from "@repo/shared";
+
+interface SectionStatusRow {
+  section_key: string;
+  status: SectionStatus;
+  assignee?: { id: string; full_name: string | null; avatar_url: string | null } | null;
+}
+
+interface AssignableUser {
+  id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  group?: string;
+}
 
 interface BaselineTabProps {
   assessment: any;
@@ -30,6 +46,10 @@ interface BaselineTabProps {
   siteContractors?: any[];
   networkDiagnostics?: any;
   networkTestResults?: any[];
+  sectionStatuses?: SectionStatusRow[];
+  assignableUsers?: AssignableUser[];
+  isInternal?: boolean;
+  sharingPermissions?: { section_key: string; shared_by: string; shared_at: string }[];
 }
 
 export function BaselineTab({
@@ -52,6 +72,10 @@ export function BaselineTab({
   siteContractors = [],
   networkDiagnostics = null,
   networkTestResults = [],
+  sectionStatuses = [],
+  assignableUsers = [],
+  isInternal = false,
+  sharingPermissions = [],
 }: BaselineTabProps) {
   // Group data sources by table for attribution badges
   const sourcesByTable = dataSources.reduce(
@@ -64,13 +88,56 @@ export function BaselineTab({
     {},
   );
 
+  // Build section status lookup
+  const statusMap = new Map(sectionStatuses.map((s) => [s.section_key, s]));
+
+  // Build sharing permissions lookup
+  const sharedSections = new Set(sharingPermissions.map((p) => p.section_key));
+
+  // For customer users, only show sections that are shared
+  function isSectionVisible(sectionKey: DiscoverySection): boolean {
+    if (isInternal) return true;
+    return sharedSections.has(sectionKey);
+  }
+
+  function renderShareToggle(sectionKey: DiscoverySection) {
+    if (!isInternal || !siteId || !tenantId) return null;
+    return (
+      <ShareSectionToggle
+        siteId={siteId}
+        tenantId={tenantId}
+        sectionKey={sectionKey}
+        isShared={sharedSections.has(sectionKey)}
+      />
+    );
+  }
+
+  function renderStatusBadge(sectionKey: DiscoverySection) {
+    if (!assessment?.id) return undefined;
+    const row = statusMap.get(sectionKey);
+    return (
+      <div className="flex items-center gap-1.5">
+        {renderShareToggle(sectionKey)}
+        <SectionStatusBadge
+          sectionKey={sectionKey}
+          status={(row?.status as SectionStatus) ?? "not_started"}
+          assignee={row?.assignee}
+          assessmentId={assessment.id}
+          assignableUsers={assignableUsers}
+          isInternal={isInternal}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Key Site Contacts */}
-      <CollapsibleSection
+      {isSectionVisible("contacts") && <CollapsibleSection
         title="Key Site Contacts"
         count={siteContacts.length}
         defaultOpen={true}
+        statusBadge={renderStatusBadge("contacts")}
       >
         <SiteContactsSection
           assessment={assessment}
@@ -80,7 +147,7 @@ export function BaselineTab({
           customerId={customerId}
           isLocked={isLocked}
         />
-      </CollapsibleSection>
+      </CollapsibleSection>}
 
       {/* Key Contractors */}
       {siteContractors.length > 0 && (
@@ -134,11 +201,12 @@ export function BaselineTab({
       </CollapsibleSection>
 
       {/* Equipment Section */}
-      <CollapsibleSection
+      {isSectionVisible("equipment") && <CollapsibleSection
         title="Equipment"
         count={equipment.length}
         defaultOpen={true}
         sourceDocuments={sourcesByTable["site_equipment"]?.map((ds: any) => ds.attachments)}
+        statusBadge={renderStatusBadge("equipment")}
       >
         <EquipmentTab
           assessment={assessment}
@@ -148,14 +216,15 @@ export function BaselineTab({
           tenantId={tenantId}
           isLocked={isLocked}
         />
-      </CollapsibleSection>
+      </CollapsibleSection>}
 
       {/* Energy & Rates Section */}
-      <CollapsibleSection
+      {isSectionVisible("energy") && <CollapsibleSection
         title="Energy & Rates"
         count={energyData.length}
         defaultOpen={true}
         sourceDocuments={sourcesByTable["site_energy_data"]?.map((ds: any) => ds.attachments)}
+        statusBadge={renderStatusBadge("energy")}
       >
         <div className="space-y-6">
           {/* TOU Rate Schedule */}
@@ -178,13 +247,14 @@ export function BaselineTab({
             isLocked={isLocked}
           />
         </div>
-      </CollapsibleSection>
+      </CollapsibleSection>}
 
       {/* Operations Section */}
-      <CollapsibleSection
+      {isSectionVisible("operations") && <CollapsibleSection
         title="Operations"
         defaultOpen={true}
         sourceDocuments={sourcesByTable["site_operational_params"]?.map((ds: any) => ds.attachments)}
+        statusBadge={renderStatusBadge("operations")}
       >
         <OperationsTab
           assessment={assessment}
@@ -194,14 +264,15 @@ export function BaselineTab({
           tenantId={tenantId}
           isLocked={isLocked}
         />
-      </CollapsibleSection>
+      </CollapsibleSection>}
 
       {/* Network Diagnostics Section */}
-      {(networkDiagnostics || networkTestResults.length > 0) && (
+      {isSectionVisible("network") && (networkDiagnostics || networkTestResults.length > 0) && (
         <CollapsibleSection
           title="Network & Connectivity"
           count={networkTestResults.length}
           defaultOpen={true}
+          statusBadge={renderStatusBadge("network")}
         >
           <div className="space-y-4">
             {/* Context info */}
@@ -300,10 +371,11 @@ export function BaselineTab({
       )}
 
       {/* Savings Analysis Section */}
-      <CollapsibleSection
+      {isSectionVisible("savings") && <CollapsibleSection
         title="Savings Analysis"
         defaultOpen={false}
         sourceDocuments={sourcesByTable["site_savings_analysis"]?.map((ds: any) => ds.attachments)}
+        statusBadge={renderStatusBadge("savings")}
       >
         <SavingsTab
           assessment={assessment}
@@ -317,7 +389,14 @@ export function BaselineTab({
           tenantId={tenantId}
           isLocked={isLocked}
         />
-      </CollapsibleSection>
+      </CollapsibleSection>}
+
+      {/* Empty state for customer view when nothing is shared */}
+      {!isInternal && !isSectionVisible("contacts") && !isSectionVisible("equipment") && !isSectionVisible("energy") && !isSectionVisible("operations") && !isSectionVisible("savings") && (
+        <div className="text-center py-12 text-sm text-gray-400">
+          No sections have been shared yet. Your CK team will share data as it becomes available.
+        </div>
+      )}
     </div>
   );
 }

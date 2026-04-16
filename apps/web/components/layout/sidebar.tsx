@@ -26,6 +26,8 @@ import {
   Target,
   Contact,
   TrendingUp,
+  Activity,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -68,6 +70,7 @@ const CK_NAV: NavItem[] = [
   { label: "Companies", href: "/customers", icon: <Building2 className="h-5 w-5" />, matchPrefix: "/customers" },
   { label: "Map", href: "/map", icon: <MapPin className="h-5 w-5" />, matchPrefix: "/map" },
   { label: "My Tasks", href: "/tasks", icon: <ListTodo className="h-5 w-5" />, matchPrefix: "/tasks" },
+  { label: "Activity", href: "/activity", icon: <Activity className="h-5 w-5" />, matchPrefix: "/activity" },
   { label: "Meetings", href: "/meetings", icon: <Users className="h-5 w-5" />, matchPrefix: "/meetings" },
   { label: "Rocks", href: "/rocks", icon: <Target className="h-5 w-5" />, matchPrefix: "/rocks" },
   { label: "Forecast", href: "/forecast", icon: <TrendingUp className="h-5 w-5" />, matchPrefix: "/forecast" },
@@ -79,6 +82,7 @@ const CK_NAV: NavItem[] = [
 const CK_ADMIN_NAV: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: <Users className="h-5 w-5" />, matchPrefix: "/admin/users" },
   { label: "Integrations", href: "/admin/integrations", icon: <Plug className="h-5 w-5" />, matchPrefix: "/admin/integrations" },
+  { label: "Deal Funnel", href: "/admin/sales/funnel", icon: <BarChart3 className="h-5 w-5" />, matchPrefix: "/admin/sales" },
   { label: "AI Instructions", href: "/admin/ai-instructions", icon: <Sparkles className="h-5 w-5" />, matchPrefix: "/admin/ai-instructions" },
   { label: "Feedback", href: "/admin/feedback", icon: <MessageSquare className="h-5 w-5" />, matchPrefix: "/admin/feedback" },
   { label: "Settings", href: "/admin/settings", icon: <Settings className="h-5 w-5" />, matchPrefix: "/admin/settings" },

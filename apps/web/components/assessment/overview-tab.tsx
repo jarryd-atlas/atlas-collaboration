@@ -11,6 +11,8 @@ import { LinkedGoogleDocs } from "./linked-google-docs";
 import { HubSpotPipelineTracker } from "../hubspot/hubspot-pipeline-tracker";
 import { ArrowRight, Calendar, Target } from "lucide-react";
 import type { SitePipelineStage } from "@repo/shared";
+import { InformationRequests } from "./information-requests";
+import { ActivityFeed } from "../activity/activity-feed";
 
 const PIPELINE_STEPS: SitePipelineStage[] = [
   "prospect",
@@ -36,6 +38,9 @@ interface OverviewTabProps {
   isInternal?: boolean;
   hubspotDealId?: string;
   hubspotPortalId?: string;
+  infoRequests?: any[];
+  tenantId?: string;
+  siteActivity?: any[];
 }
 
 export function OverviewTab({
@@ -53,6 +58,9 @@ export function OverviewTab({
   isInternal = false,
   hubspotDealId,
   hubspotPortalId,
+  infoRequests = [],
+  tenantId,
+  siteActivity = [],
 }: OverviewTabProps) {
   const hasHubSpotDeal = !!(hubspotDealId && hubspotPortalId);
   return (
@@ -100,6 +108,21 @@ export function OverviewTab({
             </div>
           </div>
         )
+      )}
+
+      {/* Information Requests */}
+      {tenantId && (
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-card">
+          <InformationRequests
+            requests={infoRequests}
+            siteId={site.id}
+            tenantId={tenantId}
+            isInternal={isInternal}
+            assignableUsers={assignableUsers}
+            currentUserName={currentUserName}
+            currentUserAvatar={currentUserAvatar}
+          />
+        </div>
       )}
 
       {/* Milestones */}
@@ -175,6 +198,21 @@ export function OverviewTab({
         tenantId={site.tenant_id}
         documentsTabUrl={`/customers/${customerSlug}/sites/${siteSlug}?tab=documents`}
       />
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-card">
+        <div className="flex items-center gap-1.5 px-5 py-3 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Recent Activity</h2>
+        </div>
+        <div className="px-4 py-3">
+          <ActivityFeed
+            activities={siteActivity}
+            variant="compact"
+            maxItems={8}
+            emptyMessage="No activity yet — changes will appear here as your team works"
+          />
+        </div>
+      </div>
     </div>
   );
 }

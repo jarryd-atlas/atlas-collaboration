@@ -3,9 +3,9 @@
 import { useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "../../lib/utils";
-import { LayoutDashboard, Users, Target, Building2, CalendarDays, Mail, Tag, Rocket, MapPin } from "lucide-react";
+import { LayoutDashboard, Users, Target, Building2, CalendarDays, Mail, Tag, Rocket, MapPin, Activity } from "lucide-react";
 
-type TabKey = "overview" | "people" | "initiatives" | "meetings" | "emails" | "tickets" | "success-plan" | "sites-tasks" | "map";
+type TabKey = "overview" | "people" | "initiatives" | "meetings" | "emails" | "tickets" | "success-plan" | "sites-tasks" | "map" | "activity";
 
 interface AccountPlanTabsProps {
   isCKInternal: boolean;
@@ -19,6 +19,7 @@ interface AccountPlanTabsProps {
     successPlan: React.ReactNode;
     sitesTasks: React.ReactNode;
     map: React.ReactNode;
+    activity: React.ReactNode;
   };
   onTabChange?: (tab: string) => void;
 }
@@ -33,6 +34,7 @@ const TABS: { key: TabKey; label: string; icon: any; internalOnly: boolean }[] =
   { key: "success-plan", label: "Success Plan", icon: Target, internalOnly: false },
   { key: "sites-tasks", label: "Sites", icon: Building2, internalOnly: false },
   { key: "map", label: "Map", icon: MapPin, internalOnly: false },
+  { key: "activity", label: "Activity", icon: Activity, internalOnly: false },
 ];
 
 const VALID_TABS = new Set<string>(TABS.map((t) => t.key));
@@ -81,6 +83,7 @@ export function AccountPlanTabs({ isCKInternal, children, onTabChange }: Account
     "success-plan": children.successPlan,
     "sites-tasks": children.sitesTasks,
     map: children.map,
+    activity: children.activity,
   };
 
   return (

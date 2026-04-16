@@ -16,6 +16,7 @@ import {
   getEnterpriseDeal,
   getInitiativesForCustomer,
   getBusinessUnits,
+  getActivityForCustomer,
 } from "../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../lib/data/current-user";
 import { getSession, createSupabaseAdmin } from "../../../../lib/supabase/server";
@@ -242,6 +243,14 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
     // non-critical
   }
 
+  // Fetch customer activity for the Activity tab
+  let customerActivity: any[] = [];
+  try {
+    customerActivity = await getActivityForCustomer(customer.id, 50, isCKInternal);
+  } catch {
+    // Non-critical
+  }
+
   const tasksWithComments = customerTasks.map((t: any) => ({
     ...t,
     latestComment: latestComments[t.id] ?? null,
@@ -294,6 +303,7 @@ export default async function CustomerPage({ params }: CustomerPageProps) {
       businessUnits={businessUnits}
       buyingTriggers={buyingTriggers}
       accountObjections={accountObjections}
+      customerActivity={customerActivity}
     />
   );
 }

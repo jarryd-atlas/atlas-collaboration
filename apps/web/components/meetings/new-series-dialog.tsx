@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from "../ui/dialog";
 import { Avatar } from "../ui/avatar";
+import { CustomerSearch } from "../ui/customer-search";
 import { createMeetingSeries } from "../../lib/actions/meetings";
-import { Search, Check } from "lucide-react";
+import { Search, Check, Users, User, Building2 } from "lucide-react";
 
 interface TeamMember {
   id: string;
@@ -21,21 +22,55 @@ interface NewSeriesDialogProps {
   currentUserId: string;
 }
 
+type MeetingType = "standup" | "one_on_one" | "account_360";
+type Cadence = "weekly" | "biweekly" | "monthly";
+
+const TYPE_OPTIONS: { value: MeetingType; label: string; description: string; icon: any }[] = [
+  {
+    value: "standup",
+    label: "Standup",
+    description: "Recurring team sync across customers",
+    icon: Users,
+  },
+  {
+    value: "one_on_one",
+    label: "1:1",
+    description: "Private check-in between two people",
+    icon: User,
+  },
+  {
+    value: "account_360",
+    label: "Account 360",
+    description: "Cross-team sync on a specific customer",
+    icon: Building2,
+  },
+];
+
 export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: NewSeriesDialogProps) {
   const router = useRouter();
+  const [type, setType] = useState<MeetingType>("standup");
   const [title, setTitle] = useState("");
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [customer, setCustomer] = useState<{ id: string; name: string; slug: string } | null>(null);
+  const [cadence, setCadence] = useState<Cadence>("weekly");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
+  // For standup / 1:1, hide the current user (they're auto-added as participant).
+  // For account_360, show everyone — "leads" is an explicit opt-in list.
+  const availableMembers =
+    type === "account_360"
+      ? teamMembers
+      : teamMembers.filter((m) => m.id !== currentUserId);
+
   const filteredMembers = search
-    ? teamMembers.filter(
+    ? availableMembers.filter(
         (m) =>
           m.fullName.toLowerCase().includes(search.toLowerCase()) ||
           m.email.toLowerCase().includes(search.toLowerCase())
       )
-    : teamMembers;
+    : availableMembers;
 
   const toggleMember = (id: string) => {
     setSelectedIds((prev) => {
@@ -46,58 +81,187 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
     });
   };
 
+  const resetAndClose = () => {
+    onClose();
+    setType("standup");
+    setTitle("");
+    setSelectedIds(new Set());
+    setCustomer(null);
+    setCadence("weekly");
+    setSearch("");
+    setError("");
+  };
+
+  const handleTypeChange = (next: MeetingType) => {
+    setType(next);
+    setError("");
+    // If user hasn't typed a title yet, suggest one based on the type
+    if (!title.trim() && next === "account_360" && customer) {
+      setTitle(`${customer.name} — Account 360`);
+    }
+  };
+
+  const handleCustomerSelect = (c: { id: string; name: string; slug: string }) => {
+    setCustomer(c);
+    if (!title.trim() || title.endsWith(" — Account 360")) {
+      setTitle(`${c.name} — Account 360`);
+    }
+  };
+
   const handleCreate = () => {
     if (!title.trim()) {
       setError("Title is required");
       return;
     }
-    if (selectedIds.size === 0) {
-      setError("Select at least one team member");
-      return;
+
+    if (type === "account_360") {
+      if (!customer) {
+        setError("Select a customer");
+        return;
+      }
+    } else {
+      if (selectedIds.size === 0) {
+        setError("Select at least one team member");
+        return;
+      }
     }
     setError("");
 
     startTransition(async () => {
-      const result = await createMeetingSeries(title.trim(), "standup", [...selectedIds]);
+      const result = await createMeetingSeries(
+        title.trim(),
+        type,
+        [...selectedIds],
+        type === "account_360"
+          ? { customerId: customer?.id ?? null, cadence }
+          : undefined,
+      );
       if ("error" in result) {
         setError(result.error);
       } else {
-        onClose();
-        setTitle("");
-        setSelectedIds(new Set());
+        resetAndClose();
         router.push(`/meetings/${result.id}`);
       }
     });
   };
 
+  const headerLabel =
+    type === "account_360" ? "New Account 360" : type === "one_on_one" ? "New 1:1" : "New Standup";
+  const createLabel =
+    type === "account_360" ? "Create Account 360" : type === "one_on_one" ? "Create 1:1" : "Create Standup";
+
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogHeader onClose={onClose}>New Standup</DialogHeader>
+    <Dialog open={open} onClose={resetAndClose}>
+      <DialogHeader onClose={resetAndClose}>{headerLabel}</DialogHeader>
       <DialogBody className="space-y-4">
+        {/* Type picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Meeting type</label>
+          <div className="grid grid-cols-3 gap-2">
+            {TYPE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const active = type === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => handleTypeChange(opt.value)}
+                  className={`flex flex-col items-start gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    active
+                      ? "border-brand-green bg-brand-green/5"
+                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 ${active ? "text-brand-green" : "text-gray-400"}`} />
+                  <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                  <span className="text-[10px] text-gray-500 leading-tight">{opt.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Customer picker (Account 360 only) */}
+        {type === "account_360" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
+            {customer ? (
+              <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm text-gray-900">{customer.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomer(null)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <CustomerSearch onSelect={handleCustomerSelect} placeholder="Search customers..." />
+            )}
+          </div>
+        )}
+
+        {/* Cadence (Account 360 only) */}
+        {type === "account_360" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cadence</label>
+            <div className="flex gap-2">
+              {(["weekly", "biweekly", "monthly"] as Cadence[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCadence(c)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                    cadence === c
+                      ? "border-brand-green bg-brand-green/5 text-gray-900"
+                      : "border-gray-200 text-gray-500 hover:border-gray-300"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Title */}
         <div>
-          <label htmlFor="standup-title" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="series-title" className="block text-sm font-medium text-gray-700 mb-1">
             Name
           </label>
           <input
-            id="standup-title"
+            id="series-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., Sales Team Weekly"
+            placeholder={
+              type === "account_360"
+                ? "e.g., Americold — Account 360"
+                : type === "one_on_one"
+                  ? "e.g., Alex × Jamie"
+                  : "e.g., Sales Team Weekly"
+            }
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green/50"
-            autoFocus
           />
         </div>
 
         {/* Participants */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Participants
+            {type === "account_360" ? "Leads" : "Participants"}
             {selectedIds.size > 0 && (
               <span className="ml-1 text-gray-400 font-normal">({selectedIds.size} selected)</span>
             )}
           </label>
+          {type === "account_360" && (
+            <p className="text-[11px] text-gray-400 mb-2">
+              Anyone at CrossnoKaye can view and edit this meeting. Leads are listed for context.
+            </p>
+          )}
 
           {/* Search */}
           <div className="relative mb-2">
@@ -129,9 +293,7 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
                     <p className="text-sm font-medium text-gray-900 truncate">{m.fullName}</p>
                     <p className="text-xs text-gray-400 truncate">{m.email}</p>
                   </div>
-                  {selected && (
-                    <Check className="h-4 w-4 text-brand-green shrink-0" />
-                  )}
+                  {selected && <Check className="h-4 w-4 text-brand-green shrink-0" />}
                 </button>
               );
             })}
@@ -141,14 +303,12 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
           </div>
         </div>
 
-        {error && (
-          <p className="text-sm text-red-500">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-500">{error}</p>}
       </DialogBody>
       <DialogFooter>
         <button
           type="button"
-          onClick={onClose}
+          onClick={resetAndClose}
           className="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
         >
           Cancel
@@ -159,7 +319,7 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
           disabled={isPending}
           className="rounded-lg bg-brand-dark px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark/90 disabled:opacity-50 transition-colors"
         >
-          {isPending ? "Creating..." : "Create Standup"}
+          {isPending ? "Creating..." : createLabel}
         </button>
       </DialogFooter>
     </Dialog>

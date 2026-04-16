@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdmin, requireSession } from "../supabase/server";
 import type { TaskStatus, PriorityLevel } from "@repo/supabase";
+import { logActivity, getCustomerIdForSite } from "./activity";
 
 /**
  * Create a task. Both CK and customer users can create tasks.
@@ -94,6 +95,20 @@ export async function createTask(formData: FormData) {
       }
     }
 
+    // Log activity
+    const taskCustomerId = customerId || (resolvedSiteId ? await getCustomerIdForSite(resolvedSiteId) : null);
+    await logActivity({
+      tenantId,
+      actorId: claims.profileId,
+      entityType: "task",
+      entityId: task.id,
+      action: "created",
+      changes: { title },
+      siteId: resolvedSiteId,
+      customerId: taskCustomerId,
+      customerVisible: true,
+    });
+
     revalidatePath("/customers");
     revalidatePath("/tasks");
     return { success: true, id: task.id };
@@ -107,15 +122,42 @@ export async function createTask(formData: FormData) {
  */
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   try {
-    await requireSession();
+    const { claims } = await requireSession();
 
     const admin = createSupabaseAdmin();
+
+    // Get task details for activity log
+    const { data: existing } = await admin
+      .from("tasks")
+      .select("title, status, site_id, customer_id, tenant_id")
+      .eq("id", taskId)
+      .single();
+
     const { error: dbError } = await admin
       .from("tasks")
       .update({ status })
       .eq("id", taskId);
 
     if (dbError) return { error: dbError.message };
+
+    // Log activity
+    if (claims.profileId && existing) {
+      await logActivity({
+        tenantId: (existing as any).tenant_id,
+        actorId: claims.profileId,
+        entityType: "task",
+        entityId: taskId,
+        action: "status_changed",
+        changes: {
+          title: (existing as any).title,
+          old_status: (existing as any).status,
+          new_status: status,
+        },
+        siteId: (existing as any).site_id,
+        customerId: (existing as any).customer_id,
+        customerVisible: true,
+      });
+    }
 
     revalidatePath("/customers");
     revalidatePath("/tasks");
@@ -236,6 +278,34 @@ export async function updateTaskAssignee(taskId: string, assigneeId: string | nu
       } catch {
         // Non-critical
       }
+    }
+
+    // Log activity
+    if (claims.profileId && existing) {
+      let assigneeName = "unassigned";
+      if (assigneeId) {
+        const { data: assigneeProfile } = await admin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", assigneeId)
+          .single();
+        assigneeName = (assigneeProfile as any)?.full_name ?? "someone";
+      }
+      const taskCustomerId = (existing as any).customer_id || ((existing as any).site_id ? await getCustomerIdForSite((existing as any).site_id) : null);
+      await logActivity({
+        tenantId: (existing as any).tenant_id,
+        actorId: claims.profileId,
+        entityType: "task",
+        entityId: taskId,
+        action: "assigned",
+        changes: {
+          title: (existing as any).title,
+          assignee_name: assigneeName,
+        },
+        siteId: (existing as any).site_id,
+        customerId: taskCustomerId,
+        customerVisible: true,
+      });
     }
 
     revalidatePath("/customers");

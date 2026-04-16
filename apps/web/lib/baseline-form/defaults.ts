@@ -13,6 +13,8 @@ import type {
   CondenserSpecs,
   EvaporatorSpecs,
   HeadcountEntry,
+  EngineRoomData,
+  TemperatureZoneData,
 } from "./types";
 import type { EquipmentCategory } from "@repo/shared/constants";
 
@@ -115,9 +117,42 @@ export const emptyContractor: ContractorData = {
   notes: "",
 };
 
+export const emptyEngineRoom: EngineRoomData = {
+  name: "",
+  sort_order: 0,
+  system_type: "",
+  refrigerant: "",
+  control_system: "",
+  control_hardware: "",
+  micro_panel_type: "",
+  suction_pressure_typical: null,
+  discharge_pressure_typical: null,
+  connected_to_engine_room_id: null,
+  shared_controls: false,
+  notes: "",
+};
+
+export const emptyTemperatureZone: TemperatureZoneData = {
+  engine_room_id: null,
+  name: "",
+  sort_order: 0,
+  zone_type: "",
+  target_temp_f: null,
+  length_ft: null,
+  width_ft: null,
+  height_ft: null,
+  num_doors: null,
+  door_type: "",
+  insulation_thickness_in: null,
+  insulation_condition: "",
+  notes: "",
+};
+
 export const emptyFormState: BaselineFormState = {
   contacts: [],
   facility: emptyFacility,
+  engineRooms: [],
+  temperatureZones: [],
   system: emptySystem,
   network: emptyNetwork,
   equipment: [],
@@ -232,11 +267,15 @@ export function duplicateEquipment(
   };
 }
 
-/** Get available loop options based on system config */
-export function getAvailableLoops(state: BaselineFormState): Array<{ value: string; label: string }> {
+/** Get available loop options based on system config (or engine room config) */
+export function getAvailableLoops(
+  state: BaselineFormState,
+  engineRoom?: EngineRoomData
+): Array<{ value: string; label: string }> {
   const loops: Array<{ value: string; label: string }> = [];
+  const systemType = engineRoom?.system_type || state.system.system_type;
 
-  if (state.system.system_type === "two_stage" || state.system.system_type === "cascade") {
+  if (systemType === "two_stage" || systemType === "cascade") {
     loops.push({ value: "low", label: "Low Stage" });
     loops.push({ value: "high", label: "High Stage" });
   } else {
@@ -248,4 +287,49 @@ export function getAvailableLoops(state: BaselineFormState): Array<{ value: stri
   }
 
   return loops;
+}
+
+/** Create a new engine room with smart defaults from existing site-level config */
+export function createDefaultEngineRoom(
+  state: BaselineFormState,
+  existingCount: number
+): EngineRoomData {
+  // First ER inherits site-level system config
+  const isFirst = existingCount === 0;
+  return {
+    name: `Engine Room ${existingCount + 1}`,
+    sort_order: existingCount,
+    system_type: isFirst ? state.system.system_type : "",
+    refrigerant: isFirst ? state.system.refrigerant : "",
+    control_system: isFirst ? state.system.control_system : "",
+    control_hardware: isFirst ? state.system.control_hardware : "",
+    micro_panel_type: isFirst ? state.system.micro_panel_type : "",
+    suction_pressure_typical: isFirst ? state.operations.suction_pressure_typical : null,
+    discharge_pressure_typical: isFirst ? state.operations.discharge_pressure_typical : null,
+    connected_to_engine_room_id: null,
+    shared_controls: false,
+    notes: "",
+  };
+}
+
+/** Create a new temperature zone with defaults */
+export function createDefaultZone(
+  engineRoomId: string | null,
+  existingCount: number
+): TemperatureZoneData {
+  return {
+    engine_room_id: engineRoomId,
+    name: `Zone ${existingCount + 1}`,
+    sort_order: existingCount,
+    zone_type: "",
+    target_temp_f: null,
+    length_ft: null,
+    width_ft: null,
+    height_ft: null,
+    num_doors: null,
+    door_type: "",
+    insulation_thickness_in: null,
+    insulation_condition: "",
+    notes: "",
+  };
 }

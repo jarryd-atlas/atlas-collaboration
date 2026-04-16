@@ -309,6 +309,45 @@ export const LABOR_ROLE_LABELS: Record<LaborRole, string> = {
 export const BASELINE_SECTIONS = ["equipment", "energy", "operations", "savings"] as const;
 export type BaselineSection = (typeof BASELINE_SECTIONS)[number];
 
+/** Discovery workspace section keys — maps to CollapsibleSection instances on the baseline tab */
+export const DISCOVERY_SECTIONS = [
+  "contacts", "equipment", "energy", "operations",
+  "network", "savings", "labor", "documents",
+] as const;
+export type DiscoverySection = (typeof DISCOVERY_SECTIONS)[number];
+
+/** Discovery section display labels */
+export const DISCOVERY_SECTION_LABELS: Record<DiscoverySection, string> = {
+  contacts: "Key Site Contacts",
+  equipment: "Equipment",
+  energy: "Energy & Rates",
+  operations: "Operations",
+  network: "Network & Connectivity",
+  savings: "Savings Analysis",
+  labor: "Labor",
+  documents: "Documents",
+};
+
+/** Section workflow statuses */
+export const SECTION_STATUSES = ["not_started", "in_progress", "needs_review", "complete"] as const;
+export type SectionStatus = (typeof SECTION_STATUSES)[number];
+
+/** Section status display labels */
+export const SECTION_STATUS_LABELS: Record<SectionStatus, string> = {
+  not_started: "Not Started",
+  in_progress: "In Progress",
+  needs_review: "Needs Review",
+  complete: "Complete",
+};
+
+/** Section status colors for badges */
+export const SECTION_STATUS_COLORS: Record<SectionStatus, { bg: string; text: string; dot: string }> = {
+  not_started: { bg: "bg-gray-50", text: "text-gray-600", dot: "bg-gray-400" },
+  in_progress: { bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500" },
+  needs_review: { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" },
+  complete: { bg: "bg-green-50", text: "text-green-700", dot: "bg-green-500" },
+};
+
 /** Demand response evaluation statuses */
 export const DEMAND_RESPONSE_STATUSES = [
   "not_evaluated",
@@ -328,10 +367,69 @@ export const DEMAND_RESPONSE_LABELS: Record<DemandResponseStatus, string> = {
 
 /** Baseline form sections (external-facing interactive form) */
 export const BASELINE_FORM_SECTIONS = [
-  "contact", "facility", "system", "equipment", "documents",
+  "contact", "facility", "layout", "system", "equipment", "documents",
   "energy", "operations", "efficiency", "review",
 ] as const;
 export type BaselineFormSection = (typeof BASELINE_FORM_SECTIONS)[number];
+
+// ═══════════════════════════════════════════════════════════════
+// Multi-Engine-Room & Temperature Zone Constants
+// ═══════════════════════════════════════════════════════════════
+
+/** Temperature zone types */
+export const ZONE_TYPES = [
+  "cooler", "freezer", "blast", "dock", "processing", "dry_storage",
+] as const;
+export type ZoneType = (typeof ZONE_TYPES)[number];
+
+/** Zone type display labels */
+export const ZONE_TYPE_LABELS: Record<ZoneType, string> = {
+  cooler: "Cooler",
+  freezer: "Freezer",
+  blast: "Blast Freezer",
+  dock: "Dock / Shipping",
+  processing: "Processing Area",
+  dry_storage: "Dry Storage",
+};
+
+/** Door types for temperature zones */
+export const DOOR_TYPES = [
+  "strip_curtain", "high_speed", "manual", "dock_door",
+] as const;
+export type DoorType = (typeof DOOR_TYPES)[number];
+
+/** Door type display labels */
+export const DOOR_TYPE_LABELS: Record<DoorType, string> = {
+  strip_curtain: "Strip Curtain",
+  high_speed: "High-Speed Roll-Up",
+  manual: "Manual Swing / Slide",
+  dock_door: "Dock Door",
+};
+
+/** Equipment and insulation condition ratings */
+export const CONDITION_RATINGS = [
+  "good", "fair", "poor", "needs_replacement",
+] as const;
+export type ConditionRating = (typeof CONDITION_RATINGS)[number];
+
+/** Condition rating display labels */
+export const CONDITION_RATING_LABELS: Record<ConditionRating, string> = {
+  good: "Good",
+  fair: "Fair",
+  poor: "Poor",
+  needs_replacement: "Needs Replacement",
+};
+
+/** Insulation condition ratings (subset of condition ratings, for zones) */
+export const INSULATION_CONDITIONS = ["good", "fair", "poor"] as const;
+export type InsulationCondition = (typeof INSULATION_CONDITIONS)[number];
+
+/** Insulation condition display labels */
+export const INSULATION_CONDITION_LABELS: Record<InsulationCondition, string> = {
+  good: "Good — intact, no visible damage",
+  fair: "Fair — minor damage or aging",
+  poor: "Poor — significant damage, moisture intrusion",
+};
 
 // ═══════════════════════════════════════════════════════════════
 // Account Planning Constants

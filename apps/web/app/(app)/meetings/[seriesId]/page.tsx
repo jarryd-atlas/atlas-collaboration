@@ -1,11 +1,19 @@
 import { redirect, notFound } from "next/navigation";
 import { after } from "next/server";
 import { getCurrentUser } from "../../../../lib/data/current-user";
-import { getMeetingSeriesDetail, getMeetingsWithItems, getStandupCustomerData, getStandupDealData, getStandupStakeholderData } from "../../../../lib/data/meeting-queries";
+import {
+  getMeetingSeriesDetail,
+  getMeetingsWithItems,
+  getStandupCustomerData,
+  getStandupDealData,
+  getStandupStakeholderData,
+} from "../../../../lib/data/meeting-queries";
+import { getAccount360Snapshot } from "../../../../lib/data/account-360-queries";
 import { getInternalProfiles } from "../../../../lib/data/queries";
 import { createSupabaseAdmin } from "../../../../lib/supabase/server";
 import { triggerCalendarSyncForCurrentUser } from "../../../../lib/calendar/trigger-sync";
 import { StandupDashboard } from "./standup-dashboard";
+import { Account360Dashboard } from "./account360-dashboard";
 
 interface Props {
   params: Promise<{ seriesId: string }>;
@@ -19,11 +27,46 @@ export default async function MeetingDetailPage({ params }: Props) {
 
   after(triggerCalendarSyncForCurrentUser);
 
-  const [seriesDetail, meetings, customerData, internalProfiles, dealData, stakeholderData] = await Promise.all([
+  const [seriesDetail, meetings, internalProfiles] = await Promise.all([
     getMeetingSeriesDetail(seriesId),
     getMeetingsWithItems(seriesId),
-    getStandupCustomerData(),
     getInternalProfiles(),
+  ]);
+
+  if (!seriesDetail) notFound();
+
+  const teamMembers = internalProfiles.map((p: any) => ({
+    id: p.id,
+    fullName: p.full_name,
+    avatarUrl: p.avatar_url,
+    email: p.email,
+  }));
+
+  // ── Account 360 branch ───────────────────────────────────
+  if (seriesDetail.type === "account_360") {
+    if (!seriesDetail.customer_id) notFound();
+
+    const snapshot = await getAccount360Snapshot(seriesDetail.customer_id);
+    if (!snapshot) notFound();
+
+    return (
+      <Account360Dashboard
+        series={seriesDetail}
+        meetings={meetings}
+        snapshot={snapshot}
+        currentUserId={currentUser.id}
+        teamMembers={teamMembers}
+      />
+    );
+  }
+
+  // ── Standup / 1:1 branch (existing behavior) ─────────────
+  // Verify current user is a participant — these types are participant-gated.
+  const isParticipant = seriesDetail.participants.some((p: any) => p.id === currentUser.id);
+  if (!isParticipant) redirect("/meetings");
+
+  const [customerData, dealData, stakeholderData] = await Promise.all([
+    getStandupCustomerData(),
     getStandupDealData(),
     getStandupStakeholderData(),
   ]);
@@ -67,19 +110,6 @@ export default async function MeetingDetailPage({ params }: Props) {
   } catch {
     // non-critical
   }
-
-  if (!seriesDetail) notFound();
-
-  // Verify current user is a participant
-  const isParticipant = seriesDetail.participants.some((p: any) => p.id === currentUser.id);
-  if (!isParticipant) redirect("/meetings");
-
-  const teamMembers = internalProfiles.map((p: any) => ({
-    id: p.id,
-    fullName: p.full_name,
-    avatarUrl: p.avatar_url,
-    email: p.email,
-  }));
 
   return (
     <StandupDashboard

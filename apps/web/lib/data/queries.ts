@@ -1167,6 +1167,59 @@ export async function getFullAssessmentData(siteId: string) {
   };
 }
 
+// ─── Discovery Workspace ────────────────────────────────────
+
+/** Get section statuses for an assessment, with assignee profile info. */
+export async function getSectionStatusesForAssessment(assessmentId: string | undefined) {
+  if (!assessmentId) return [];
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "section_statuses")
+    .select("*, assignee:profiles!section_statuses_assignee_id_fkey(id, full_name, avatar_url)")
+    .eq("assessment_id", assessmentId)
+    .order("created_at", { ascending: true });
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/** Get active output sharing permissions for a site. */
+export async function getOutputSharingForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "output_sharing_permissions")
+    .select("section_key, shared_by, shared_at")
+    .eq("site_id", siteId)
+    .is("revoked_at", null);
+
+  if (error) return [];
+  return (data ?? []) as { section_key: string; shared_by: string; shared_at: string }[];
+}
+
+/** Get information requests for a site, with requester and assignee profiles. */
+export async function getInformationRequestsForSite(siteId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await fromTable(admin, "information_requests")
+    .select("*, requester:profiles!information_requests_requested_by_fkey(id, full_name, avatar_url), assignee:profiles!information_requests_assigned_to_fkey(id, full_name, avatar_url)")
+    .eq("site_id", siteId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
+/** Get comments for an information request thread. */
+export async function getCommentsForInfoRequest(requestId: string) {
+  const admin = createSupabaseAdmin();
+  const { data, error } = await admin
+    .from("comments")
+    .select("*, author:profiles!comments_author_id_fkey(id, full_name, avatar_url)")
+    .eq("entity_type", "info_request" as any)
+    .eq("entity_id", requestId)
+    .order("created_at", { ascending: true });
+
+  if (error) return [];
+  return (data ?? []) as any[];
+}
+
 // ─── Search ─────────────────────────────────────────────────
 
 export async function searchAll(query: string) {
@@ -1532,4 +1585,99 @@ export async function getBusinessUnits(customerId: string): Promise<BusinessUnit
 
   if (error) throw error;
   return (data ?? []) as BusinessUnit[];
+}
+
+// ─── Activity Feed ─────────────────────────────────────────
+
+/**
+ * Get recent activity for a single site.
+ * Customer view filters to customer_visible = true.
+ */
+export async function getActivityForSite(
+  siteId: string,
+  limit = 20,
+  isInternal = true
+) {
+  const supabase = createSupabaseAdmin();
+  let query = fromTable(supabase, "activity_log")
+    .select("*, actor:profiles!activity_log_actor_id_fkey(full_name, avatar_url)")
+    .eq("site_id", siteId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (!isInternal) {
+    query = query.eq("customer_visible", true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Get recent activity across all sites for a customer.
+ * Customer view filters to customer_visible = true.
+ */
+export async function getActivityForCustomer(
+  customerId: string,
+  limit = 30,
+  isInternal = true
+) {
+  const supabase = createSupabaseAdmin();
+  let query = fromTable(supabase, "activity_log")
+    .select("*, actor:profiles!activity_log_actor_id_fkey(full_name, avatar_url), site:sites!activity_log_site_id_fkey(name)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (!isInternal) {
+    query = query.eq("customer_visible", true);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Get portfolio-wide activity for a tenant with optional filters.
+ */
+export async function getActivityForPortfolio(
+  tenantId: string,
+  filters?: {
+    customerId?: string;
+    entityType?: string;
+    actorId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+  limit = 50,
+  offset = 0
+) {
+  const supabase = createSupabaseAdmin();
+  let query = fromTable(supabase, "activity_log")
+    .select("*, actor:profiles!activity_log_actor_id_fkey(full_name, avatar_url), site:sites!activity_log_site_id_fkey(name), customer:customers!activity_log_customer_id_fkey(name)")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (filters?.customerId) {
+    query = query.eq("customer_id", filters.customerId);
+  }
+  if (filters?.entityType) {
+    query = query.eq("entity_type", filters.entityType);
+  }
+  if (filters?.actorId) {
+    query = query.eq("actor_id", filters.actorId);
+  }
+  if (filters?.dateFrom) {
+    query = query.gte("created_at", filters.dateFrom);
+  }
+  if (filters?.dateTo) {
+    query = query.lte("created_at", filters.dateTo);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
 }

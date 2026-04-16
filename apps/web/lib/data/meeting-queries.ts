@@ -20,18 +20,29 @@ const fromTable = (sb: ReturnType<typeof createSupabaseAdmin>, table: string) =>
 export async function getMeetingSeries(profileId: string) {
   const supabase = createSupabaseAdmin();
 
-  // Get series IDs where user is a participant
+  // Get series IDs where user is a participant (covers standup / 1:1)
   const { data: participantRows } = await fromTable(supabase, "meeting_participants")
     .select("series_id")
     .eq("profile_id", profileId);
 
-  if (!participantRows || participantRows.length === 0) return [];
+  const participantSeriesIds = new Set<string>(
+    (participantRows ?? []).map((r: any) => r.series_id),
+  );
 
-  const seriesIds = participantRows.map((r: any) => r.series_id);
+  // Account 360 series are visible to all internal users — fetch those too.
+  const { data: a360Rows } = await fromTable(supabase, "meeting_series")
+    .select("id")
+    .eq("type", "account_360");
+
+  for (const r of (a360Rows ?? []) as any[]) participantSeriesIds.add(r.id);
+
+  if (participantSeriesIds.size === 0) return [];
+
+  const seriesIds = [...participantSeriesIds];
 
   // Get series with participants
   const { data: seriesList, error } = await fromTable(supabase, "meeting_series")
-    .select("*")
+    .select("*, customer:customers(id, name, slug)")
     .in("id", seriesIds)
     .order("updated_at", { ascending: false });
 
@@ -125,7 +136,8 @@ export async function getMeetingsWithItems(seriesId: string, limit = 10) {
 
   const { data: items } = await fromTable(supabase, "meeting_items")
     .select(`
-      *,
+      id, meeting_id, type, body, section, customer_id, site_id,
+      author_id, assignee_id, due_date, completed, task_id, sort_order, created_at,
       author:profiles!meeting_items_author_id_fkey(id, full_name, avatar_url),
       assignee:profiles!meeting_items_assignee_id_fkey(id, full_name, avatar_url),
       customer:customers(id, name, slug)

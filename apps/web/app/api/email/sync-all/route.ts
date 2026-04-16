@@ -23,14 +23,35 @@ export async function POST(req: NextRequest) {
 
     const supabase = createSupabaseAdmin();
 
-    // Get all users with Google tokens
-    const { data: tokens } = await (supabase as any)
+    // Get all users with Google tokens, then restrict to @crossnokaye.com
+    // addresses. We cannot join auth.users from PostgREST directly, so the
+    // filter happens in two passes: (1) pull candidate user_ids, (2) look up
+    // their auth.users.email via the admin API and drop any non-CK addresses.
+    const { data: candidateTokens } = await (supabase as any)
       .from("user_google_tokens")
       .select("user_id");
 
-    if (!tokens || tokens.length === 0) {
+    if (!candidateTokens || candidateTokens.length === 0) {
       return NextResponse.json({ error: "No users with Google tokens" }, { status: 404 });
     }
+
+    const ckTokens: { user_id: string }[] = [];
+    for (const t of candidateTokens as { user_id: string }[]) {
+      const { data: userRes } = await supabase.auth.admin.getUserById(t.user_id);
+      const email = userRes?.user?.email?.toLowerCase();
+      if (email && email.endsWith("@crossnokaye.com")) {
+        ckTokens.push(t);
+      }
+    }
+
+    if (ckTokens.length === 0) {
+      return NextResponse.json(
+        { error: "No @crossnokaye.com users with Google tokens" },
+        { status: 404 },
+      );
+    }
+
+    const tokens = ckTokens;
 
     // ── Phase 1: Sync emails for all users ───────────────────
     const results: Array<{ userId: string; synced?: number; error?: string }> = [];

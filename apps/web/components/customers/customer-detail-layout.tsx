@@ -21,6 +21,7 @@ import type { AssignableUser, AssignableSite } from "../tasks/inline-task-input"
 import { CustomerTasksTable } from "../tasks/customer-tasks-table";
 import { SitesTable } from "../sites/sites-table";
 import { BusinessUnitsManager } from "./business-units-manager";
+import { ActivityFeed } from "../activity/activity-feed";
 
 // ── Lazy-loaded heavy components (only loaded when their tab is active) ──
 const loadingSpinner = () => (
@@ -176,6 +177,7 @@ interface CustomerDetailLayoutProps {
   businessUnits?: { id: string; name: string; slug: string }[];
   buyingTriggers?: any[];
   accountObjections?: any[];
+  customerActivity?: any[];
 }
 
 const STORAGE_KEY = "atlas-sites-panel-collapsed";
@@ -210,6 +212,7 @@ export function CustomerDetailLayout({
   businessUnits = [],
   buyingTriggers = [],
   accountObjections = [],
+  customerActivity = [],
 }: CustomerDetailLayoutProps) {
   const [sitesCollapsed, setSitesCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -762,6 +765,16 @@ export function CustomerDetailLayout({
             successPlan: successPlanTab,
             sitesTasks: sitesTasksTab,
             map: mapTab,
+            activity: (
+              <div className="p-6 overflow-y-auto max-h-[calc(100vh-240px)]">
+                <ActivityFeed
+                  activities={customerActivity}
+                  variant="full"
+                  showSiteName={true}
+                  emptyMessage="No activity recorded yet"
+                />
+              </div>
+            ),
           }}
         </AccountPlanTabs>
       </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { after } from "next/server";
-import { getCustomersWithAccountData, getAllFlaggedIssues, getAllOpenTasks } from "../../lib/data/queries";
+import { getCustomersWithAccountData, getAllFlaggedIssues, getAllOpenTasks, getActivityForPortfolio } from "../../lib/data/queries";
 import type { CustomerListItem } from "../../lib/data/queries";
 import { getStandupDealData, getUpcomingMeetingsAllCustomers } from "../../lib/data/meeting-queries";
 import type { DashboardMeeting } from "../../lib/data/meeting-queries";
@@ -9,6 +9,7 @@ import { triggerCalendarSyncForCurrentUser } from "../../lib/calendar/trigger-sy
 import { StatusBadge } from "../../components/ui/badge";
 import { Avatar } from "../../components/ui/avatar";
 import { DashboardMeetingsClient } from "../../components/dashboard/dashboard-meetings";
+import { ActivityFeed } from "../../components/activity/activity-feed";
 import {
   Building2,
   MapPin,
@@ -22,6 +23,7 @@ import {
   Users,
   ExternalLink,
   Clock,
+  Activity,
 } from "lucide-react";
 
 interface StandupDeal {
@@ -46,6 +48,7 @@ export default async function DashboardPage() {
   let openTasks: Awaited<ReturnType<typeof getAllOpenTasks>> = [];
   let openIssues: Awaited<ReturnType<typeof getAllFlaggedIssues>> = [];
   let currentUser: Awaited<ReturnType<typeof getCurrentUser>> = null;
+  let recentActivity: any[] = [];
 
   try {
     [customersData, dealData, upcomingMeetings, openTasks, openIssues, currentUser] = await Promise.all([
@@ -58,6 +61,15 @@ export default async function DashboardPage() {
     ]);
   } catch {
     // If Supabase is not connected, show empty state
+  }
+
+  // Fetch portfolio activity (needs tenantId from currentUser)
+  if (currentUser?.sessionClaims?.tenantId) {
+    try {
+      recentActivity = await getActivityForPortfolio(currentUser.sessionClaims.tenantId, undefined, 8);
+    } catch {
+      // Non-critical
+    }
   }
 
   after(triggerCalendarSyncForCurrentUser);
@@ -225,6 +237,29 @@ export default async function DashboardPage() {
                   );
                 })
               )}
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-card">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5 text-blue-500" />
+                <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Activity</h2>
+              </div>
+              <Link href="/activity" className="text-[11px] text-brand-green font-medium hover:underline">
+                View all
+              </Link>
+            </div>
+            <div className="px-4 py-3">
+              <ActivityFeed
+                activities={recentActivity}
+                variant="compact"
+                showCustomerName={true}
+                showSiteName={true}
+                maxItems={8}
+                viewAllHref="/activity"
+              />
             </div>
           </div>
         </div>

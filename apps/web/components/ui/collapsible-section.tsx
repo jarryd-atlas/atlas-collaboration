@@ -13,6 +13,8 @@ interface CollapsibleSectionProps {
   children: React.ReactNode;
   sourceDocuments?: Array<{ file_name: string }>;
   badge?: string;
+  /** Rich status badge (e.g., section status dropdown + assignee) */
+  statusBadge?: React.ReactNode;
 }
 
 export function CollapsibleSection({
@@ -25,6 +27,7 @@ export function CollapsibleSection({
   children,
   sourceDocuments,
   badge,
+  statusBadge,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -35,16 +38,20 @@ export function CollapsibleSection({
 
   return (
     <div
-      className={`border rounded-xl overflow-hidden transition-colors ${
+      className={`border rounded-xl transition-colors ${
         highlighted
           ? "border-green-300 ring-1 ring-green-200"
           : "border-gray-200"
       }`}
     >
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50/50 hover:bg-gray-50 transition-colors"
+      <div
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer"
+        onClick={(e) => {
+          // Only toggle if the click target is not inside the statusBadge area
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-status-badge]")) return;
+          setIsOpen(!isOpen);
+        }}
       >
         <div className="flex items-center gap-2">
           {icon && <span className="text-sm">{icon}</span>}
@@ -66,12 +73,19 @@ export function CollapsibleSection({
             </span>
           )}
         </div>
-        <ChevronDown
-          className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
-      </button>
+        <div className="flex items-center gap-2">
+          {statusBadge && (
+            <div data-status-badge>
+              {statusBadge}
+            </div>
+          )}
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
+        </div>
+      </div>
       {isOpen && (
-        <div className="px-4 py-4 bg-white">
+        <div className="px-4 py-4 bg-white rounded-b-xl">
           {children}
         </div>
       )}

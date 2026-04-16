@@ -53,6 +53,27 @@ export const CLOSED_STAGE_IDS = new Set([
 export const RENEWAL_PIPELINE_ID = "7c3189ce-7431-4b27-a546-6e095c0f366a";
 export const NEW_BUSINESS_PIPELINE_ID = "f95a95c9-99c3-4b7f-a250-1303e9288649";
 
+/**
+ * Ordered New Business funnel stages, top-of-funnel → bottom.
+ * Stalled (99) and Lost (100) are placed after Won to appear at the bottom of the funnel.
+ * Used by monthly funnel snapshots to preserve display order.
+ */
+export const NEW_BUSINESS_STAGE_ORDER: { id: string; order: number }[] = [
+  { id: "1188492915", order: 1 },   // 01 - Intro/Contact
+  { id: "250564613",  order: 2 },   // 02 - Discovery
+  { id: "1188492916", order: 3 },   // 03 - Demonstration
+  { id: "250564614",  order: 4 },   // 04 - Data Collection
+  { id: "1240422453", order: 5 },   // 05 - Qualified
+  { id: "1188492917", order: 6 },   // 06 - Energy Value Assessment
+  { id: "1188492918", order: 7 },   // 07 - Executive Presentation
+  { id: "1188492919", order: 8 },   // 08 - M&V Alignment
+  { id: "6b3b22f8-8bf4-40af-91e0-61bd1b0bfc63", order: 9 },  // 09 - In Consideration
+  { id: "250564615",  order: 10 },  // 10 - Out for Signature
+  { id: "4c6e00f8-890b-4a2d-8f22-7eb9b7227e00", order: 11 }, // 11 - Won
+  { id: "10d2d0d7-556b-4fb9-aa24-12b0fd0159a6", order: 12 }, // 99 - Stalled
+  { id: "5b2cab04-4ab5-4249-8487-0b3834d444c5", order: 13 }, // 100 - Lost
+];
+
 /** Determine deal type — prefer pipeline ID, fall back to stage ID */
 export function getDealType(dealStageId: string, pipelineId?: string): "renewal" | "new_business" {
   if (pipelineId) {

@@ -8,6 +8,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { processTranscriptionJob } from "./jobs/transcribe.js";
+import { processDealFunnelSnapshot } from "./jobs/snapshot-deal-funnel.js";
+import { processSyncAllEmailsJob } from "./jobs/sync-emails.js";
 
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
 const MAX_ATTEMPTS = 3;
@@ -65,6 +67,12 @@ async function pollForJobs() {
     switch (job.type) {
       case "transcribe_voice_note":
         await processTranscriptionJob(supabase, job.payload);
+        break;
+      case "snapshot_deal_funnel":
+        await processDealFunnelSnapshot(supabase, job.payload);
+        break;
+      case "sync_all_emails":
+        await processSyncAllEmailsJob(supabase, job.payload);
         break;
       default:
         throw new Error(`Unknown job type: ${job.type}`);

@@ -11,6 +11,8 @@ import type {
   EnergyData,
   OperationsData,
   EfficiencyData,
+  EngineRoomData,
+  TemperatureZoneData,
 } from "../baseline-form/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,6 +56,19 @@ async function logChange(
   changes: Record<string, unknown>
 ) {
   try {
+    // Look up customer_id for the site
+    let customerId: string | null = null;
+    try {
+      const { data: site } = await admin
+        .from("sites")
+        .select("customer_id")
+        .eq("id", session.site_id)
+        .single();
+      customerId = (site as any)?.customer_id ?? null;
+    } catch {
+      // Non-critical
+    }
+
     await fromTable(admin, "activity_log").insert({
       tenant_id: session.tenant_id,
       actor_id: profileId,
@@ -61,6 +76,9 @@ async function logChange(
       entity_id: session.site_id,
       action,
       changes,
+      site_id: session.site_id,
+      customer_id: customerId,
+      customer_visible: false,
     });
   } catch {
     // Non-critical — don't fail the save
@@ -240,7 +258,7 @@ export async function upsertBaselineEquipment(
     if (!session) return { error: "Invalid or expired form link" };
 
     const admin = createSupabaseAdmin();
-    const record = {
+    const record: Record<string, unknown> = {
       assessment_id: session.assessment_id,
       site_id: session.site_id,
       tenant_id: session.tenant_id,
@@ -254,6 +272,8 @@ export async function upsertBaselineEquipment(
       source: "baseline_form",
       contributed_by: profileId,
       updated_at: new Date().toISOString(),
+      engine_room_id: equipment.engine_room_id ?? null,
+      zone_id: equipment.zone_id ?? null,
     };
 
     if (equipment.id) {
@@ -302,6 +322,240 @@ export async function deleteBaselineEquipment(token: string, profileId: string, 
       table: "site_equipment",
       action: "deleted",
       record_id: equipmentId,
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Engine Rooms
+// ═══════════════════════════════════════════════════════════════
+
+export async function upsertBaselineEngineRoom(
+  token: string,
+  profileId: string,
+  engineRoom: EngineRoomData
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const record = {
+      assessment_id: session.assessment_id,
+      site_id: session.site_id,
+      tenant_id: session.tenant_id,
+      name: engineRoom.name || "Engine Room",
+      sort_order: engineRoom.sort_order ?? 0,
+      system_type: engineRoom.system_type || null,
+      refrigerant: engineRoom.refrigerant || null,
+      control_system: engineRoom.control_system || null,
+      control_hardware: engineRoom.control_hardware || null,
+      micro_panel_type: engineRoom.micro_panel_type || null,
+      suction_pressure_typical: engineRoom.suction_pressure_typical,
+      discharge_pressure_typical: engineRoom.discharge_pressure_typical,
+      connected_to_engine_room_id: engineRoom.connected_to_engine_room_id || null,
+      shared_controls: engineRoom.shared_controls ?? false,
+      notes: engineRoom.notes || null,
+      last_edited_by: profileId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (engineRoom.id) {
+      const { error } = await fromTable(admin, "site_engine_rooms")
+        .update(record)
+        .eq("id", engineRoom.id);
+      if (error) return { error: error.message };
+      await logChange(admin, session, profileId, "baseline_form_update", {
+        table: "site_engine_rooms",
+        record_id: engineRoom.id,
+        name: engineRoom.name,
+      });
+      return { id: engineRoom.id };
+    } else {
+      const { data, error } = await fromTable(admin, "site_engine_rooms")
+        .insert(record)
+        .select("id")
+        .single();
+      if (error) return { error: error.message };
+      await logChange(admin, session, profileId, "baseline_form_update", {
+        table: "site_engine_rooms",
+        action: "created",
+        name: engineRoom.name,
+      });
+      return { id: data.id };
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function deleteBaselineEngineRoom(
+  token: string,
+  profileId: string,
+  engineRoomId: string
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+
+    // Clear engine_room_id from associated equipment (FK will SET NULL, but be explicit)
+    await fromTable(admin, "site_equipment")
+      .update({ engine_room_id: null, updated_at: new Date().toISOString() })
+      .eq("engine_room_id", engineRoomId);
+
+    // Clear engine_room_id from associated zones
+    await fromTable(admin, "site_temperature_zones")
+      .update({ engine_room_id: null, updated_at: new Date().toISOString() })
+      .eq("engine_room_id", engineRoomId);
+
+    const { error } = await fromTable(admin, "site_engine_rooms")
+      .delete()
+      .eq("id", engineRoomId)
+      .eq("assessment_id", session.assessment_id);
+    if (error) return { error: error.message };
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_engine_rooms",
+      action: "deleted",
+      record_id: engineRoomId,
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Temperature Zones
+// ═══════════════════════════════════════════════════════════════
+
+export async function upsertBaselineTemperatureZone(
+  token: string,
+  profileId: string,
+  zone: TemperatureZoneData
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const record = {
+      assessment_id: session.assessment_id,
+      site_id: session.site_id,
+      tenant_id: session.tenant_id,
+      engine_room_id: zone.engine_room_id || null,
+      name: zone.name || "Zone",
+      sort_order: zone.sort_order ?? 0,
+      zone_type: zone.zone_type || null,
+      target_temp_f: zone.target_temp_f,
+      length_ft: zone.length_ft,
+      width_ft: zone.width_ft,
+      height_ft: zone.height_ft,
+      num_doors: zone.num_doors,
+      door_type: zone.door_type || null,
+      insulation_thickness_in: zone.insulation_thickness_in,
+      insulation_condition: zone.insulation_condition || null,
+      notes: zone.notes || null,
+      last_edited_by: profileId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (zone.id) {
+      const { error } = await fromTable(admin, "site_temperature_zones")
+        .update(record)
+        .eq("id", zone.id);
+      if (error) return { error: error.message };
+      await logChange(admin, session, profileId, "baseline_form_update", {
+        table: "site_temperature_zones",
+        record_id: zone.id,
+        name: zone.name,
+      });
+      return { id: zone.id };
+    } else {
+      const { data, error } = await fromTable(admin, "site_temperature_zones")
+        .insert(record)
+        .select("id")
+        .single();
+      if (error) return { error: error.message };
+      await logChange(admin, session, profileId, "baseline_form_update", {
+        table: "site_temperature_zones",
+        action: "created",
+        name: zone.name,
+      });
+      return { id: data.id };
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+export async function deleteBaselineTemperatureZone(
+  token: string,
+  profileId: string,
+  zoneId: string
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+
+    // Clear zone_id from associated evaporators
+    await fromTable(admin, "site_equipment")
+      .update({ zone_id: null, updated_at: new Date().toISOString() })
+      .eq("zone_id", zoneId);
+
+    const { error } = await fromTable(admin, "site_temperature_zones")
+      .delete()
+      .eq("id", zoneId)
+      .eq("assessment_id", session.assessment_id);
+    if (error) return { error: error.message };
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_temperature_zones",
+      action: "deleted",
+      record_id: zoneId,
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Unexpected error" };
+  }
+}
+
+/** Update the engine_room_id and/or zone_id on an equipment record */
+export async function updateEquipmentAssignment(
+  token: string,
+  profileId: string,
+  equipmentId: string,
+  engineRoomId: string | null,
+  zoneId: string | null
+) {
+  try {
+    const session = await validateToken(token);
+    if (!session) return { error: "Invalid or expired form link" };
+
+    const admin = createSupabaseAdmin();
+    const { error } = await fromTable(admin, "site_equipment")
+      .update({
+        engine_room_id: engineRoomId,
+        zone_id: zoneId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", equipmentId)
+      .eq("assessment_id", session.assessment_id);
+    if (error) return { error: error.message };
+
+    await logChange(admin, session, profileId, "baseline_form_update", {
+      table: "site_equipment",
+      action: "reassigned",
+      record_id: equipmentId,
+      engine_room_id: engineRoomId,
+      zone_id: zoneId,
     });
     return { success: true };
   } catch (err) {
@@ -844,7 +1098,7 @@ export async function getBaselineFormData(token: string) {
       .single();
 
     // Load existing baseline data in parallel
-    const [contacts, equipment, operationalParams, touSchedule, operations, laborBaseline, contractors, networkDiagnostics, networkTestResults, attachments] =
+    const [contacts, equipment, operationalParams, touSchedule, operations, laborBaseline, contractors, networkDiagnostics, networkTestResults, attachments, engineRooms, temperatureZones] =
       await Promise.all([
         fromTable(admin, "site_contacts")
           .select("*")
@@ -890,6 +1144,18 @@ export async function getBaselineFormData(token: string) {
           .eq("entity_type", "site")
           .eq("entity_id", interview.site_id)
           .order("created_at", { ascending: false }),
+        fromTable(admin, "site_engine_rooms")
+          .select("*")
+          .eq("assessment_id", interview.assessment_id)
+          .order("sort_order", { ascending: true })
+          .then((res: { data: unknown[] | null }) => res)
+          .catch(() => ({ data: [] })),
+        fromTable(admin, "site_temperature_zones")
+          .select("*")
+          .eq("assessment_id", interview.assessment_id)
+          .order("sort_order", { ascending: true })
+          .then((res: { data: unknown[] | null }) => res)
+          .catch(() => ({ data: [] })),
       ]);
 
     // Natural sort helper: C-1, C-2, ... C-10 (not C-1, C-10, C-2)
@@ -926,6 +1192,8 @@ export async function getBaselineFormData(token: string) {
       networkDiagnostics: networkDiagnostics.data ?? null,
       networkTestResults: networkTestResults.data ?? [],
       attachments: attachments.data ?? [],
+      engineRooms: engineRooms.data ?? [],
+      temperatureZones: temperatureZones.data ?? [],
     };
   } catch {
     return null;

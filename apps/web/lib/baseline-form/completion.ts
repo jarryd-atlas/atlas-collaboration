@@ -11,6 +11,8 @@ export function getSectionCompletion(
       return getContactCompletion(state);
     case "facility":
       return getFacilityCompletion(state);
+    case "layout":
+      return getLayoutCompletion(state);
     case "system":
       return getSystemCompletion(state);
     case "network":
@@ -38,7 +40,7 @@ export function getSectionCompletion(
 /** Calculate overall form completion */
 export function getOverallCompletion(state: BaselineFormState): number {
   const dataSections = BASELINE_FORM_SECTIONS.filter(
-    (s) => s !== "review" && s !== "documents" && s !== "contractors"
+    (s) => s !== "review" && s !== "documents" && s !== "contractors" && s !== "layout"
   );
   const total = dataSections.reduce(
     (sum, section) => sum + getSectionCompletion(section, state),
@@ -81,7 +83,39 @@ function getFacilityCompletion(state: BaselineFormState): number {
   return Math.round((filled / fields.length) * 100);
 }
 
+function getLayoutCompletion(state: BaselineFormState): number {
+  // Layout is optional — 100% if no engine rooms (simple site)
+  if (state.engineRooms.length === 0) return 100;
+
+  // Check each ER has name + system_type + refrigerant
+  const erFields = state.engineRooms.map((er) => {
+    const checks = [
+      er.name.trim().length > 0,
+      er.system_type !== "",
+      er.refrigerant !== "",
+    ];
+    return checks.filter(Boolean).length / checks.length;
+  });
+
+  // Check each zone has name + zone_type + target_temp
+  const zoneFields = state.temperatureZones.map((z) => {
+    const checks = [
+      z.name.trim().length > 0,
+      z.zone_type !== "",
+      z.target_temp_f !== null,
+    ];
+    return checks.filter(Boolean).length / checks.length;
+  });
+
+  const allItems = [...erFields, ...zoneFields];
+  if (allItems.length === 0) return 100;
+  return Math.round((allItems.reduce((a, b) => a + b, 0) / allItems.length) * 100);
+}
+
 function getSystemCompletion(state: BaselineFormState): number {
+  // If engine rooms exist, system config is per-ER — site-level is auto-complete
+  if (state.engineRooms.length > 0) return 100;
+
   const s = state.system;
   const fields = [
     s.system_type !== "",
@@ -116,6 +150,19 @@ function getEnergyCompletion(state: BaselineFormState): number {
 }
 
 function getOperationsCompletion(state: BaselineFormState): number {
+  // If engine rooms exist, pressures are per-ER — check ER-level pressures
+  if (state.engineRooms.length > 0) {
+    const erPressures = state.engineRooms.map((er) => {
+      const checks = [
+        er.suction_pressure_typical !== null,
+        er.discharge_pressure_typical !== null,
+      ];
+      return checks.filter(Boolean).length / checks.length;
+    });
+    const avg = erPressures.reduce((a, b) => a + b, 0) / erPressures.length;
+    return Math.round(avg * 100);
+  }
+
   const o = state.operations;
   const fields = [
     o.suction_pressure_typical !== null,

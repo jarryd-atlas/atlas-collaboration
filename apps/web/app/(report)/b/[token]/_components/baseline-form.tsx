@@ -27,6 +27,8 @@ import type {
   EquipmentData,
   HeadcountEntry,
   BaselineFormSection,
+  EngineRoomData,
+  TemperatureZoneData,
 } from "../../../../../lib/baseline-form/types";
 import {
   BASELINE_FORM_SECTIONS,
@@ -41,6 +43,8 @@ import {
   emptyHeadcount,
   createDefaultEquipment,
   duplicateEquipment,
+  createDefaultEngineRoom,
+  createDefaultZone,
 } from "../../../../../lib/baseline-form/defaults";
 import { getAllSectionCompletions } from "../../../../../lib/baseline-form/completion";
 import {
@@ -59,12 +63,17 @@ import {
   deleteNetworkTestResult,
   updateBaselineFormProgress,
   submitBaselineForm,
+  upsertBaselineEngineRoom,
+  deleteBaselineEngineRoom,
+  upsertBaselineTemperatureZone,
+  deleteBaselineTemperatureZone,
 } from "../../../../../lib/actions/baseline-form";
 import type { EquipmentCategory } from "@repo/shared/constants";
 
 import { FormProgress } from "./form-progress";
 import { SectionShell } from "./section-shell";
 import { SaveIndicator } from "./save-indicator";
+import { LayoutSection } from "./sections/layout-section";
 import { SaveToast } from "./save-toast";
 import type { SaveToastData } from "./save-toast";
 import { useBaselineDraft } from "./use-baseline-draft";
@@ -280,6 +289,117 @@ function formReducer(
         contractors: state.contractors.filter((_, i) => i !== action.index),
       };
 
+    // ─── Engine Room actions ──────────────────────────────────
+
+    case "SET_ENGINE_ROOMS":
+      return { ...state, engineRooms: action.engineRooms };
+
+    case "ADD_ENGINE_ROOM": {
+      const newER = createDefaultEngineRoom(state, state.engineRooms.length);
+      return {
+        ...state,
+        engineRooms: [...state.engineRooms, newER],
+      };
+    }
+
+    case "UPDATE_ENGINE_ROOM":
+      return {
+        ...state,
+        engineRooms: state.engineRooms.map((er, i) =>
+          i === action.index ? { ...er, ...action.engineRoom } : er
+        ),
+      };
+
+    case "REMOVE_ENGINE_ROOM": {
+      const removedER = state.engineRooms[action.index];
+      const removedERId = removedER?.id;
+      return {
+        ...state,
+        engineRooms: state.engineRooms.filter((_, i) => i !== action.index),
+        // Clear engine_room_id on associated equipment
+        equipment: removedERId
+          ? state.equipment.map((e) =>
+              e.engine_room_id === removedERId
+                ? { ...e, engine_room_id: null }
+                : e
+            )
+          : state.equipment,
+        // Clear engine_room_id on associated zones
+        temperatureZones: removedERId
+          ? state.temperatureZones.map((z) =>
+              z.engine_room_id === removedERId
+                ? { ...z, engine_room_id: null }
+                : z
+            )
+          : state.temperatureZones,
+      };
+    }
+
+    // ─── Temperature Zone actions ──────────────────────────────
+
+    case "SET_TEMPERATURE_ZONES":
+      return { ...state, temperatureZones: action.zones };
+
+    case "ADD_TEMPERATURE_ZONE": {
+      const newZone = createDefaultZone(
+        action.engineRoomId ?? null,
+        state.temperatureZones.length
+      );
+      return {
+        ...state,
+        temperatureZones: [...state.temperatureZones, newZone],
+      };
+    }
+
+    case "UPDATE_TEMPERATURE_ZONE":
+      return {
+        ...state,
+        temperatureZones: state.temperatureZones.map((z, i) =>
+          i === action.index ? { ...z, ...action.zone } : z
+        ),
+      };
+
+    case "REMOVE_TEMPERATURE_ZONE": {
+      const removedZone = state.temperatureZones[action.index];
+      const removedZoneId = removedZone?.id;
+      return {
+        ...state,
+        temperatureZones: state.temperatureZones.filter(
+          (_, i) => i !== action.index
+        ),
+        // Clear zone_id on associated evaporators
+        equipment: removedZoneId
+          ? state.equipment.map((e) =>
+              e.zone_id === removedZoneId ? { ...e, zone_id: null } : e
+            )
+          : state.equipment,
+      };
+    }
+
+    // ─── Promote site-level config into first engine room ─────
+
+    case "PROMOTE_TO_ENGINE_ROOM": {
+      if (state.engineRooms.length > 0) return state; // Already has ERs
+      const firstER: EngineRoomData = {
+        name: "Engine Room 1",
+        sort_order: 0,
+        system_type: state.system.system_type,
+        refrigerant: state.system.refrigerant,
+        control_system: state.system.control_system,
+        control_hardware: state.system.control_hardware,
+        micro_panel_type: state.system.micro_panel_type,
+        suction_pressure_typical: state.operations.suction_pressure_typical,
+        discharge_pressure_typical: state.operations.discharge_pressure_typical,
+        connected_to_engine_room_id: null,
+        shared_controls: false,
+        notes: "",
+      };
+      return {
+        ...state,
+        engineRooms: [firstER],
+      };
+    }
+
     case "SET_SECTION":
       return {
         ...state,
@@ -339,7 +459,7 @@ function hydrateState(data: FormDataResult): BaselineFormState {
     has_sub_metering: (op.has_sub_metering as boolean) ?? false,
   };
 
-  // Map equipment
+  // Map equipment (including engine_room_id and zone_id)
   const equipment: EquipmentData[] = (data.equipment ?? []).map(
     (e: Record<string, unknown>) => ({
       id: e.id as string,
@@ -350,6 +470,47 @@ function hydrateState(data: FormDataResult): BaselineFormState {
       quantity: (e.quantity as number) ?? 1,
       specs: (e.specs as Record<string, unknown>) ?? {},
       notes: (e.notes as string) ?? "",
+      engine_room_id: (e.engine_room_id as string) ?? null,
+      zone_id: (e.zone_id as string) ?? null,
+    })
+  );
+
+  // Map engine rooms
+  const engineRooms: EngineRoomData[] = ((data as any).engineRooms ?? []).map(
+    (er: Record<string, unknown>) => ({
+      id: er.id as string,
+      name: (er.name as string) ?? "",
+      sort_order: (er.sort_order as number) ?? 0,
+      system_type: (er.system_type as EngineRoomData["system_type"]) ?? "",
+      refrigerant: (er.refrigerant as string) ?? "",
+      control_system: (er.control_system as string) ?? "",
+      control_hardware: (er.control_hardware as string) ?? "",
+      micro_panel_type: (er.micro_panel_type as string) ?? "",
+      suction_pressure_typical: (er.suction_pressure_typical as number) ?? null,
+      discharge_pressure_typical: (er.discharge_pressure_typical as number) ?? null,
+      connected_to_engine_room_id: (er.connected_to_engine_room_id as string) ?? null,
+      shared_controls: (er.shared_controls as boolean) ?? false,
+      notes: (er.notes as string) ?? "",
+    })
+  );
+
+  // Map temperature zones
+  const temperatureZones: TemperatureZoneData[] = ((data as any).temperatureZones ?? []).map(
+    (z: Record<string, unknown>) => ({
+      id: z.id as string,
+      engine_room_id: (z.engine_room_id as string) ?? null,
+      name: (z.name as string) ?? "",
+      sort_order: (z.sort_order as number) ?? 0,
+      zone_type: (z.zone_type as TemperatureZoneData["zone_type"]) ?? "",
+      target_temp_f: (z.target_temp_f as number) ?? null,
+      length_ft: (z.length_ft as number) ?? null,
+      width_ft: (z.width_ft as number) ?? null,
+      height_ft: (z.height_ft as number) ?? null,
+      num_doors: (z.num_doors as number) ?? null,
+      door_type: (z.door_type as TemperatureZoneData["door_type"]) ?? "",
+      insulation_thickness_in: (z.insulation_thickness_in as number) ?? null,
+      insulation_condition: (z.insulation_condition as TemperatureZoneData["insulation_condition"]) ?? "",
+      notes: (z.notes as string) ?? "",
     })
   );
 
@@ -481,6 +642,8 @@ function hydrateState(data: FormDataResult): BaselineFormState {
   return {
     contacts,
     facility,
+    engineRooms,
+    temperatureZones,
     system,
     network,
     equipment,
@@ -775,6 +938,35 @@ function SystemSection({
   dispatch: React.Dispatch<BaselineFormAction>;
 }) {
   const s = state.system;
+  const hasERs = state.engineRooms.length > 0;
+
+  if (hasERs) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+          <p className="text-sm text-blue-800 font-medium mb-1">
+            System configuration is per engine room
+          </p>
+          <p className="text-sm text-blue-700">
+            Since you have {state.engineRooms.length} engine room{state.engineRooms.length > 1 ? "s" : ""} defined,
+            system type, refrigerant, and controls are configured on each engine room
+            in the Facility Layout section.
+          </p>
+          <div className="mt-3 space-y-1">
+            {state.engineRooms.map((er, i) => (
+              <div key={er.id ?? i} className="text-sm text-blue-700">
+                <span className="font-medium">{er.name || `Engine Room ${i + 1}`}</span>
+                {er.system_type && <span className="text-blue-500"> — {er.system_type}{er.refrigerant ? `, ${er.refrigerant}` : ""}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="text-sm text-gray-500 italic">
+          The fields below apply as defaults and can still be filled for reference.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -3288,6 +3480,7 @@ function getSectionFingerprint(
   switch (section) {
     case "contact": return JSON.stringify(st.contacts);
     case "facility": return JSON.stringify(st.facility);
+    case "layout": return JSON.stringify({ er: st.engineRooms, tz: st.temperatureZones });
     case "system": return JSON.stringify(st.system);
     case "network": return JSON.stringify(st.network);
     case "equipment": return JSON.stringify(st.equipment);
@@ -3372,6 +3565,29 @@ export function BaselineForm({
               s.facility,
               s.system
             );
+            break;
+
+          case "layout":
+            // Save engine rooms
+            for (let i = 0; i < s.engineRooms.length; i++) {
+              const er = s.engineRooms[i]!;
+              result = await upsertBaselineEngineRoom(token, profileId, er);
+              if (result.error) break;
+              if (result.id && !er.id) {
+                dispatch({ type: "UPDATE_ENGINE_ROOM", index: i, engineRoom: { id: result.id } });
+              }
+            }
+            if (!result.error) {
+              // Save temperature zones
+              for (let i = 0; i < s.temperatureZones.length; i++) {
+                const zone = s.temperatureZones[i]!;
+                result = await upsertBaselineTemperatureZone(token, profileId, zone);
+                if (result.error) break;
+                if (result.id && !zone.id) {
+                  dispatch({ type: "UPDATE_TEMPERATURE_ZONE", index: i, zone: { id: result.id } });
+                }
+              }
+            }
             break;
 
           case "network":
@@ -3633,12 +3849,14 @@ export function BaselineForm({
       case 1:
         return <FacilitySection state={state} dispatch={dispatch} />;
       case 2:
-        return <SystemSection state={state} dispatch={dispatch} />;
+        return <LayoutSection state={state} dispatch={dispatch} token={token} profileId={profileId} />;
       case 3:
-        return <NetworkSection state={state} dispatch={dispatch} token={token} profileId={profileId} />;
+        return <SystemSection state={state} dispatch={dispatch} />;
       case 4:
+        return <NetworkSection state={state} dispatch={dispatch} token={token} profileId={profileId} />;
+      case 5:
         return <EquipmentSection state={state} dispatch={dispatch} />;
-      case 5: {
+      case 6: {
         const docAttachments: DocAttachment[] = (initialData.attachments ?? []).map(
           (a: Record<string, unknown>) => ({
             id: a.id as string,
@@ -3660,15 +3878,15 @@ export function BaselineForm({
           />
         );
       }
-      case 6:
-        return <EnergySection state={state} dispatch={dispatch} />;
       case 7:
-        return <OperationsSection state={state} dispatch={dispatch} />;
+        return <EnergySection state={state} dispatch={dispatch} />;
       case 8:
-        return <EfficiencySection state={state} dispatch={dispatch} />;
+        return <OperationsSection state={state} dispatch={dispatch} />;
       case 9:
-        return <ContractorsSection state={state} dispatch={dispatch} />;
+        return <EfficiencySection state={state} dispatch={dispatch} />;
       case 10:
+        return <ContractorsSection state={state} dispatch={dispatch} />;
+      case 11:
         return (
           <ReviewSection
             state={state}

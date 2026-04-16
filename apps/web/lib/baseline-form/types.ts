@@ -10,6 +10,10 @@ import type {
   FacilityType,
   SystemType,
   DemandResponseStatus,
+  ZoneType,
+  DoorType,
+  ConditionRating,
+  InsulationCondition,
 } from "@repo/shared/constants";
 
 // ═══════════════════════════════════════════════════════════════
@@ -19,6 +23,7 @@ import type {
 export const BASELINE_FORM_SECTIONS = [
   "contact",
   "facility",
+  "layout",
   "system",
   "network",
   "equipment",
@@ -35,6 +40,7 @@ export type BaselineFormSection = (typeof BASELINE_FORM_SECTIONS)[number];
 export const SECTION_LABELS: Record<BaselineFormSection, string> = {
   contact: "Your Info",
   facility: "Your Facility",
+  layout: "Facility Layout",
   system: "Refrigeration System",
   network: "Network & Connectivity",
   equipment: "Equipment",
@@ -49,6 +55,7 @@ export const SECTION_LABELS: Record<BaselineFormSection, string> = {
 export const SECTION_DESCRIPTIONS: Record<BaselineFormSection, string> = {
   contact: "Tell us about yourself and your team at this facility",
   facility: "Help us understand your facility and operating schedule",
+  layout: "Define engine rooms and temperature zones (optional for simple sites)",
   system: "Describe your refrigeration system configuration",
   network: "Test your internet connection and describe your network setup",
   equipment: "List your compressors, condensers, and evaporators",
@@ -100,12 +107,16 @@ export interface CompressorSpecs {
   suction_setpoint_psig: number | null;
   discharge_setpoint_psig: number | null;
   vfd_equipped: boolean;
+  year_installed?: number | null;
+  condition?: ConditionRating | "";
 }
 
 export interface CondenserSpecs {
   type: CondenserType | "";
   total_fans: number | null;
   total_hp_fan_and_pump: number | null;
+  year_installed?: number | null;
+  condition?: ConditionRating | "";
 }
 
 export interface EvaporatorSpecs {
@@ -114,12 +125,16 @@ export interface EvaporatorSpecs {
   avg_fan_hp: number | null;
   defrost_type: DefrostType | "";
   loop: RefrigerationLoop | "";
+  year_installed?: number | null;
+  condition?: ConditionRating | "";
 }
 
 export interface VesselSpecs {
   type: VesselType | "";
   capacity_gallons: number | null;
   pressure_rating: number | null;
+  year_installed?: number | null;
+  condition?: ConditionRating | "";
 }
 
 export interface EquipmentData {
@@ -130,6 +145,45 @@ export interface EquipmentData {
   model: string;
   quantity: number;
   specs: CompressorSpecs | CondenserSpecs | EvaporatorSpecs | VesselSpecs | Record<string, unknown>;
+  notes: string;
+  engine_room_id?: string | null;
+  zone_id?: string | null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Engine Room & Temperature Zone Types
+// ═══════════════════════════════════════════════════════════════
+
+export interface EngineRoomData {
+  id?: string;
+  name: string;
+  sort_order: number;
+  system_type: SystemType | "";
+  refrigerant: string;
+  control_system: string;
+  control_hardware: string;
+  micro_panel_type: string;
+  suction_pressure_typical: number | null;
+  discharge_pressure_typical: number | null;
+  connected_to_engine_room_id: string | null;
+  shared_controls: boolean;
+  notes: string;
+}
+
+export interface TemperatureZoneData {
+  id?: string;
+  engine_room_id: string | null;
+  name: string;
+  sort_order: number;
+  zone_type: ZoneType | "";
+  target_temp_f: number | null;
+  length_ft: number | null;
+  width_ft: number | null;
+  height_ft: number | null;
+  num_doors: number | null;
+  door_type: DoorType | "";
+  insulation_thickness_in: number | null;
+  insulation_condition: InsulationCondition | "";
   notes: string;
 }
 
@@ -245,6 +299,8 @@ export interface FormMeta {
 export interface BaselineFormState {
   contacts: ContactData[];
   facility: FacilityData;
+  engineRooms: EngineRoomData[];
+  temperatureZones: TemperatureZoneData[];
   system: SystemData;
   network: NetworkData;
   equipment: EquipmentData[];
@@ -298,6 +354,18 @@ export type BaselineFormAction =
   | { type: "UPDATE_CONTRACTOR"; index: number; contractor: ContractorData }
   | { type: "ADD_CONTRACTOR" }
   | { type: "REMOVE_CONTRACTOR"; index: number }
+  // Engine Room actions
+  | { type: "SET_ENGINE_ROOMS"; engineRooms: EngineRoomData[] }
+  | { type: "ADD_ENGINE_ROOM" }
+  | { type: "UPDATE_ENGINE_ROOM"; index: number; engineRoom: Partial<EngineRoomData> }
+  | { type: "REMOVE_ENGINE_ROOM"; index: number }
+  // Temperature Zone actions
+  | { type: "SET_TEMPERATURE_ZONES"; zones: TemperatureZoneData[] }
+  | { type: "ADD_TEMPERATURE_ZONE"; engineRoomId?: string }
+  | { type: "UPDATE_TEMPERATURE_ZONE"; index: number; zone: Partial<TemperatureZoneData> }
+  | { type: "REMOVE_TEMPERATURE_ZONE"; index: number }
+  // Promote site-level data into first engine room
+  | { type: "PROMOTE_TO_ENGINE_ROOM" }
   | { type: "SET_SECTION"; section: number }
   | { type: "SET_META"; meta: Partial<FormMeta> }
   | { type: "HYDRATE"; state: Partial<BaselineFormState> };

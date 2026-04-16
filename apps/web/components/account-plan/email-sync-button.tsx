@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { RefreshCw, Check, AlertCircle } from "lucide-react";
 
 interface EmailSyncButtonProps {
-  userId: string;
+  /** Retained for backwards compatibility — no longer used. */
+  userId?: string;
 }
 
-export function EmailSyncButton({ userId }: EmailSyncButtonProps) {
+export function EmailSyncButton(_props: EmailSyncButtonProps) {
   const [syncing, setSyncing] = useState(false);
   const [result, setResult] = useState<{ synced?: number; error?: string } | null>(null);
   const router = useRouter();
@@ -18,17 +19,20 @@ export function EmailSyncButton({ userId }: EmailSyncButtonProps) {
     setResult(null);
 
     try {
-      const res = await fetch("/api/email/sync", {
+      // Pull every @crossnokaye.com mailbox, not just the current user's,
+      // so emails Jon (or anyone else) sent are reflected even when the
+      // viewer wasn't on the thread.
+      const res = await fetch("/api/email/sync-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ __internal: true }),
       });
       const data = await res.json();
 
       if (data.error) {
         setResult({ error: data.error });
       } else {
-        setResult({ synced: data.synced });
+        setResult({ synced: data.total_synced ?? 0 });
         router.refresh();
       }
     } catch {

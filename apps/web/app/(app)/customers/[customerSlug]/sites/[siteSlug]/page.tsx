@@ -11,6 +11,9 @@ import {
 } from "../../../../../../lib/data/queries";
 import { getCurrentUser } from "../../../../../../lib/data/current-user";
 import { createOrGetAssessment } from "../../../../../../lib/actions/assessment";
+import { seedSectionStatuses } from "../../../../../../lib/actions/discovery";
+import { getSectionStatusesForAssessment, getInformationRequestsForSite, getOutputSharingForSite, getActivityForSite } from "../../../../../../lib/data/queries";
+import { DiscoveryScorecard } from "../../../../../../components/assessment/discovery-scorecard";
 import { getHandoffReportForSite } from "../../../../../../lib/data/queries";
 import { PipelineStageBadge } from "../../../../../../components/ui/badge";
 import { SiteDealLink } from "../../../../../../components/hubspot/site-deal-link";
@@ -29,10 +32,12 @@ import { EditableSiteAddress } from "../../../../../../components/sites/editable
 
 interface SitePageProps {
   params: Promise<{ customerSlug: string; siteSlug: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default async function SitePage({ params }: SitePageProps) {
+export default async function SitePage({ params, searchParams }: SitePageProps) {
   const { customerSlug, siteSlug } = await params;
+  const resolvedSearchParams = await searchParams;
 
   let site: Awaited<ReturnType<typeof getSiteBySlug>> = null;
   let customer: Awaited<ReturnType<typeof getCustomerBySlug>> = null;
@@ -76,6 +81,9 @@ export default async function SitePage({ params }: SitePageProps) {
     // Show empty state gracefully
   }
 
+  // Compute isInternal early so we can use it for activity fetch
+  const isInternal = currentUser?.sessionClaims?.tenantType === "internal";
+
   // Auto-create assessment if none exists (idempotent)
   let assessment = assessmentData?.assessment ?? null;
   if (!assessment) {
@@ -88,6 +96,26 @@ export default async function SitePage({ params }: SitePageProps) {
       // Non-critical — tabs will show empty states
     }
   }
+
+  // Seed & fetch section statuses, info requests, and sharing permissions
+  let sectionStatuses: any[] = [];
+  let infoRequests: any[] = [];
+  let sharingPermissions: { section_key: string; shared_by: string; shared_at: string }[] = [];
+  let siteActivity: any[] = [];
+  if (assessment?.id) {
+    try {
+      await seedSectionStatuses(assessment.id, site.id, site.tenant_id);
+      [sectionStatuses, infoRequests, sharingPermissions, siteActivity] = await Promise.all([
+        getSectionStatusesForAssessment(assessment.id),
+        getInformationRequestsForSite(site.id),
+        getOutputSharingForSite(site.id),
+        getActivityForSite(site.id, 20, isInternal).catch(() => []),
+      ]);
+    } catch {
+      // Non-critical
+    }
+  }
+
 
   // Fetch latest comments for site tasks
   const taskIds = siteTasks.map((t: any) => t.id);
@@ -105,7 +133,8 @@ export default async function SitePage({ params }: SitePageProps) {
   const currentUserName = currentUser?.full_name ?? currentUser?.email ?? "You";
   const currentUserAvatar = currentUser?.avatarUrl ?? null;
   const isLocked = assessment?.status === "locked";
-  const isInternal = currentUser?.sessionClaims?.tenantType === "internal";
+  const isPreviewingCustomer = isInternal && resolvedSearchParams.preview === "customer";
+  const effectiveIsInternal = isInternal && !isPreviewingCustomer;
 
   // Load HubSpot deal links for this site (non-critical)
   let hubspotLinks: { id: string; hubspot_deal_id: string; deal_name: string | null; is_primary: boolean; deal_type?: string | null }[] = [];
@@ -189,6 +218,30 @@ export default async function SitePage({ params }: SitePageProps) {
         </div>
       </div>
 
+      {/* Customer preview banner */}
+      {isPreviewingCustomer && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2 flex items-center justify-between">
+          <p className="text-sm text-purple-700 font-medium">
+            👁 Customer Preview Mode — viewing as the customer would see this page
+          </p>
+          <a
+            href={`/customers/${customerSlug}/sites/${siteSlug}`}
+            className="text-xs text-purple-600 hover:text-purple-800 font-medium underline"
+          >
+            Exit Preview
+          </a>
+        </div>
+      )}
+
+      {/* Discovery Scorecard */}
+      {assessment?.id && sectionStatuses.length > 0 && (
+        <DiscoveryScorecard
+          sectionStatuses={sectionStatuses}
+          isInternal={isInternal}
+          openInfoRequestCount={infoRequests.filter((r: any) => r.status !== "resolved").length}
+        />
+      )}
+
       {/* Tabbed layout */}
       <SiteTabLayout>
         {{
@@ -208,6 +261,9 @@ export default async function SitePage({ params }: SitePageProps) {
               isInternal={isInternal}
               hubspotDealId={hubspotLinks[0]?.hubspot_deal_id}
               hubspotPortalId={hubspotPortalId}
+              infoRequests={infoRequests}
+              tenantId={site.tenant_id}
+              siteActivity={siteActivity}
             />
           ),
           documents: (
@@ -243,6 +299,10 @@ export default async function SitePage({ params }: SitePageProps) {
                   siteContractors={assessmentData?.siteContractors ?? []}
                   networkDiagnostics={assessmentData?.networkDiagnostics ?? null}
                   networkTestResults={assessmentData?.networkTestResults ?? []}
+                  sectionStatuses={sectionStatuses}
+                  assignableUsers={assignableUsers}
+                  isInternal={true}
+                  sharingPermissions={sharingPermissions}
                 />
               }
             />
@@ -267,6 +327,10 @@ export default async function SitePage({ params }: SitePageProps) {
               siteContractors={assessmentData?.siteContractors ?? []}
               networkDiagnostics={assessmentData?.networkDiagnostics ?? null}
               networkTestResults={assessmentData?.networkTestResults ?? []}
+              sectionStatuses={sectionStatuses}
+              assignableUsers={assignableUsers}
+              isInternal={false}
+              sharingPermissions={sharingPermissions}
             />
           ),
           labor: (

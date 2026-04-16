@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from "../ui/dialog";
 import { Avatar } from "../ui/avatar";
 import { CustomerSearch } from "../ui/customer-search";
 import { createMeetingSeries } from "../../lib/actions/meetings";
-import { Search, Check, Users, User, Building2 } from "lucide-react";
+import { Search, Check, Users, User, Building2, X } from "lucide-react";
 
 interface TeamMember {
   id: string;
@@ -56,6 +56,21 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
   const [cadence, setCadence] = useState<Cadence>("weekly");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [dropdownOpen]);
 
   // For standup / 1:1, hide the current user (they're auto-added as participant).
   // For account_360, show everyone — "leads" is an explicit opt-in list.
@@ -71,6 +86,8 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
           m.email.toLowerCase().includes(search.toLowerCase())
       )
     : availableMembers;
+
+  const selectedMembers = teamMembers.filter((m) => selectedIds.has(m.id));
 
   const toggleMember = (id: string) => {
     setSelectedIds((prev) => {
@@ -249,13 +266,10 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
           />
         </div>
 
-        {/* Participants */}
-        <div>
+        {/* Participants / Leads */}
+        <div ref={dropdownRef}>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {type === "account_360" ? "Leads" : "Participants"}
-            {selectedIds.size > 0 && (
-              <span className="ml-1 text-gray-400 font-normal">({selectedIds.size} selected)</span>
-            )}
           </label>
           {type === "account_360" && (
             <p className="text-[11px] text-gray-400 mb-2">
@@ -263,42 +277,70 @@ export function NewSeriesDialog({ open, onClose, teamMembers, currentUserId }: N
             </p>
           )}
 
-          {/* Search */}
-          <div className="relative mb-2">
+          {/* Selected chips */}
+          {selectedMembers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {selectedMembers.map((m) => (
+                <span
+                  key={m.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-brand-green/10 pl-1 pr-2 py-0.5"
+                >
+                  <Avatar name={m.fullName} src={m.avatarUrl} size="xs" />
+                  <span className="text-xs font-medium text-gray-700">{m.fullName.split(" ")[0]}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleMember(m.id)}
+                    className="ml-0.5 rounded-full p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Search input */}
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setDropdownOpen(true)}
               placeholder="Search team members..."
               className="w-full rounded-lg border border-gray-200 pl-9 pr-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green/50"
             />
-          </div>
 
-          {/* Member list */}
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
-            {filteredMembers.map((m) => {
-              const selected = selectedIds.has(m.id);
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => toggleMember(m.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors ${
-                    selected ? "bg-brand-green/5" : ""
-                  }`}
-                >
-                  <Avatar name={m.fullName} src={m.avatarUrl} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{m.fullName}</p>
-                    <p className="text-xs text-gray-400 truncate">{m.email}</p>
-                  </div>
-                  {selected && <Check className="h-4 w-4 text-brand-green shrink-0" />}
-                </button>
-              );
-            })}
-            {filteredMembers.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">No matches</p>
+            {/* Dropdown list — only visible when focused */}
+            {dropdownOpen && (
+              <div className="absolute z-10 mt-1 left-0 right-0 max-h-48 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg divide-y divide-gray-50">
+                {filteredMembers.map((m) => {
+                  const selected = selectedIds.has(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Prevent input blur
+                        toggleMember(m.id);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 transition-colors ${
+                        selected ? "bg-brand-green/5" : ""
+                      }`}
+                    >
+                      <Avatar name={m.fullName} src={m.avatarUrl} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{m.fullName}</p>
+                        <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                      </div>
+                      {selected && <Check className="h-4 w-4 text-brand-green shrink-0" />}
+                    </button>
+                  );
+                })}
+                {filteredMembers.length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-3">No matches</p>
+                )}
+              </div>
             )}
           </div>
         </div>
